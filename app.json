@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MyFirebaseApp",
-    "slug": "MyFirebaseApp",
+    "name": "HealthMate",
+    "slug": "HealthMate",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,7 +28,7 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT"
       ],
-      "package": "com.apinacio.MyFirebaseApp"
+      "package": "com.apinacio.HealthMate"
     },
     "web": {
       "favicon": "./assets/favicon.png"

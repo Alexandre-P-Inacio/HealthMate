@@ -1,4 +1,4 @@
-package com.apinacio.MyFirebaseApp
+package com.apinacio.HealthMate
 
 import android.app.Application
 import android.content.res.Configuration
