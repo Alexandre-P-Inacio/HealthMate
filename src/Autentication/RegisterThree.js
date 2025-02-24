@@ -10,17 +10,17 @@ const RegisterThree = ({ route, navigation }) => {
   const handleFingerprintAuth = async () => {
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Autenticação por Impressão Digital',
+        promptMessage: 'Registar Impressão Digital',
       });
 
       if (result.success) {
         const fingerprintId = `fingerprint_${emailOrPhone}`;
         handleRegister(fingerprintId);
       } else {
-        Alert.alert('Falha', 'Autenticação por impressão digital falhou.');
+        Alert.alert('Falha', 'Autenticação biométrica falhou.');
       }
     } catch (error) {
-      console.error('Erro com autenticação biométrica:', error);
+      console.error('Erro na biometria:', error);
       Alert.alert('Erro', 'Ocorreu um erro com a autenticação biométrica.');
     }
   };
@@ -41,24 +41,24 @@ const RegisterThree = ({ route, navigation }) => {
           password: hashedPassword,
           role: 'user',
           fingerprintid: fingerprintId,
+          pfpimg: null,
         },
       ]);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      Alert.alert('Sucesso', 'Utilizador registado com sucesso!');
-      navigation.navigate('HomeScreen');
+      Alert.alert('Sucesso', 'Registro concluído! Faça login.', [
+        { text: 'OK', onPress: () => navigation.navigate('Login') },
+      ]);
     } catch (error) {
-      console.error('Erro ao registar utilizador:', error);
-      Alert.alert('Erro', 'Falha ao registar utilizador. Por favor, tente novamente.');
+      console.error('Erro ao registrar:', error);
+      Alert.alert('Erro', 'Falha ao registrar. Tente novamente.');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Passo 3: Autenticação Biométrica</Text>
+      <Text style={styles.title}>Passo 3: Biometria</Text>
 
       <TouchableOpacity style={styles.button} onPress={handleFingerprintAuth}>
         <Text style={styles.buttonText}>Registar Impressão Digital</Text>
@@ -71,13 +71,13 @@ const RegisterThree = ({ route, navigation }) => {
   );
 };
 
-// Adição dos estilos para evitar o erro
+// Estilos
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
-  button: { backgroundColor: '#4A90E2', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 8, marginBottom: 20 },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  button: { backgroundColor: '#4A90E2', padding: 15, borderRadius: 8, marginBottom: 20 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  skipButton: { backgroundColor: '#ddd', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 8 },
+  skipButton: { backgroundColor: '#ddd', padding: 15, borderRadius: 8 },
   skipButtonText: { color: '#333', fontSize: 16 },
 });
 
