@@ -11,6 +11,7 @@ import {
 import supabase from '../../supabase';
 import * as Crypto from 'expo-crypto';
 import * as LocalAuthentication from 'expo-local-authentication';
+import DataUser from '../../navigation/DataUser'; // Importando o arquivo DataUser.js
 
 const LoginScreen = ({ navigation }) => {
   const [identifier, setIdentifier] = useState('');
@@ -44,6 +45,9 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
+      // Armazenar os dados do usuário no DataUser.js
+      DataUser.setUserData(user);
+
       Alert.alert('Bem-vindo', `Bem-vindo, ${user.fullname}!`);
       navigation.navigate('HomeScreen', { userId: user.id });
 
@@ -71,7 +75,7 @@ const LoginScreen = ({ navigation }) => {
         const { data: users, error } = await supabase
           .from('users')
           .select('*')
-          .not('fingerprintid', 'is', null); 
+          .not('fingerprintid', 'is', null);
 
         if (error || !users || users.length === 0) {
           Alert.alert('Erro', 'Nenhuma conta encontrada para esta impressão digital.');
@@ -87,6 +91,9 @@ const LoginScreen = ({ navigation }) => {
         }
 
         if (matchedUser) {
+          // Armazenar os dados do usuário no DataUser.js
+          DataUser.setUserData(matchedUser);
+
           Alert.alert('Bem-vindo de volta', `Olá, ${matchedUser.fullname}!`);
           navigation.navigate('HomeScreen', { userId: matchedUser.id });
         } else {
@@ -126,7 +133,7 @@ const LoginScreen = ({ navigation }) => {
       <TouchableOpacity onPress={() => navigation.navigate('RegisterOne')}>
         <Text style={styles.link}>Ainda não tem conta? Registe-se</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.fingerprintButton} onPress={handleFingerprintLogin}>
         <Image 
           source={{ uri: 'https://img.icons8.com/ios-filled/50/000000/fingerprint.png' }} 

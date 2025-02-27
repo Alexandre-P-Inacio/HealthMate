@@ -1,31 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
-import supabase from '../../supabase';
+import DataUser from '../../navigation/DataUser'; // Importando o arquivo DataUser.js
 import Navbar from '../Components/Navbar';
 
-const HomeScreen = ({ route }) => {
+const HomeScreen = () => {
   const [userData, setUserData] = useState(null);
-  const userId = route.params?.userId;
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
+    // Tentar buscar os dados do usuário diretamente do DataUser.js
+    const user = DataUser.getUserData();
 
-      if (error) {
-        Alert.alert('Erro', 'Utilizador não encontrado.');
-        return;
-      }
-      setUserData(data);
-    };
-
-    if (userId) {
-      fetchUserData();
+    if (user) {
+      setUserData(user);
+    } else {
+      Alert.alert('Erro', 'Nenhum usuário encontrado.');
     }
-  }, [userId]);
+  }, []);
 
   if (!userData) {
     return (
@@ -39,9 +29,10 @@ const HomeScreen = ({ route }) => {
     <View style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Bem-vindo, {userData.fullname}!</Text>
+        <Text>ID: {userData.id}</Text>
         <Text>Email: {userData.email || 'N/A'}</Text>
         <Text>Telefone: {userData.phone || 'N/A'}</Text>
-        <Text>Função: {userData.role}</Text>
+        <Text>Função: {userData.role || 'N/A'}</Text>
       </View>
 
       {/* Navbar na parte inferior */}

@@ -1,142 +1,66 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, Image, Alert, TouchableOpacity } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import supabase from '../../supabase';
+import DataUser from '../../navigation/DataUser';
 import Navbar from '../Components/Navbar';
 
-const AccountScreen = ({ navigation, route }) => {
+const AccountScreen = ({ navigation }) => {
   const [userData, setUserData] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const userId = route.params?.userId;
 
   useEffect(() => {
-    if (!userId) {
-      Alert.alert('Erro', 'User  ID não encontrado.');
+    const user = DataUser.getUserData();
+    
+    if (user) {
+      setUserData(user);
+    } else {
+      Alert.alert('Error', 'User data not found.');
       navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
-      return;
     }
-    fetchUserData();
-  }, [userId]);
-
-  const fetchUserData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error || !data) {
-        Alert.alert('Erro', 'Utilizador não encontrado.');
-        navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
-        return;
-      }
-
-      setUserData(data);
-    } catch (error) {
-      console.error('Erro ao buscar dados do utilizador:', error);
-      Alert.alert('Erro', 'Falha ao carregar os dados do utilizador.');
-    }
-  };
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permissão necessária', 'Dá permissão para aceder à galeria.');
-      return;
-    }
-
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      uploadImage(result.assets[0].uri);
-    }
-  };
-
-  const uploadImage = async (imageUri) => {
-    try {
-      setUploading(true);
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      const reader = new FileReader();
-
-      reader.onloadend = async () => {
-        const base64Data = reader.result.split(',')[1]; // Remove o prefixo base64
-
-        const { error } = await supabase
-          .from('users')
-          .update({ pfpimg: base64Data })
-          .eq('id', userId);
-
-        if (error) throw error;
-
-        setUserData((prev) => ({ ...prev, pfpimg: imageUri }));
-        Alert.alert('Sucesso', 'Imagem de perfil atualizada!');
-      };
-
-      reader.readAsDataURL(blob);
-    } catch (error) {
-      console.error('Erro ao fazer upload da imagem:', error);
-      Alert.alert('Erro', 'Falha ao carregar a imagem.');
-    } finally {
-      setUploading(false);
-    }
-  };
+  }, []);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Tem a certeza que deseja sair?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Sair', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] }) },
+    Alert.alert('Logout', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log Out', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] }) },
     ]);
   };
 
   if (!userData) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>A carregar dados do utilizador...</Text>
+        <Text style={styles.loadingText}>Loading user data...</Text>
       </View>
     );
   }
 
+  const profileImage = userData.pfpimg
+    ? { uri: `data:image/png;base64,${userData.pfpimg}` }
+    : { uri: 'https://i.pravatar.cc/150?img=3' };
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <FontAwesome name="arrow-left" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Meu Perfil</Text>
-      </View>
-
+      {/* Profile Section */}
       <View style={styles.profileSection}>
-        <TouchableOpacity onPress={pickImage} disabled={uploading}>
-          <Image
-            source={{ uri: userData?.pfpimg || 'https://i.pravatar.cc/150?img=3' }}
-            style={styles.profileImage}
-          />
-          {uploading && <Text style={styles.uploadingText}>Carregando...</Text>}
-        </TouchableOpacity>
-        <Text style={styles.profileName}>{userData.fullname || 'Utilizador'}</Text>
-        <Text style={styles.profileInfo}>Email: {userData.email || 'N/A'}</Text>
-        <Text style={styles.profileInfo}>Telefone: {userData.phone || 'N/A'}</Text>
-        <Text style={styles.profileInfo}>Função: {userData.role || 'N/A'}</Text>
+        <View style={styles.profileImageContainer}>
+          <Image source={profileImage} style={styles.profileImage} />
+        </View>
+        <Text style={styles.profileName}>{userData.fullname || 'User'}</Text>
+        <Text style={styles.profileInfo}>📧 {userData.email || 'N/A'}</Text>
+        <Text style={styles.profileInfo}>📞 {userData.phone || 'N/A'}</Text>
       </View>
 
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+      {/* Buttons */}
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={styles.settingsButton} onPress={() => navigation.navigate('SettingsScreen')}>
+          <FontAwesome name="cog" size={22} color="#fff" />
+          <Text style={styles.settingsText}>Edit Profile</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <FontAwesome name="sign-out" size={22} color="#fff" />
+          <Text style={styles.logoutText}>Log Out</Text>
+        </TouchableOpacity>
+      </View>
 
       <Navbar />
     </View>
@@ -144,17 +68,63 @@ const AccountScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9f9f9', paddingBottom: 70 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#4A90E2', borderBottomLeftRadius: 15, borderBottomRightRadius: 15 },
-  backButton: { marginRight: 10 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  profileSection: { alignItems: 'center', marginVertical: 20, backgroundColor: '#fff', padding: 20, borderRadius: 12, marginHorizontal: 16, elevation: 5 },
-  profileImage: { width: 100, height: 100, borderRadius: 50, marginBottom: 10 },
-  uploadingText: { fontSize: 14, color: 'gray' },
-  profileName: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  profileInfo: { fontSize: 16, color: '#666', marginBottom: 2 },
-  logoutButton: { marginTop: 20, marginHorizontal: 16, paddingVertical: 15, backgroundColor: '#e74c3c', borderRadius: 8, alignItems: 'center', elevation: 5 },
-  logoutText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#F2F2F7', paddingBottom: 70 },
+  profileSection: { 
+    alignItems: 'center', 
+    marginVertical: 30, 
+    backgroundColor: '#fff', 
+    padding: 30, 
+    borderRadius: 20, 
+    marginHorizontal: 20, 
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }
+  },
+  profileImageContainer: { 
+    width: 130, 
+    height: 130, 
+    borderRadius: 65, 
+    backgroundColor: '#fff', 
+    elevation: 10, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 15
+  },
+  profileImage: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#3498db' },
+  profileName: { fontSize: 24, fontWeight: 'bold', color: '#222', marginBottom: 5 },
+  profileInfo: { fontSize: 16, color: '#555', marginVertical: 2, textAlign: 'center' },
+  buttonContainer: { marginTop: 20, marginHorizontal: 20 },
+  settingsButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#3498db', 
+    paddingVertical: 18, 
+    borderRadius: 12, 
+    marginBottom: 15, 
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 }
+  },
+  settingsText: { color: '#fff', fontSize: 17, fontWeight: 'bold', marginLeft: 10 },
+  logoutButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#e74c3c', 
+    paddingVertical: 18, 
+    borderRadius: 12, 
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 }
+  },
+  logoutText: { color: '#fff', fontSize: 17, fontWeight: 'bold', marginLeft: 10 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 18, color: '#666' },
 });

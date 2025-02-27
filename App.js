@@ -10,6 +10,7 @@ import TableScreen from './src/Autentication/TableScreen';
 import HomeScreen from './src/App/HomeScreen';
 import CalendarScreen from './src/App/CalendarScreen';
 import AccountScreen from './src/App/AccountScreen';
+import SettingsScreen from './src/App/SettingsScreen';
 
 const Stack = createStackNavigator();
 
@@ -34,6 +35,7 @@ const App = () => {
         <Stack.Screen name="HomeScreen" component={HomeScreen} />
         <Stack.Screen name="CalendarScreen" component={CalendarScreen} />
         <Stack.Screen name="AccountScreen" component={AccountScreen} />
+        <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
