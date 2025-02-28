@@ -35,7 +35,6 @@ const HomeScreen = () => {
         <Text>Função: {userData.role || 'N/A'}</Text>
       </View>
 
-      {/* Navbar na parte inferior */}
       <Navbar />
     </View>
   );

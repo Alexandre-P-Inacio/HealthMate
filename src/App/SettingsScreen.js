@@ -215,8 +215,4 @@ const styles = StyleSheet.create({
     saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   });
   
-export default SettingsScreen;
-
-
-
-
+export default SettingsScreen
