@@ -24,7 +24,7 @@ const WelcomeScreen = ({ navigation }) => {
         style={[styles.button, styles.secondaryButton]}
         onPress={() => navigation.navigate('TableScreen')} // Navegar para a tabela
       >
-        <Text style={styles.buttonText}>View Table</Text>
+        <Text style={styles.buttonText}>View Table (Non final)</Text>
       </TouchableOpacity>
     </View>
   );
