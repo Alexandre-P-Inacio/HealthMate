@@ -69,64 +69,19 @@ const AccountScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F2F2F7', paddingBottom: 70 },
-  profileSection: { 
-    alignItems: 'center', 
-    marginVertical: 30, 
-    backgroundColor: '#fff', 
-    padding: 30, 
-    borderRadius: 20, 
-    marginHorizontal: 20, 
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }
-  },
-  profileImageContainer: { 
-    width: 130, 
-    height: 130, 
-    borderRadius: 65, 
-    backgroundColor: '#fff', 
-    elevation: 10, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginBottom: 15
-  },
+  profileSection: { alignItems: 'center', marginVertical: 30, backgroundColor: '#fff', padding: 30, borderRadius: 20, marginHorizontal: 20, elevation: 10, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  profileImageContainer: { width: 130, height: 130, borderRadius: 65, backgroundColor: '#fff', elevation: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   profileImage: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#3498db' },
   profileName: { fontSize: 24, fontWeight: 'bold', color: '#222', marginBottom: 5 },
   profileInfo: { fontSize: 16, color: '#555', marginVertical: 2, textAlign: 'center' },
   buttonContainer: { marginTop: 20, marginHorizontal: 20 },
-  settingsButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: '#3498db', 
-    paddingVertical: 18, 
-    borderRadius: 12, 
-    marginBottom: 15, 
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 }
-  },
+  settingsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#3498db', paddingVertical: 18, borderRadius: 12, marginBottom: 15, elevation: 6, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   settingsText: { color: '#fff', fontSize: 17, fontWeight: 'bold', marginLeft: 10 },
-  logoutButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: '#e74c3c', 
-    paddingVertical: 18, 
-    borderRadius: 12, 
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 }
-  },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e74c3c', paddingVertical: 18, borderRadius: 12, elevation: 6, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   logoutText: { color: '#fff', fontSize: 17, fontWeight: 'bold', marginLeft: 10 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 18, color: '#666' },
 });
+
 
 export default AccountScreen;

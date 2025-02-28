@@ -9,19 +9,27 @@ const RegisterThree = ({ route, navigation }) => {
 
   const handleFingerprintAuth = async () => {
     try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Registar Impressão Digital',
+      const biometricAuth = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Register Fingerprint',
+        disableDeviceFallback: true,
+        cancelLabel: 'Cancel'
       });
 
-      if (result.success) {
-        const fingerprintId = `fingerprint_${emailOrPhone}`;
-        handleRegister(fingerprintId);
+      if (biometricAuth.success) {
+        const { available, biometryType } = await LocalAuthentication.supportedAuthenticationTypesAsync();
+        const fingerprintInfo = {
+          type: biometryType,
+          timestamp: new Date().toISOString(),
+          deviceId: await LocalAuthentication.getEnrolledLevelAsync()
+        };
+        
+        handleRegister(JSON.stringify(fingerprintInfo));
       } else {
-        Alert.alert('Falha', 'Autenticação biométrica falhou.');
+        Alert.alert('Failed', 'Biometric authentication failed.');
       }
     } catch (error) {
-      console.error('Erro na biometria:', error);
-      Alert.alert('Erro', 'Ocorreu um erro com a autenticação biométrica.');
+      console.error('Biometric error:', error);
+      Alert.alert('Error', 'An error occurred with biometric authentication.');
     }
   };
 
@@ -40,38 +48,38 @@ const RegisterThree = ({ route, navigation }) => {
           phone: identifierType === 'phone' ? emailOrPhone : null,
           password: hashedPassword,
           role: 'user',
-          fingerprintid: fingerprintId,
+          fingerprintid: fingerprintId, // Armazena a impressão digital
           pfpimg: null,
         },
       ]);
 
       if (error) throw error;
 
-      Alert.alert('Sucesso', 'Registro concluído! Faça login.', [
+      Alert.alert('Success', 'Registration complete! Please login.', [
         { text: 'OK', onPress: () => navigation.navigate('Login') },
       ]);
     } catch (error) {
-      console.error('Erro ao registrar:', error);
-      Alert.alert('Erro', 'Falha ao registrar. Tente novamente.');
+      console.error('Registration error:', error);
+      Alert.alert('Error', 'Failed to register. Please try again.');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Passo 3: Biometria</Text>
+      <Text style={styles.title}>Step 3: Biometrics</Text>
 
       <TouchableOpacity style={styles.button} onPress={handleFingerprintAuth}>
-        <Text style={styles.buttonText}>Registar Impressão Digital</Text>
+        <Text style={styles.buttonText}>Register Fingerprint</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.skipButton} onPress={() => handleRegister()}>
-        <Text style={styles.skipButtonText}>Pular</Text>
+        <Text style={styles.skipButtonText}>Skip</Text>
       </TouchableOpacity>
     </View>
   );
 };
 
-// Estilos
+// Styles
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },

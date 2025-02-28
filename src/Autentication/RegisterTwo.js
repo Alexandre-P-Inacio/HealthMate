@@ -7,7 +7,7 @@ const RegisterTwo = ({ navigation, route }) => {
 
   const handleNext = () => {
     if (password.length < 6) {
-      Alert.alert('Erro', 'A palavra-passe deve ter pelo menos 6 caracteres.');
+      Alert.alert('Error', 'Password must be at least 6 characters long.');
       return;
     }
 
@@ -16,18 +16,18 @@ const RegisterTwo = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Passo 2: Crie uma Palavra-passe</Text>
+      <Text style={styles.title}>Step 2: Create a Password</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="Palavra-passe"
+        placeholder="Password"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
 
       <TouchableOpacity style={styles.button} onPress={handleNext}>
-        <Text style={styles.buttonText}>Próximo</Text>
+        <Text style={styles.buttonText}>Next</Text>
       </TouchableOpacity>
     </View>
   );

@@ -11,7 +11,7 @@ import {
 import supabase from '../../supabase';
 import * as Crypto from 'expo-crypto';
 import * as LocalAuthentication from 'expo-local-authentication';
-import DataUser from '../../navigation/DataUser'; // Importando o arquivo DataUser.js
+import DataUser from '../../navigation/DataUser';
 
 const LoginScreen = ({ navigation }) => {
   const [identifier, setIdentifier] = useState('');
@@ -20,91 +20,102 @@ const LoginScreen = ({ navigation }) => {
   const handleLogin = async () => {
     try {
       if (!identifier.trim() || !password.trim()) {
-        Alert.alert('Erro', 'Preencha todos os campos.');
+        Alert.alert('Error', 'Please fill in all fields.');
         return;
       }
 
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .or(`email.eq.${identifier},phone.eq.${identifier}`)
-        .single();
-
-      if (error || !user) {
-        Alert.alert('Erro', 'Email ou número de telefone incorreto.');
-        return;
-      }
-
+      // Hash the password for comparison
       const hashedPassword = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
         password
       );
 
-      if (hashedPassword !== user.password) {
-        Alert.alert('Erro', 'Palavra-passe incorreta.');
+      // Query the database directly with both email/phone and hashed password
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.eq.${identifier},phone.eq.${identifier}`)
+        .eq('password', hashedPassword)
+        .single();
+
+      if (error || !user) {
+        Alert.alert('Error', 'Invalid credentials. Please try again.');
         return;
       }
 
-      // Armazenar os dados do usuário no DataUser.js
-      DataUser.setUserData(user);
+      // Store user data in DataUser .js
+      DataUser .setUserData(user);
 
-      Alert.alert('Bem-vindo', `Bem-vindo, ${user.fullname}!`);
+      Alert.alert('Welcome', `Welcome, ${user.fullname}!`);
       navigation.navigate('HomeScreen', { userId: user.id });
 
     } catch (error) {
-      console.error('Erro ao autenticar:', error);
-      Alert.alert('Erro', 'Ocorreu um erro ao fazer login.');
+      console.error('Authentication error:', error);
+      Alert.alert('Error', 'An error occurred while logging in.');
     }
   };
 
   const handleFingerprintLogin = async () => {
     try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      // Alert the user about using the same angle
+      Alert.alert(
+        'Fingerprint Authentication',
+        'Please use the same angle and pressure as you did during registration.',
+        [{ text: 'OK' }]
+      );
 
-      if (!hasHardware || !isEnrolled) {
-        Alert.alert('Erro', 'Seu dispositivo não suporta biometria ou não está configurado.');
+      // Check if device has biometric hardware
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (!hasHardware) {
+        Alert.alert('Error', 'This device does not have biometric hardware');
         return;
       }
 
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Autenticar com impressão digital',
+      // Check if biometrics are enrolled
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) {
+        Alert.alert('Error', 'No biometrics enrolled on this device');
+        return;
+      }
+
+      // Try to authenticate with biometrics
+      const biometricAuth = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Login with Biometrics',
+        disableDeviceFallback: true,
+        cancelLabel: 'Cancel'
       });
 
-      if (result.success) {
-        const { data: users, error } = await supabase
+      if (biometricAuth.success) {
+        // Get the fingerprint info
+        const fingerprintInfo = {
+          timestamp: new Date().toISOString(),
+          deviceId: await LocalAuthentication.getEnrolledLevelAsync()
+        };
+
+        // Query user with matching fingerprint info
+        const { data: user, error } = await supabase
           .from('users')
           .select('*')
-          .not('fingerprintid', 'is', null);
+          .eq('fingerprintid', JSON.stringify(fingerprintInfo)) // Busca pelo fingerprintid
+          .single();
 
-        if (error || !users || users.length === 0) {
-          Alert.alert('Erro', 'Nenhuma conta encontrada para esta impressão digital.');
+        if (error || !user) {
+          Alert.alert('Error', 'No matching account found for this fingerprint');
           return;
         }
+        
+        // Store user data and navigate
+        DataUser .setUserData(user);
+        Alert.alert('Success', `Welcome back, ${user.fullname}!`);
+        navigation.navigate('HomeScreen', { userId: user.id });
 
-        let matchedUser = null;
-        for (const user of users) {
-          if (user.fingerprintid) {
-            matchedUser = user;
-            break;
-          }
-        }
-
-        if (matchedUser) {
-          // Armazenar os dados do usuário no DataUser.js
-          DataUser.setUserData(matchedUser);
-
-          Alert.alert('Bem-vindo de volta', `Olá, ${matchedUser.fullname}!`);
-          navigation.navigate('HomeScreen', { userId: matchedUser.id });
-        } else {
-          Alert.alert('Erro', 'Nenhum usuário correspondente encontrado.');
-        }
       } else {
-        Alert.alert('Erro', 'Falha na autenticação biométrica.');
+        Alert.alert('Error', 'Biometric authentication failed');
       }
+
     } catch (error) {
-      console.error('Erro na autenticação biométrica:', error);
-      Alert.alert('Erro', 'Ocorreu um erro ao autenticar com biometria.');
+      console.error('Biometric error:', error);
+      Alert.alert('Error', 'Failed to authenticate with biometrics');
     }
   };
 
@@ -114,9 +125,10 @@ const LoginScreen = ({ navigation }) => {
 
       <TextInput
         style={styles.input}
-        placeholder="Email ou Telefone"
+        placeholder="Email or Phone"
         value={identifier}
         onChangeText={setIdentifier}
+        autoCapitalize="none"
       />
       <TextInput
         style={styles.input}
@@ -124,14 +136,15 @@ const LoginScreen = ({ navigation }) => {
         secureTextEntry
         value={password}
         onChangeText={setPassword}
+        autoCapitalize="none"
       />
 
       <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Entrar</Text>
+        <Text style={styles.buttonText}>Sign In</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate('RegisterOne')}>
-        <Text style={styles.link}>Ainda não tem conta? Registe-se</Text>
+      <TouchableOpacity onPress={() => navigation .navigate('RegisterOne')}>
+        <Text style={styles.link}>Don't have an account? Sign Up</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.fingerprintButton} onPress={handleFingerprintLogin}>
@@ -139,67 +152,22 @@ const LoginScreen = ({ navigation }) => {
           source={{ uri: 'https://img.icons8.com/ios-filled/50/000000/fingerprint.png' }} 
           style={styles.fingerprintIcon} 
         />
-        <Text style={styles.fingerprintText}>Biometria</Text>
+        <Text style={styles.fingerprintText}>Biometrics</Text>
       </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    padding: 20, 
-    justifyContent: 'center', 
-    backgroundColor: '#fff' 
-  },
-  title: { 
-    fontSize: 28, 
-    fontWeight: 'bold', 
-    marginBottom: 20, 
-    textAlign: 'center' 
-  },
-  input: { 
-    borderWidth: 1, 
-    borderColor: '#ddd', 
-    borderRadius: 8, 
-    padding: 12, 
-    marginBottom: 10 
-  },
-  button: { 
-    backgroundColor: '#0d6efd', 
-    padding: 15, 
-    borderRadius: 8, 
-    alignItems: 'center' 
-  },
-  buttonText: { 
-    color: '#fff', 
-    fontSize: 16 
-  },
-  link: { 
-    color: '#0d6efd', 
-    textAlign: 'center', 
-    marginTop: 10 
-  },
-  fingerprintButton: { 
-    width: 80, 
-    height: 80, 
-    backgroundColor: '#f0f0f0', 
-    borderRadius: 40, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    alignSelf: 'center', 
-    marginTop: 20,
-  },
-  fingerprintIcon: { 
-    width: 30, 
-    height: 30, 
-  },
-  fingerprintText: { 
-    marginTop: 5, 
-    fontSize: 14, 
-    color: '#555', 
-    textAlign: 'center'
-  },
+  container: { flex: 1, padding: 20, justifyContent: 'center', backgroundColor: '#fff' },
+  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 10 },
+  button: { backgroundColor: '#0d6efd', padding: 15, borderRadius: 8, alignItems: 'center' },
+  buttonText: { color: '#fff', fontSize: 16 },
+  link: { color: '#0d6efd', textAlign: 'center', marginTop: 10 },
+  fingerprintButton: { width: 80, height: 80, backgroundColor: '#f0f0f0', borderRadius: 40, justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginTop: 20 },
+  fingerprintIcon: { width: 30, height: 30 },
+  fingerprintText: { marginTop: 5, fontSize: 14, color: '#555', textAlign: 'center' },
 });
 
 export default LoginScreen;

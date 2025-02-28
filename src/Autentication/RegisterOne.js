@@ -11,16 +11,16 @@ const RegisterOne = ({ navigation }) => {
 
   const handleNext = async () => {
     if (!fullName.trim() || !emailOrPhone.trim()) {
-      Alert.alert('Erro', 'Preencha todos os campos.');
+      Alert.alert('Error', 'Please fill in all fields.');
       return;
     }
 
     if (!isEmail(emailOrPhone) && !isPhoneNumber(emailOrPhone)) {
-      Alert.alert('Erro', 'Introduza um email ou número de telefone válido.');
+      Alert.alert('Error', 'Please enter a valid email or phone number.');
       return;
     }
 
-    const firstName = fullName.trim().split(' ')[0]; // Pega apenas o primeiro nome
+    const firstName = fullName.trim().split(' ')[0]; // Get only first name
 
     try {
       const { data, error } = await supabase
@@ -30,7 +30,7 @@ const RegisterOne = ({ navigation }) => {
         .maybeSingle();
 
       if (data) {
-        Alert.alert('Erro', 'Este email ou número de telefone já está registado.');
+        Alert.alert('Error', 'This email or phone number is already registered.');
         return;
       }
 
@@ -38,34 +38,34 @@ const RegisterOne = ({ navigation }) => {
 
       navigation.navigate('RegisterTwo', { fullName, firstName, emailOrPhone, identifierType });
     } catch (error) {
-      console.error('Erro ao verificar utilizador:', error);
-      Alert.alert('Erro', 'Ocorreu um erro ao verificar os dados.');
+      console.error('Error checking user:', error);
+      Alert.alert('Error', 'An error occurred while verifying the data.');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Passo 1: Introduza os seus dados</Text>
+      <Text style={styles.title}>Step 1: Enter Your Details</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="Nome Completo"
+        placeholder="Full Name"
         value={fullName}
         onChangeText={setFullName}
       />
       <TextInput
         style={styles.input}
-        placeholder="Email ou Telefone"
+        placeholder="Email or Phone"
         value={emailOrPhone}
         onChangeText={setEmailOrPhone}
       />
 
       <TouchableOpacity style={styles.button} onPress={handleNext}>
-        <Text style={styles.buttonText}>Próximo</Text>
+        <Text style={styles.buttonText}>Next</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-        <Text style={styles.link}>Já tem conta? Entrar</Text>
+        <Text style={styles.link}>Already have an account? Log in</Text>
       </TouchableOpacity>
     </View>
   );

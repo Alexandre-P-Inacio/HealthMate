@@ -16,7 +16,9 @@ const CalendarScreen = ({ navigation }) => {
   const [selectedMedication, setSelectedMedication] = useState(null);
   const [selectedScheduleType, setSelectedScheduleType] = useState('interval');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [dateType, setDateType] = useState(null);
+  const [selectedTimes, setSelectedTimes] = useState([]); // Para armazenar os horários selecionados
 
   const [newMedication, setNewMedication] = useState({
     titulo: '',
@@ -105,6 +107,7 @@ const CalendarScreen = ({ navigation }) => {
         user_id: userId,
         ...newMedication,
         data_inicio: newMedication.data_inicio, // A data e hora já foram concatenadas
+        horario_fixo: selectedTimes.join('; '), // Armazena os horários selecionados
         quantidade_comprimidos: parseInt(newMedication.quantidade_comprimidos),
         quantidade_comprimidos_por_vez: parseInt(newMedication.quantidade_comprimidos_por_vez),
         intervalo_horas: newMedication.intervalo_horas ? parseInt(newMedication.intervalo_horas) : null
@@ -128,6 +131,7 @@ const CalendarScreen = ({ navigation }) => {
         horario_fixo: '',
         data_fim: '',
       });
+      setSelectedTimes([]); // Limpa os horários selecionados
       Alert.alert('Success', 'Medication added successfully!');
     } catch (error) {
       Alert.alert('Error', 'Could not add medication');
@@ -138,6 +142,7 @@ const CalendarScreen = ({ navigation }) => {
   const handleDateChange = (event, selectedDate) => {
     if (event.type === 'dismissed') {
       setShowDatePicker(false);
+      setShowTimePicker(false);
       return;
     }
 
@@ -154,7 +159,7 @@ const CalendarScreen = ({ navigation }) => {
             hour: '2-digit',
             minute: '2-digit'
           });
-          updatedMedication.data_inicio = `${updatedMedication.data_inicio} ; ${timeString}`; // Concatena a hora com a data
+          setSelectedTimes([...selectedTimes, timeString]); // Adiciona a hora selecionada
           break;
         case 'end':
           updatedMedication.data_fim = selectedDate.toISOString().split('T')[0];
@@ -171,6 +176,7 @@ const CalendarScreen = ({ navigation }) => {
       setNewMedication(updatedMedication);
     }
     setShowDatePicker(false);
+    setShowTimePicker(false);
   };
 
   const renderMedicationCard = ({ item }) => (
@@ -309,7 +315,7 @@ const CalendarScreen = ({ navigation }) => {
 
                   <TouchableOpacity 
                     style={styles.datePickerButton}
-                    onPress={() => { setShowDatePicker(true); setDateType('time'); }}
+                    onPress={() => { setShowTimePicker(true); setDateType('time'); }}
                   >
                     <Ionicons name="time" size={20} color="#3498db" />
                     <Text style={styles.datePickerText}>
@@ -331,7 +337,7 @@ const CalendarScreen = ({ navigation }) => {
               {selectedScheduleType === 'fixed' && (
                 <TouchableOpacity 
                   style={styles.datePickerButton}
-                  onPress={() => { setShowDatePicker(true); setDateType('fixed'); }}
+                  onPress={() => { setShowTimePicker(true); setDateType('fixed'); }}
                 >
                   <Ionicons name="time" size={20} color="#3498db" />
                   <Text style={styles.datePickerText}>
@@ -368,6 +374,16 @@ const CalendarScreen = ({ navigation }) => {
                 <DateTimePicker
                   value={new Date()}
                   mode={dateType === 'start' || dateType === 'end' ? 'date' : 'time'}
+                  is24Hour={true}
+                  display="default"
+                  onChange={handleDateChange}
+                />
+              )}
+
+              {showTimePicker && (
+                <DateTimePicker
+                  value={new Date()}
+                  mode="time"
                   is24Hour={true}
                   display="default"
                   onChange={handleDateChange}
@@ -466,214 +482,38 @@ const CalendarScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f7fa',
-    paddingTop: 40,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    textAlign: 'center',
-    marginVertical: 20,
-    letterSpacing: 0.5,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  noDataText: {
-    fontSize: 20,
-    color: '#7f8c8d',
-    marginTop: 20,
-    fontWeight: '600',
-  },
-  noDataSubtext: {
-    fontSize: 16,
-    color: '#95a5a6',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  listContainer: {
-    padding: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  medicationCard: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 15,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    borderLeftWidth: 5,
-    borderLeftColor: '#3498db',
-  },
-  medicationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  medicationTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    flex: 1,
-  },
-  infoButton: {
-    padding: 5,
-  },
-  medicationDetails: {
-    gap: 8,
-  },
-  medicationInfo: {
-    fontSize: 16,
-    color: '#34495e',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  addButton: {
-    position: 'absolute',
-    bottom: 80,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3498db',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 25,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 20,
-    width: '100%',
-    maxHeight: '80%',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-    zIndex: 1,
-    padding: 5,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 20,
-    marginTop: 10,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    fontSize: 16,
-    backgroundColor: '#f8f9fa',
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    marginBottom: 15,
-    backgroundColor: '#f8f9fa',
-  },
-  picker: {
-    height: 50,
-  },
-  datePickerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 15,
-  },
-  datePickerButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    gap: 8,
-  },
-  datePickerText: {
-    fontSize: 16,
-    color: '#3498db',
-    flex: 1,
-  },
-  saveButton: {
-    backgroundColor: '#2ecc71',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  infoSection: {
-    marginBottom: 15,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#7f8c8d',
-    marginBottom: 5,
-  },
-  infoValue: {
-    fontSize: 18,
-    color: '#2c3e50',
-    fontWeight: '500',
-  },
-  deleteButton: {
-    backgroundColor: '#e74c3c',
-    padding: 15,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    gap: 8,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  container: { flex: 1, backgroundColor: '#f5f7fa', paddingTop: 40 },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#2c3e50', textAlign: 'center', marginVertical: 20, letterSpacing: 0.5 },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  noDataText: { fontSize: 20, color: '#7f8c8d', marginTop: 20, fontWeight: '600' },
+  noDataSubtext: { fontSize: 16, color: '#95a5a6', marginTop: 8, textAlign: 'center' },
+  listContainer: { padding: 20 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  medicationCard: { backgroundColor: '#fff', padding: 20, borderRadius: 15, marginBottom: 15, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, borderLeftWidth: 5, borderLeftColor: '#3498db' },
+  medicationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  medicationTitle: { fontSize: 22, fontWeight: 'bold', color: '#2c3e50', flex: 1 },
+  infoButton: { padding: 5 },
+  medicationDetails: { gap: 8 },
+  medicationInfo: { fontSize: 16, color: '#34495e', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  addButton: { position: 'absolute', bottom: 80, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', backgroundColor: '#3498db', paddingVertical: 15, paddingHorizontal: 25, borderRadius: 25, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+  addButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginLeft: 8 },
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 20 },
+  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 20, width: '100%', maxHeight: '80%' },
+  closeButton: { position: 'absolute', top: 15, right: 15, zIndex: 1, padding: 5 },
+  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#2c3e50', marginBottom: 20, marginTop: 10 },
+  input: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 15, marginBottom: 15, fontSize: 16, backgroundColor: '#f8f9fa' },
+  pickerContainer: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, marginBottom: 15, backgroundColor: '#f8f9fa' },
+  picker: { height: 50 },
+  datePickerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 15 },
+  datePickerButton: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: '#e0e0e0', gap: 8 },
+  datePickerText: { fontSize: 16, color: '#3498db', flex: 1 },
+  saveButton: { backgroundColor: '#2ecc71', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 },
+  saveButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  infoSection: { marginBottom: 15 },
+  infoLabel: { fontSize: 14, color: '#7f8c8d', marginBottom: 5 },
+  infoValue: { fontSize: 18, color: '#2c3e50', fontWeight: '500' },
+  deleteButton: { backgroundColor: '#e74c3c', padding: 15, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20, gap: 8 },
+  deleteButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
 
 export default CalendarScreen;

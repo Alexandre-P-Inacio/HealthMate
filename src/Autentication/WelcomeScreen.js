@@ -31,33 +31,11 @@ const WelcomeScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-  },
-  logoText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginBottom: 40,
-    color: '#0d6efd',
-  },
-  button: {
-    backgroundColor: '#0d6efd',
-    padding: 15,
-    borderRadius: 10,
-    marginVertical: 10,
-    width: '80%',
-    alignItems: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: '#e0e0e0',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
+  container: {flex: 1,justifyContent: 'center',alignItems: 'center',backgroundColor: '#f9f9f9',},
+  logoText: {fontSize: 36,fontWeight: 'bold',marginBottom: 40,color: '#0d6efd',},
+  button: {backgroundColor: '#0d6efd',padding: 15,borderRadius: 10,marginVertical: 10,width: '80%',alignItems: 'center',},
+  secondaryButton: {backgroundColor: '#e0e0e0',},
+  buttonText: {color: '#fff',fontSize: 16,},
 });
 
 export default WelcomeScreen;
