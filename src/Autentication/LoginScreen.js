@@ -11,7 +11,7 @@ import {
 import supabase from '../../supabase';
 import * as Crypto from 'expo-crypto';
 import * as LocalAuthentication from 'expo-local-authentication';
-import DataUser from '../../navigation/DataUser';
+import DataUser  from '../../navigation/DataUser';
 
 const LoginScreen = ({ navigation }) => {
   const [identifier, setIdentifier] = useState('');
@@ -57,28 +57,6 @@ const LoginScreen = ({ navigation }) => {
 
   const handleFingerprintLogin = async () => {
     try {
-      // Alert the user about using the same angle
-      Alert.alert(
-        'Fingerprint Authentication',
-        'Please use the same angle and pressure as you did during registration.',
-        [{ text: 'OK' }]
-      );
-
-      // Check if device has biometric hardware
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      if (!hasHardware) {
-        Alert.alert('Error', 'This device does not have biometric hardware');
-        return;
-      }
-
-      // Check if biometrics are enrolled
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!isEnrolled) {
-        Alert.alert('Error', 'No biometrics enrolled on this device');
-        return;
-      }
-
-      // Try to authenticate with biometrics
       const biometricAuth = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Login with Biometrics',
         disableDeviceFallback: true,
@@ -86,33 +64,27 @@ const LoginScreen = ({ navigation }) => {
       });
 
       if (biometricAuth.success) {
-        // Get the fingerprint info
-        const fingerprintInfo = {
-          timestamp: new Date().toISOString(),
-          deviceId: await LocalAuthentication.getEnrolledLevelAsync()
-        };
+        const deviceId = await LocalAuthentication.getEnrolledLevelAsync(); // Obtenha o deviceId
 
-        // Query user with matching fingerprint info
+        // Verifica a impressão digital associada ao usuário
         const { data: user, error } = await supabase
           .from('users')
           .select('*')
-          .eq('fingerprintid', JSON.stringify(fingerprintInfo)) // Busca pelo fingerprintid
+          .eq('fingerprintid', JSON.stringify({ deviceId })) // Busca pelo deviceId
           .single();
 
         if (error || !user) {
           Alert.alert('Error', 'No matching account found for this fingerprint');
           return;
         }
-        
+
         // Store user data and navigate
-        DataUser .setUserData(user);
+        DataUser.setUserData(user);
         Alert.alert('Success', `Welcome back, ${user.fullname}!`);
         navigation.navigate('HomeScreen', { userId: user.id });
-
       } else {
         Alert.alert('Error', 'Biometric authentication failed');
       }
-
     } catch (error) {
       console.error('Biometric error:', error);
       Alert.alert('Error', 'Failed to authenticate with biometrics');

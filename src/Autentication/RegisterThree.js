@@ -16,14 +16,19 @@ const RegisterThree = ({ route, navigation }) => {
       });
 
       if (biometricAuth.success) {
-        const { available, biometryType } = await LocalAuthentication.supportedAuthenticationTypesAsync();
-        const fingerprintInfo = {
-          type: biometryType,
-          timestamp: new Date().toISOString(),
-          deviceId: await LocalAuthentication.getEnrolledLevelAsync()
-        };
+        // Obter o nível de autenticação biométrica
+        const enrolledLevel = await LocalAuthentication.getEnrolledLevelAsync();
         
-        handleRegister(JSON.stringify(fingerprintInfo));
+        // Verificar se há impressões digitais registradas
+        if (enrolledLevel === LocalAuthentication.EnrolledLevel.NONE) {
+          Alert.alert('Error', 'No fingerprints enrolled on this device.');
+          return;
+        }
+
+        // Gerar um ID único para a impressão digital
+        const fingerprintId = await LocalAuthentication.getEnrolledFingerprintsAsync();
+
+        handleRegister(JSON.stringify(fingerprintId)); // Armazena a impressão digital
       } else {
         Alert.alert('Failed', 'Biometric authentication failed.');
       }

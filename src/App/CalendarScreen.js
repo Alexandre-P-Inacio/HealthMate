@@ -6,9 +6,11 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import supabase from '../../supabase';
 import DataUser from '../../navigation/DataUser';
 import Navbar from '../Components/Navbar';
+import * as Notifications from 'expo-notifications';
+import * as Calendar from 'expo-calendar';
 
 const CalendarScreen = ({ navigation }) => {
-  const userId = DataUser .getUserData()?.id;
+  const userId = DataUser.getUserData()?.id;
   const [medications, setMedications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -18,14 +20,20 @@ const CalendarScreen = ({ navigation }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [dateType, setDateType] = useState(null);
-  const [selectedTimes, setSelectedTimes] = useState([]); // Para armazenar os horários selecionados
+  const [selectedTimes, setSelectedTimes] = useState([]);
+  const [fixedTimes, setFixedTimes] = useState([]);
+  const [intervalStartTime, setIntervalStartTime] = useState('');
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [showCalendarPopup, setShowCalendarPopup] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(false);
+  const [pendingEvents, setPendingEvents] = useState([]);
 
   const [newMedication, setNewMedication] = useState({
     titulo: '',
     quantidade_comprimidos: '',
     quantidade_comprimidos_por_vez: '',
     data_inicio: '',
-    intervalo_horas: '',
+    intervalo_horas: null,
     horario_fixo: '',
     data_fim: '',
   });
@@ -59,6 +67,41 @@ const CalendarScreen = ({ navigation }) => {
   const handleInfoPress = (medication) => {
     setSelectedMedication(medication);
     setInfoModalVisible(true);
+  };
+
+  const handleEditMedication = (medication) => {
+    setSelectedMedication(medication);
+    const { data_inicio, intervalo_horas } = medication;
+    const [startDate, startTime] = data_inicio.split(';');
+    setNewMedication({
+      titulo: medication.titulo,
+      quantidade_comprimidos: medication.quantidade_comprimidos.toString(),
+      quantidade_comprimidos_por_vez: medication.quantidade_comprimidos_por_vez.toString(),
+      data_inicio: startDate.trim(),
+      intervalo_horas: intervalo_horas,
+      horario_fixo: medication.horario_fixo,
+      data_fim: medication.data_fim,
+    });
+    setIntervalStartTime(startTime ? startTime.trim() : '');
+
+    if (medication.horario_fixo) {
+      setFixedTimes(medication.horario_fixo.split(';').map(time => time.trim()));
+    }
+
+    setSelectedScheduleType(medication.horario_fixo ? 'fixed' : 'interval');
+    setModalVisible(true);
+  };
+
+  const handleScheduleTypeChange = (itemValue) => {
+    setSelectedScheduleType(itemValue);
+    if (itemValue === 'interval') {
+      const [dataInicio] = newMedication.data_inicio.split(';');
+      setNewMedication({ ...newMedication, data_inicio: dataInicio.trim() });
+      setIntervalStartTime('');
+      setFixedTimes([]);
+    } else if (itemValue === 'fixed') {
+      setNewMedication({ ...newMedication, intervalo_horas: null });
+    }
   };
 
   const handleDeleteMedication = async (medicationId) => {
@@ -99,46 +142,6 @@ const CalendarScreen = ({ navigation }) => {
     return true;
   };
 
-  const handleAddMedication = async () => {
-    if (!validateMedicationInput()) return;
-
-    try {
-      const medicationData = {
-        user_id: userId,
-        ...newMedication,
-        data_inicio: newMedication.data_inicio, // A data e hora já foram concatenadas
-        horario_fixo: selectedTimes.join('; '), // Armazena os horários selecionados
-        quantidade_comprimidos: parseInt(newMedication.quantidade_comprimidos),
-        quantidade_comprimidos_por_vez: parseInt(newMedication.quantidade_comprimidos_por_vez),
-        intervalo_horas: newMedication.intervalo_horas ? parseInt(newMedication.intervalo_horas) : null
-      };
-
-      const { data, error } = await supabase
-        .from('pills_warning')
-        .insert([medicationData])
-        .select();
-
-      if (error) throw error;
-
-      setMedications([...medications, data[0]]);
-      setModalVisible(false);
-      setNewMedication({
-        titulo: '',
-        quantidade_comprimidos: '',
-        quantidade_comprimidos_por_vez: '',
-        data_inicio: '',
-        intervalo_horas: '',
-        horario_fixo: '',
-        data_fim: '',
-      });
-      setSelectedTimes([]); // Limpa os horários selecionados
-      Alert.alert('Success', 'Medication added successfully!');
-    } catch (error) {
-      Alert.alert('Error', 'Could not add medication');
-      console.error('Add error:', error);
-    }
-  };
-
   const handleDateChange = (event, selectedDate) => {
     if (event.type === 'dismissed') {
       setShowDatePicker(false);
@@ -148,28 +151,28 @@ const CalendarScreen = ({ navigation }) => {
 
     if (selectedDate) {
       const updatedMedication = { ...newMedication };
-      
+      const timeString = selectedDate.toLocaleTimeString('en-US', { 
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
       switch (dateType) {
         case 'start':
-          updatedMedication.data_inicio = selectedDate.toISOString().split('T')[0]; // Armazena apenas a data
+          updatedMedication.data_inicio = selectedDate.toISOString().split('T')[0];
           break;
         case 'time':
-          const timeString = selectedDate.toLocaleTimeString('en-US', { 
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-          setSelectedTimes([...selectedTimes, timeString]); // Adiciona a hora selecionada
+          if (selectedScheduleType === 'fixed') {
+            setFixedTimes(prevTimes => {
+              const updatedTimes = [...new Set([...prevTimes, timeString])];
+              return updatedTimes;
+            });
+          } else if (selectedScheduleType === 'interval') {
+            setIntervalStartTime(timeString);
+          }
           break;
         case 'end':
           updatedMedication.data_fim = selectedDate.toISOString().split('T')[0];
-          break;
-        case 'fixed':
-          updatedMedication.horario_fixo = selectedDate.toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit'
-          });
           break;
       }
       
@@ -177,6 +180,283 @@ const CalendarScreen = ({ navigation }) => {
     }
     setShowDatePicker(false);
     setShowTimePicker(false);
+  };
+
+  const removeTime = (timeToRemove) => {
+    setSelectedTimes(selectedTimes.filter(time => time !== timeToRemove));
+  };
+
+  const removeFixedTime = (timeToRemove) => {
+    const updatedFixedTimes = fixedTimes.filter(time => time !== timeToRemove);
+    setFixedTimes(updatedFixedTimes);
+  };
+
+  const handleAddMedication = async () => {
+    if (!validateMedicationInput()) return;
+
+    try {
+      const combinedDateTime = `${newMedication.data_inicio}; ${intervalStartTime}`;
+
+      const [dataInicio, startTime] = combinedDateTime.split(';');
+      const startDate = new Date(dataInicio);
+      if (isNaN(startDate.getTime())) {
+        return;
+      }
+
+      const medicationData = {
+        user_id: userId,
+        ...newMedication,
+        data_inicio: combinedDateTime,
+        horario_fixo: fixedTimes.join('; '),
+        quantidade_comprimidos: parseInt(newMedication.quantidade_comprimidos),
+        quantidade_comprimidos_por_vez: parseInt(newMedication.quantidade_comprimidos_por_vez),
+        intervalo_horas: newMedication.intervalo_horas,
+      };
+
+      if (selectedMedication) {
+        const { error } = await supabase
+          .from('pills_warning')
+          .update(medicationData)
+          .eq('id', selectedMedication.id);
+
+        if (error) throw error;
+
+        setMedications(medications.map(med => (med.id === selectedMedication.id ? { ...med, ...medicationData } : med)));
+      } else {
+      const { data, error } = await supabase
+        .from('pills_warning')
+        .insert([medicationData])
+        .select();
+
+      if (error) throw error;
+
+      setMedications([...medications, data[0]]);
+      }
+
+      setModalVisible(false);
+      setNewMedication({
+        titulo: '',
+        quantidade_comprimidos: '',
+        quantidade_comprimidos_por_vez: '',
+        data_inicio: '',
+        intervalo_horas: null,
+        horario_fixo: '',
+        data_fim: '',
+      });
+      setSelectedTimes([]);
+      setFixedTimes([]);
+      setIntervalStartTime('');
+
+      await scheduleReminders(medicationData);
+      await handleAddToCalendarRequest(medicationData);
+
+      Alert.alert('Success', 'Medication saved successfully!');
+    } catch (error) {
+    }
+  };
+
+  const scheduleReminders = async (medication) => {
+    const startDate = new Date(medication.data_inicio);
+    const reminderDays = 20;
+    const intervalDays = 5;
+
+    for (let i = 0; i < reminderDays / intervalDays; i++) {
+      const reminderDate = new Date(startDate);
+      reminderDate.setDate(startDate.getDate() + i * intervalDays);
+      reminderDate.setMinutes(reminderDate.getMinutes() - 10);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Lembrete: ${medication.titulo}`,
+          body: `É hora de tomar seu comprimido!`,
+          data: { medicationId: medication.id },
+        },
+        trigger: {
+          date: reminderDate,
+        },
+      });
+    }
+  };
+
+  const handleAddToCalendarRequest = async (medication) => {
+    try {
+      const { status } = await Calendar.requestCalendarPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please allow calendar access to add medication reminders.');
+        return;
+      }
+
+      const { 
+        titulo, 
+        quantidade_comprimidos, 
+        quantidade_comprimidos_por_vez, 
+        intervalo_horas, 
+        horario_fixo, 
+        data_inicio,
+        data_fim
+      } = medication;
+
+      let baseDate = new Date();
+      let initialHour = null;
+      
+      if (data_inicio && data_inicio.includes(';')) {
+        const [dateStr, timeStr] = data_inicio.split(';');
+        baseDate = new Date(dateStr.trim());
+        initialHour = timeStr.trim();
+      } else if (data_inicio) {
+        baseDate = new Date(data_inicio);
+      }
+      
+      if (isNaN(baseDate.getTime())) {
+        baseDate = new Date();
+      }
+
+      const events = [];
+
+      const totalDoses = Math.ceil(quantidade_comprimidos / quantidade_comprimidos_por_vez);
+      let remainingDoses = totalDoses;
+
+      if (horario_fixo && horario_fixo !== 'NULL') {
+        const fixedTimes = horario_fixo.split(';').map(time => time.trim()).filter(time => time);
+        
+        if (fixedTimes.length === 0) {
+          Alert.alert('Erro', 'Horários fixos inválidos.');
+          return;
+        }
+
+        let currentDay = 0;
+        
+        while (remainingDoses > 0) {
+          for (let timeIndex = 0; timeIndex < fixedTimes.length; timeIndex++) {
+            if (remainingDoses <= 0) break;
+            
+            const time = fixedTimes[timeIndex];
+            if (!time.includes(':')) continue;
+            
+            const [hours, minutes] = time.split(':').map(num => parseInt(num, 10));
+            
+            const eventDate = new Date(baseDate);
+            eventDate.setDate(baseDate.getDate() + currentDay);
+            eventDate.setHours(hours, minutes, 0, 0);
+            
+            if (data_fim && new Date(data_fim) < eventDate) {
+              remainingDoses = 0;
+              break;
+            }
+            
+            const dosePills = Math.min(quantidade_comprimidos_por_vez, remainingDoses * quantidade_comprimidos_por_vez);
+            
+            events.push({
+              title: titulo,
+              startDate: eventDate,
+              endDate: new Date(eventDate.getTime() + 15 * 60000),
+              notes: `Tome ${dosePills} comprimido(s)`
+            });
+            
+            remainingDoses--;
+          }
+          
+          currentDay++;
+          
+          if (currentDay > 365) {
+            Alert.alert('Aviso', 'Número excessivo de dias. Verifique a configuração do medicamento.');
+            break;
+          }
+        }
+      } else if (intervalo_horas && intervalo_horas !== 'NULL') {
+        let startTime = new Date(baseDate);
+        if (initialHour) {
+          const [hours, minutes] = initialHour.split(':').map(num => parseInt(num, 10));
+          startTime.setHours(hours, minutes, 0, 0);
+        }
+        
+        const intervalHours = parseInt(intervalo_horas);
+        
+        if (isNaN(intervalHours) || intervalHours <= 0) {
+          Alert.alert('Erro', 'Intervalo de horas inválido.');
+          return;
+        }
+        
+        for (let i = 0; i < totalDoses; i++) {
+          const intervalMillis = intervalHours * 60 * 60 * 1000;
+          const eventTime = new Date(startTime.getTime() + i * intervalMillis);
+          
+          if (data_fim && new Date(data_fim) < eventTime) break;
+          
+          const dosePills = Math.min(quantidade_comprimidos_por_vez, (totalDoses - i) * quantidade_comprimidos_por_vez);
+          
+          events.push({
+            title: titulo,
+            startDate: eventTime,
+            endDate: new Date(eventTime.getTime() + 15 * 60000),
+            notes: `Tome ${dosePills} comprimido(s)`
+          });
+        }
+      }
+
+      if (events.length === 0) {
+        Alert.alert('Aviso', 'Não foi possível calcular os horários para este medicamento.');
+        return;
+      }
+
+      events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+      setPendingEvents(events);
+      setSelectedMedication(medication);
+      setConfirmModal(true);
+
+    } catch (error) {
+      console.error('Erro ao preparar eventos:', error);
+      Alert.alert('Erro', 'Não foi possível preparar os horários. Tente novamente.');
+    }
+  };
+
+  const confirmAddToCalendar = async () => {
+    try {
+      const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+      if (calendars.length === 0) {
+        Alert.alert('No calendars found', 'You need at least one calendar to add events.');
+        setConfirmModal(false);
+        return;
+      }
+
+      const defaultCalendar = calendars.find(cal => 
+        cal.accessLevel === Calendar.CalendarAccessLevel.OWNER && 
+        cal.source.name === 'Default'
+      ) || calendars[0];
+
+      const eventIds = [];
+      for (const event of pendingEvents) {
+        const eventDetails = {
+          ...event,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          alarms: [{ relativeOffset: -15 }]
+        };
+        
+        const eventId = await Calendar.createEventAsync(defaultCalendar.id, eventDetails);
+        eventIds.push(eventId);
+      }
+
+      if (selectedMedication && eventIds.length > 0) {
+        await supabase
+          .from('pills_warning')
+          .update({ status: 'calendar_added' })
+          .eq('id', selectedMedication.id);
+      }
+
+      Alert.alert(
+        'Sucesso', 
+        `${eventIds.length} lembrete(s) adicionado(s) ao calendário para "${selectedMedication.titulo}".`
+      );
+
+    } catch (error) {
+      console.error('Erro ao adicionar ao calendário:', error);
+      Alert.alert('Erro', 'Não foi possível adicionar ao calendário. Tente novamente.');
+    } finally {
+      setConfirmModal(false);
+      setPendingEvents([]);
+      setSelectedMedication(null);
+    }
   };
 
   const renderMedicationCard = ({ item }) => (
@@ -189,14 +469,23 @@ const CalendarScreen = ({ navigation }) => {
         >
           <Ionicons name="information-circle-outline" size={24} color="#3498db" />
         </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => handleEditMedication(item)}
+          style={styles.editButton}
+        >
+          <Ionicons name="pencil" size={24} color="#f39c12" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleAddToCalendarRequest(item)} style={styles.addToCalendarButton}>
+          <Ionicons name="calendar" size={24} color="#3498db" />
+        </TouchableOpacity>
       </View>
       <View style={styles.medicationDetails}>
         <Text style={styles.medicationInfo}>
-          <Ionicons name="calendar" size={16} color="#3498db" /> Start: {item.data_inicio}
+          <Ionicons name="calendar" size={16} color="#3498db" /> Start: {item.data_inicio.split(';')[0]}
         </Text>
         {item.data_fim && (
           <Text style={styles.medicationInfo}>
-            <Ionicons name="calendar" size={16} color="#e74c3c" /> End: {item.data_fim}
+            <Ionicons name="calendar" size={16} color="#e74c3c" /> End: {item.data_fim.split(';')[0]}
           </Text>
         )}
         <Text style={styles.medicationInfo}>
@@ -262,7 +551,7 @@ const CalendarScreen = ({ navigation }) => {
 
             <Text style={styles.modalTitle}>Add New Medication</Text>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContent}>
               <TextInput
                 style={styles.input}
                 placeholder="Medication Name"
@@ -293,11 +582,10 @@ const CalendarScreen = ({ navigation }) => {
                 <Picker
                   selectedValue={selectedScheduleType}
                   style={styles.picker}
-                  onValueChange={(itemValue) => setSelectedScheduleType(itemValue)}
+                  onValueChange={handleScheduleTypeChange}
                 >
                   <Picker.Item label="Interval Schedule" value="interval" />
                   <Picker.Item label="Fixed Time Schedule" value="fixed" />
-                  <Picker.Item label="Period Schedule" value="period" />
                 </Picker>
               </View>
 
@@ -319,7 +607,7 @@ const CalendarScreen = ({ navigation }) => {
                   >
                     <Ionicons name="time" size={20} color="#3498db" />
                     <Text style={styles.datePickerText}>
-                      {newMedication.hora_inicio || 'Select Start Time'}
+                      {intervalStartTime || 'Select Interval Start Time'}
                     </Text>
                   </TouchableOpacity>
 
@@ -335,39 +623,31 @@ const CalendarScreen = ({ navigation }) => {
               )}
 
               {selectedScheduleType === 'fixed' && (
-                <TouchableOpacity 
-                  style={styles.datePickerButton}
-                  onPress={() => { setShowTimePicker(true); setDateType('fixed'); }}
-                >
-                  <Ionicons name="time" size={20} color="#3498db" />
-                  <Text style={styles.datePickerText}>
-                    {newMedication.horario_fixo || 'Select Fixed Time'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {selectedScheduleType === 'period' && (
-                <View style={styles.datePickerRow}>
+                <>
                   <TouchableOpacity 
                     style={styles.datePickerButton}
-                    onPress={() => { setShowDatePicker(true); setDateType('start'); }}
+                    onPress={() => { setShowTimePicker(true); setDateType('time'); }}
                   >
-                    <Ionicons name="calendar" size={20} color="#3498db" />
+                    <Ionicons name="time" size={20} color="#3498db" />
                     <Text style={styles.datePickerText}>
-                      {newMedication.data_inicio || 'Select Start Date'}
+                      {fixedTimes.length > 0 ? fixedTimes.join(', ') : 'Select Fixed Times'}
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={styles.datePickerButton}
-                    onPress={() => { setShowDatePicker(true); setDateType('end'); }}
-                  >
-                    <Ionicons name="calendar" size={20} color="#3498db" />
-                    <Text style={styles.datePickerText}>
-                      {newMedication.data_fim || 'Select End Date'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                  {fixedTimes.length > 0 && (
+                    <View style={styles.selectedTimesContainer}>
+                      <Text style={styles.selectedTimesTitle}>Selected Fixed Times:</Text>
+                      {fixedTimes.map((time, index) => (
+                        <View key={index} style={styles.selectedTimeRow}>
+                          <Text style={styles.selectedTimeText}>{time}</Text>
+                          <TouchableOpacity onPress={() => removeFixedTime(time)}>
+                            <Ionicons name="trash" size={20} color="#e74c3c" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </>
               )}
 
               {showDatePicker && (
@@ -388,6 +668,20 @@ const CalendarScreen = ({ navigation }) => {
                   display="default"
                   onChange={handleDateChange}
                 />
+              )}
+
+              {selectedTimes.length > 0 && (
+                <View style={styles.selectedTimesContainer}>
+                  <Text style={styles.selectedTimesTitle}>Selected Times:</Text>
+                  {selectedTimes.map((time, index) => (
+                    <View key={index} style={styles.selectedTimeRow}>
+                      <Text style={styles.selectedTimeText}>{time}</Text>
+                      <TouchableOpacity onPress={() => removeTime(time)}>
+                        <Ionicons name="trash" size={20} color="#e74c3c" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
               )}
 
               <TouchableOpacity 
@@ -438,13 +732,13 @@ const CalendarScreen = ({ navigation }) => {
 
                 <View style={styles.infoSection}>
                   <Text style={styles.infoLabel}>Start Date</Text>
-                  <Text style={styles.infoValue}>{selectedMedication.data_inicio}</Text>
+                  <Text style={styles.infoValue}>{selectedMedication.data_inicio.split(';')[0]}</Text>
                 </View>
 
                 {selectedMedication.data_fim && (
                   <View style={styles.infoSection}>
                     <Text style={styles.infoLabel}>End Date</Text>
-                    <Text style={styles.infoValue}>{selectedMedication.data_fim}</Text>
+                    <Text style={styles.infoValue}>{selectedMedication.data_fim.split(';')[0]}</Text>
                   </View>
                 )}
 
@@ -476,6 +770,53 @@ const CalendarScreen = ({ navigation }) => {
         </View>
       </Modal>
 
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={confirmModal}
+        onRequestClose={() => setConfirmModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirmar Lembretes</Text>
+            
+            <Text style={styles.modalSubTitle}>
+              {selectedMedication?.titulo} - {pendingEvents.length} horário(s)
+            </Text>
+            
+            <ScrollView style={styles.eventsList}>
+              {pendingEvents.map((event, index) => (
+                <View key={index} style={styles.eventItem}>
+                  <Text style={styles.eventDate}>
+                    {event.startDate.toLocaleDateString()}
+                  </Text>
+                  <Text style={styles.eventTime}>
+                    {event.startDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                  </Text>
+                  <Text style={styles.eventNotes}>{event.notes}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setConfirmModal(false)}
+              >
+                <Text style={styles.buttonText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]} 
+                onPress={confirmAddToCalendar}
+              >
+                <Text style={styles.buttonText}>Confirmar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Navbar navigation={navigation} />
     </View>
   );
@@ -489,24 +830,138 @@ const styles = StyleSheet.create({
   noDataSubtext: { fontSize: 16, color: '#95a5a6', marginTop: 8, textAlign: 'center' },
   listContainer: { padding: 20 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  medicationCard: { backgroundColor: '#fff', padding: 20, borderRadius: 15, marginBottom: 15, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, borderLeftWidth: 5, borderLeftColor: '#3498db' },
+  medicationCard: { 
+    backgroundColor: '#ffffff', 
+    padding: 20, 
+    borderRadius: 15, 
+    marginBottom: 15, 
+    elevation: 5, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 4, 
+    borderLeftWidth: 5, 
+    borderLeftColor: '#3498db' 
+  },
   medicationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   medicationTitle: { fontSize: 22, fontWeight: 'bold', color: '#2c3e50', flex: 1 },
   infoButton: { padding: 5 },
   medicationDetails: { gap: 8 },
   medicationInfo: { fontSize: 16, color: '#34495e', flexDirection: 'row', alignItems: 'center', gap: 8 },
-  addButton: { position: 'absolute', bottom: 80, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', backgroundColor: '#3498db', paddingVertical: 15, paddingHorizontal: 25, borderRadius: 25, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+  addButton: { 
+    position: 'absolute', 
+    bottom: 80, 
+    alignSelf: 'center', 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#3498db', 
+    paddingVertical: 15, 
+    paddingHorizontal: 25, 
+    borderRadius: 25, 
+    elevation: 5, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 4 
+  },
   addButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginLeft: 8 },
-  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 20 },
-  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 20, width: '100%', maxHeight: '80%' },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
   closeButton: { position: 'absolute', top: 15, right: 15, zIndex: 1, padding: 5 },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#2c3e50', marginBottom: 20, marginTop: 10 },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2D3142',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalSubTitle: {
+    fontSize: 16,
+    color: '#6A8DFD',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  eventsList: {
+    maxHeight: 300,
+  },
+  eventItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F5',
+  },
+  eventDate: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2D3142',
+  },
+  eventTime: {
+    fontSize: 16,
+    color: '#6A8DFD',
+    fontWeight: 'bold',
+    marginVertical: 4,
+  },
+  eventNotes: {
+    fontSize: 14,
+    color: '#9BA3B7',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    padding: 12,
+    borderRadius: 10,
+    width: '48%',
+    alignItems: 'center',
+  },
+  confirmButton: {
+    backgroundColor: '#6A8DFD',
+  },
+  cancelButton: {
+    backgroundColor: '#E74C3C',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   input: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 15, marginBottom: 15, fontSize: 16, backgroundColor: '#f8f9fa' },
   pickerContainer: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, marginBottom: 15, backgroundColor: '#f8f9fa' },
   picker: { height: 50 },
   datePickerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 15 },
-  datePickerButton: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: '#e0e0e0', gap: 8 },
-  datePickerText: { fontSize: 16, color: '#3498db', flex: 1 },
+  datePickerButton: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#f8f9fa', 
+    padding: 15, 
+    borderRadius: 10, 
+    borderWidth: 1, 
+    borderColor: '#e0e0e0', 
+    gap: 8 
+  },
+  datePickerText: { 
+    fontSize: 16, 
+    color: '#3498db', 
+    flex: 1 
+  },
   saveButton: { backgroundColor: '#2ecc71', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 },
   saveButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   infoSection: { marginBottom: 15 },
@@ -514,6 +969,39 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 18, color: '#2c3e50', fontWeight: '500' },
   deleteButton: { backgroundColor: '#e74c3c', padding: 15, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20, gap: 8 },
   deleteButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  selectedTimesContainer: { marginTop: 15, padding: 10, backgroundColor: '#f8f9fa', borderRadius: 10 },
+  selectedTimesTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50' },
+  selectedTimeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 5 },
+  selectedTimeText: { fontSize: 16, color: '#34495e' },
+  scrollViewContent: { gap: 15 },
+  editButton: { padding: 5 },
+  calendarInfoContainer: {
+    marginVertical: 15,
+  },
+  calendarInfoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  calendarInfoText: {
+    fontSize: 16,
+    color: '#34495e',
+  },
+  addToCalendarButton: {
+    marginLeft: 10,
+  },
+  confirmAddToCalendarButton: {
+    backgroundColor: '#2ecc71',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  confirmAddToCalendarButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
 });
 
 export default CalendarScreen;
