@@ -11,6 +11,13 @@ import HomeScreen from './src/App/HomeScreen';
 import CalendarScreen from './src/App/CalendarScreen';
 import AccountScreen from './src/App/AccountScreen';
 import SettingsScreen from './src/App/SettingsScreen';
+import MedicalDiaryScreen from './src/App/MedicalDiaryScreen';
+import MedicationTracker from './src/App/MedicationTracker';
+import SupportScreen from './src/App/SupportScreen';
+import PrivacyPolicyScreen from './src/App/PrivacyPolicyScreen';
+import TermsScreen from './src/App/TermsScreen';
+import HelpScreen from './src/App/HelpScreen';
+import EditProfileScreen from './src/App/EditProfileScreen';
 
 const Stack = createStackNavigator();
 
@@ -36,6 +43,14 @@ const App = () => {
         <Stack.Screen name="CalendarScreen" component={CalendarScreen} />
         <Stack.Screen name="AccountScreen" component={AccountScreen} />
         <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
+        <Stack.Screen name="MedicalDiary" component={MedicalDiaryScreen} />
+        <Stack.Screen name="MedicationTracker" component={MedicationTracker} />
+        <Stack.Screen name="SupportScreen" component={SupportScreen} />
+        <Stack.Screen name="PrivacyPolicyScreen" component={PrivacyPolicyScreen} />
+        <Stack.Screen name="TermsScreen" component={TermsScreen} />
+        <Stack.Screen name="HelpScreen" component={HelpScreen} />
+        <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

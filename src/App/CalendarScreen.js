@@ -503,7 +503,7 @@ const CalendarScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Medication Schedule</Text>
+      <Text style={styles.headerTitle}>Medications</Text>
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -541,114 +541,192 @@ const CalendarScreen = ({ navigation }) => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContentEnhanced}>
+            <View style={styles.modalHandle} />
+            
             <TouchableOpacity 
-              style={styles.closeButton} 
+              style={styles.closeButtonEnhanced} 
               onPress={() => setModalVisible(false)}
             >
-              <Ionicons name="close" size={24} color="#333" />
+              <Ionicons name="close" size={24} color="#666" />
             </TouchableOpacity>
 
-            <Text style={styles.modalTitle}>Add New Medication</Text>
+            <Text style={styles.modalTitleEnhanced}>
+              {selectedMedication ? 'Editar Medicamento' : 'Novo Medicamento'}
+            </Text>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContent}>
-              <TextInput
-                style={styles.input}
-                placeholder="Medication Name"
-                value={newMedication.titulo}
-                onChangeText={(text) => setNewMedication({ ...newMedication, titulo: text })}
-                placeholderTextColor="#95a5a6"
-              />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContentEnhanced}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nome do Medicamento</Text>
+                <TextInput
+                  style={styles.inputEnhanced}
+                  placeholder="Ex: Paracetamol, Vitamina C..."
+                  value={newMedication.titulo}
+                  onChangeText={(text) => setNewMedication({ ...newMedication, titulo: text })}
+                  placeholderTextColor="#95a5a6"
+                />
+              </View>
               
-              <TextInput
-                style={styles.input}
-                placeholder="Total Tablets"
-                keyboardType="numeric"
-                value={newMedication.quantidade_comprimidos}
-                onChangeText={(text) => setNewMedication({ ...newMedication, quantidade_comprimidos: text })}
-                placeholderTextColor="#95a5a6"
-              />
-              
-              <TextInput
-                style={styles.input}
-                placeholder="Tablets per Dose"
-                keyboardType="numeric"
-                value={newMedication.quantidade_comprimidos_por_vez}
-                onChangeText={(text) => setNewMedication({ ...newMedication, quantidade_comprimidos_por_vez: text })}
-                placeholderTextColor="#95a5a6"
-              />
+              <View style={styles.rowContainer}>
+                <View style={[styles.inputGroup, {flex: 1, marginRight: 8}]}>
+                  <Text style={styles.inputLabel}>Total de Comprimidos</Text>
+                  <TextInput
+                    style={styles.inputEnhanced}
+                    placeholder="Ex: 30"
+                    keyboardType="numeric"
+                    value={newMedication.quantidade_comprimidos}
+                    onChangeText={(text) => setNewMedication({ ...newMedication, quantidade_comprimidos: text })}
+                    placeholderTextColor="#95a5a6"
+                  />
+                </View>
+                
+                <View style={[styles.inputGroup, {flex: 1, marginLeft: 8}]}>
+                  <Text style={styles.inputLabel}>Dose por vez</Text>
+                  <TextInput
+                    style={styles.inputEnhanced}
+                    placeholder="Ex: 1"
+                    keyboardType="numeric"
+                    value={newMedication.quantidade_comprimidos_por_vez}
+                    onChangeText={(text) => setNewMedication({ ...newMedication, quantidade_comprimidos_por_vez: text })}
+                    placeholderTextColor="#95a5a6"
+                  />
+                </View>
+              </View>
 
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={selectedScheduleType}
-                  style={styles.picker}
-                  onValueChange={handleScheduleTypeChange}
-                >
-                  <Picker.Item label="Interval Schedule" value="interval" />
-                  <Picker.Item label="Fixed Time Schedule" value="fixed" />
-                </Picker>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tipo de Agendamento</Text>
+                <View style={styles.scheduleTypeContainer}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.scheduleTypeButton,
+                      selectedScheduleType === 'interval' && styles.scheduleTypeSelected
+                    ]}
+                    onPress={() => handleScheduleTypeChange('interval')}
+                  >
+                    <Ionicons 
+                      name="time-outline" 
+                      size={20} 
+                      color={selectedScheduleType === 'interval' ? '#fff' : '#3498db'} 
+                    />
+                    <Text style={[
+                      styles.scheduleTypeText,
+                      selectedScheduleType === 'interval' && styles.scheduleTypeTextSelected
+                    ]}>Intervalo</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.scheduleTypeButton,
+                      selectedScheduleType === 'fixed' && styles.scheduleTypeSelected
+                    ]}
+                    onPress={() => handleScheduleTypeChange('fixed')}
+                  >
+                    <Ionicons 
+                      name="alarm-outline" 
+                      size={20} 
+                      color={selectedScheduleType === 'fixed' ? '#fff' : '#3498db'} 
+                    />
+                    <Text style={[
+                      styles.scheduleTypeText,
+                      selectedScheduleType === 'fixed' && styles.scheduleTypeTextSelected
+                    ]}>Horário Fixo</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {selectedScheduleType === 'interval' && (
                 <>
-                  <TouchableOpacity 
-                    style={styles.datePickerButton}
-                    onPress={() => { setShowDatePicker(true); setDateType('start'); }}
-                  >
-                    <Ionicons name="calendar" size={20} color="#3498db" />
-                    <Text style={styles.datePickerText}>
-                      {newMedication.data_inicio || 'Select Start Date'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Data de Início</Text>
+                    <TouchableOpacity 
+                      style={styles.datePickerButtonEnhanced}
+                      onPress={() => { setShowDatePicker(true); setDateType('start'); }}
+                    >
+                      <Ionicons name="calendar" size={20} color="#3498db" />
+                      <Text style={styles.datePickerTextEnhanced}>
+                        {newMedication.data_inicio || 'Selecione a data inicial'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
-                  <TouchableOpacity 
-                    style={styles.datePickerButton}
-                    onPress={() => { setShowTimePicker(true); setDateType('time'); }}
-                  >
-                    <Ionicons name="time" size={20} color="#3498db" />
-                    <Text style={styles.datePickerText}>
-                      {intervalStartTime || 'Select Interval Start Time'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Horário Inicial</Text>
+                    <TouchableOpacity 
+                      style={styles.datePickerButtonEnhanced}
+                      onPress={() => { setShowTimePicker(true); setDateType('time'); }}
+                    >
+                      <Ionicons name="time" size={20} color="#3498db" />
+                      <Text style={styles.datePickerTextEnhanced}>
+                        {intervalStartTime || 'Selecione o horário inicial'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Interval in Hours"
-                    keyboardType="numeric"
-                    value={newMedication.intervalo_horas}
-                    onChangeText={(text) => setNewMedication({ ...newMedication, intervalo_horas: text })}
-                    placeholderTextColor="#95a5a6"
-                  />
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Intervalo (horas)</Text>
+                    <TextInput
+                      style={styles.inputEnhanced}
+                      placeholder="Ex: 8 (para de 8 em 8 horas)"
+                      keyboardType="numeric"
+                      value={newMedication.intervalo_horas}
+                      onChangeText={(text) => setNewMedication({ ...newMedication, intervalo_horas: text })}
+                      placeholderTextColor="#95a5a6"
+                    />
+                  </View>
                 </>
               )}
 
               {selectedScheduleType === 'fixed' && (
                 <>
-                  <TouchableOpacity 
-                    style={styles.datePickerButton}
-                    onPress={() => { setShowTimePicker(true); setDateType('time'); }}
-                  >
-                    <Ionicons name="time" size={20} color="#3498db" />
-                    <Text style={styles.datePickerText}>
-                      {fixedTimes.length > 0 ? fixedTimes.join(', ') : 'Select Fixed Times'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Horários Fixos</Text>
+                    <TouchableOpacity 
+                      style={styles.datePickerButtonEnhanced}
+                      onPress={() => { setShowTimePicker(true); setDateType('time'); }}
+                    >
+                      <Ionicons name="time" size={20} color="#3498db" />
+                      <Text style={styles.datePickerTextEnhanced}>
+                        Adicionar novo horário
+                      </Text>
+                      <View style={styles.addTimeButton}>
+                        <Ionicons name="add" size={18} color="#fff" />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
 
                   {fixedTimes.length > 0 && (
-                    <View style={styles.selectedTimesContainer}>
-                      <Text style={styles.selectedTimesTitle}>Selected Fixed Times:</Text>
-                      {fixedTimes.map((time, index) => (
-                        <View key={index} style={styles.selectedTimeRow}>
-                          <Text style={styles.selectedTimeText}>{time}</Text>
-                          <TouchableOpacity onPress={() => removeFixedTime(time)}>
-                            <Ionicons name="trash" size={20} color="#e74c3c" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
+                    <View style={styles.selectedTimesContainerEnhanced}>
+                      <Text style={styles.selectedTimesTitle}>Horários Selecionados:</Text>
+                      <View style={styles.timeChipsContainer}>
+                        {fixedTimes.map((time, index) => (
+                          <View key={index} style={styles.timeChip}>
+                            <Text style={styles.timeChipText}>{time}</Text>
+                            <TouchableOpacity 
+                              style={styles.removeTimeButton} 
+                              onPress={() => removeFixedTime(time)}
+                            >
+                              <Ionicons name="close-circle" size={18} color="#e74c3c" />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
                     </View>
                   )}
                 </>
               )}
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Data Final (opcional)</Text>
+                <TouchableOpacity 
+                  style={styles.datePickerButtonEnhanced}
+                  onPress={() => { setShowDatePicker(true); setDateType('end'); }}
+                >
+                  <Ionicons name="calendar" size={20} color="#3498db" />
+                  <Text style={styles.datePickerTextEnhanced}>
+                    {newMedication.data_fim || 'Definir data final'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {showDatePicker && (
                 <DateTimePicker
@@ -670,26 +748,12 @@ const CalendarScreen = ({ navigation }) => {
                 />
               )}
 
-              {selectedTimes.length > 0 && (
-                <View style={styles.selectedTimesContainer}>
-                  <Text style={styles.selectedTimesTitle}>Selected Times:</Text>
-                  {selectedTimes.map((time, index) => (
-                    <View key={index} style={styles.selectedTimeRow}>
-                      <Text style={styles.selectedTimeText}>{time}</Text>
-                      <TouchableOpacity onPress={() => removeTime(time)}>
-                        <Ionicons name="trash" size={20} color="#e74c3c" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
               <TouchableOpacity 
-                style={styles.saveButton} 
+                style={styles.saveButtonEnhanced} 
                 onPress={handleAddMedication}
                 activeOpacity={0.8}
               >
-                <Text style={styles.saveButtonText}>Save Medication</Text>
+                <Text style={styles.saveButtonText}>Salvar Medicamento</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -824,7 +888,7 @@ const CalendarScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f7fa', paddingTop: 40 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#2c3e50', textAlign: 'center', marginVertical: 20, letterSpacing: 0.5 },
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#2c3e50', textAlign: 'center', marginVertical: 20, letterSpacing: 0.5 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   noDataText: { fontSize: 20, color: '#7f8c8d', marginTop: 20, fontWeight: '600' },
   noDataSubtext: { fontSize: 16, color: '#95a5a6', marginTop: 8, textAlign: 'center' },
@@ -871,35 +935,165 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  modalContent: {
+  modalContentEnhanced: {
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 25,
+    paddingTop: 15,
+    width: '100%',
+    maxHeight: '90%',
+    position: 'absolute',
+    bottom: 0,
     elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowRadius: 4,
   },
-  closeButton: { position: 'absolute', top: 15, right: 15, zIndex: 1, padding: 5 },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2D3142',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  modalSubTitle: {
-    fontSize: 16,
-    color: '#6A8DFD',
+  modalHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#ddd',
+    borderRadius: 3,
+    alignSelf: 'center',
     marginBottom: 15,
+  },
+  modalTitleEnhanced: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 20,
     textAlign: 'center',
   },
-  eventsList: {
-    maxHeight: 300,
+  closeButtonEnhanced: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    zIndex: 1,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f1f2f6',
   },
+  scrollViewContentEnhanced: {
+    paddingBottom: 30,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#2c3e50',
+    marginBottom: 8,
+  },
+  inputEnhanced: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    backgroundColor: '#f8f9fa',
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  datePickerButtonEnhanced: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  datePickerTextEnhanced: {
+    fontSize: 16,
+    color: '#3498db',
+    flex: 1,
+    marginLeft: 10,
+  },
+  saveButtonEnhanced: {
+    backgroundColor: '#3498db',
+    padding: 18,
+    borderRadius: 15,
+    alignItems: 'center',
+    marginTop: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  scheduleTypeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  scheduleTypeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    padding: 15,
+    flex: 1,
+    marginHorizontal: 5,
+    justifyContent: 'center',
+  },
+  scheduleTypeSelected: {
+    backgroundColor: '#3498db',
+    borderColor: '#3498db',
+  },
+  scheduleTypeText: {
+    fontSize: 16,
+    color: '#3498db',
+    marginLeft: 8,
+  },
+  scheduleTypeTextSelected: {
+    color: '#fff',
+  },
+  selectedTimesContainerEnhanced: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 20,
+  },
+  timeChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+  },
+  timeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f4fd',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  timeChipText: {
+    fontSize: 14,
+    color: '#3498db',
+  },
+  removeTimeButton: {
+    marginLeft: 5,
+  },
+  addTimeButton: {
+    backgroundColor: '#3498db',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedTimesTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50' },
   eventItem: {
     padding: 12,
     borderBottomWidth: 1,
@@ -942,66 +1136,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  input: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 15, marginBottom: 15, fontSize: 16, backgroundColor: '#f8f9fa' },
-  pickerContainer: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, marginBottom: 15, backgroundColor: '#f8f9fa' },
-  picker: { height: 50 },
-  datePickerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 15 },
-  datePickerButton: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#f8f9fa', 
-    padding: 15, 
-    borderRadius: 10, 
-    borderWidth: 1, 
-    borderColor: '#e0e0e0', 
-    gap: 8 
+  editButton: { padding: 5 },
+  addToCalendarButton: {
+    marginLeft: 10,
   },
-  datePickerText: { 
-    fontSize: 16, 
-    color: '#3498db', 
-    flex: 1 
-  },
-  saveButton: { backgroundColor: '#2ecc71', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 },
-  saveButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   infoSection: { marginBottom: 15 },
   infoLabel: { fontSize: 14, color: '#7f8c8d', marginBottom: 5 },
   infoValue: { fontSize: 18, color: '#2c3e50', fontWeight: '500' },
   deleteButton: { backgroundColor: '#e74c3c', padding: 15, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20, gap: 8 },
   deleteButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  scrollViewContent: { gap: 15 },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  closeButton: { position: 'absolute', top: 15, right: 15, zIndex: 1, padding: 5 },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2D3142',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#6A8DFD',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  eventsList: {
+    maxHeight: 300,
+  },
   selectedTimesContainer: { marginTop: 15, padding: 10, backgroundColor: '#f8f9fa', borderRadius: 10 },
-  selectedTimesTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50' },
   selectedTimeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 5 },
   selectedTimeText: { fontSize: 16, color: '#34495e' },
-  scrollViewContent: { gap: 15 },
-  editButton: { padding: 5 },
-  calendarInfoContainer: {
-    marginVertical: 15,
-  },
-  calendarInfoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-  },
-  calendarInfoText: {
-    fontSize: 16,
-    color: '#34495e',
-  },
-  addToCalendarButton: {
-    marginLeft: 10,
-  },
-  confirmAddToCalendarButton: {
-    backgroundColor: '#2ecc71',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  confirmAddToCalendarButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
 });
 
 export default CalendarScreen;
