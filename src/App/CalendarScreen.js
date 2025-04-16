@@ -27,6 +27,8 @@ const CalendarScreen = ({ navigation }) => {
   const [showCalendarPopup, setShowCalendarPopup] = useState(false);
   const [confirmModal, setConfirmModal] = useState(false);
   const [pendingEvents, setPendingEvents] = useState([]);
+  const [scheduleConfirmModal, setScheduleConfirmModal] = useState(false);
+  const [scheduleItems, setScheduleItems] = useState([]);
 
   const [newMedication, setNewMedication] = useState({
     titulo: '',
@@ -475,6 +477,109 @@ const CalendarScreen = ({ navigation }) => {
         cal.source.name === 'Default'
       ) || calendars[0];
 
+      // Prepare schedule items for confirmation
+      const scheduleItemsToSave = pendingEvents.map(event => {
+        const eventDate = new Date(event.startDate);
+        const timeStr = eventDate.toTimeString().split(' ')[0]; // HH:MM:SS
+        return {
+          date: eventDate.toLocaleDateString(),
+          time: eventDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+          notes: event.notes,
+          rawDate: eventDate.toISOString().split('T')[0],
+          rawTime: timeStr,
+          fullDatetime: eventDate.toISOString()
+        };
+      });
+
+      // Show confirmation popup for schedule items
+      setScheduleItems(scheduleItemsToSave);
+      setScheduleConfirmModal(true);
+      setConfirmModal(false); // Close the first confirmation modal
+
+    } catch (error) {
+      console.error('Erro ao preparar dados para confirmação:', error);
+      Alert.alert('Erro', 'Não foi possível preparar os horários. Tente novamente.');
+      setConfirmModal(false);
+    }
+  };
+
+  const finalizeCalendarAndScheduleSave = async () => {
+    try {
+      const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+      const defaultCalendar = calendars.find(cal => 
+        cal.accessLevel === Calendar.CalendarAccessLevel.OWNER && 
+        cal.source.name === 'Default'
+      ) || calendars[0];
+
+      let savedConfirmationsCount = 0;
+      let savedSchedulesCount = 0;
+
+      // Save to both tables
+      for (const item of scheduleItems) {
+        try {
+          // 1. Save to medication_confirmations
+          const confirmationData = {
+            medication_id: selectedMedication.id,
+            pill_id: selectedMedication.id,
+            user_id: userId,
+            scheduled_time: item.fullDatetime,
+            confirmation_date: item.rawDate,
+            confirmation_time: null,
+            taken: false,
+            notes: item.notes || 'Medicamento agendado',
+            created_at: new Date().toISOString()
+          };
+
+          const { data: existingConfirmation, error: checkError } = await supabase
+            .from('medication_confirmations')
+            .select('id')
+            .eq('medication_id', confirmationData.medication_id)
+            .eq('scheduled_time', confirmationData.scheduled_time)
+            .maybeSingle();
+
+          if (!checkError && !existingConfirmation) {
+            const { error: insertError } = await supabase
+              .from('medication_confirmations')
+              .insert(confirmationData);
+
+            if (!insertError) savedConfirmationsCount++;
+          }
+
+          // 2. Save to medication_schedule_times
+          const scheduleData = {
+            medication_id: selectedMedication.id,
+            scheduled_date: item.rawDate,
+            scheduled_time: item.rawTime,
+            complete_datetime: item.fullDatetime,
+            dosage: item.notes ? item.notes.replace('Tome ', '').replace(' comprimido(s)', '') : null,
+            user_id: userId,
+            pill_id: selectedMedication.id,
+            notes: item.notes || 'Agendado via CalendarScreen'
+          };
+
+          const { data: existingSchedule, error: checkScheduleError } = await supabase
+            .from('medication_schedule_times')
+            .select('id')
+            .eq('medication_id', scheduleData.medication_id)
+            .eq('scheduled_date', scheduleData.scheduled_date)
+            .eq('scheduled_time', scheduleData.scheduled_time)
+            .maybeSingle();
+
+          if (!checkScheduleError && !existingSchedule) {
+            const { error: insertScheduleError } = await supabase
+              .from('medication_schedule_times')
+              .insert(scheduleData);
+
+            if (!insertScheduleError) savedSchedulesCount++;
+          }
+        } catch (err) {
+          console.error('Erro ao salvar item individual:', err);
+        }
+      }
+
+      console.log(`Salvos: ${savedConfirmationsCount} confirmações, ${savedSchedulesCount} agendamentos`);
+
+      // Add to calendar
       const eventIds = [];
       for (const event of pendingEvents) {
         const eventDetails = {
@@ -487,25 +592,30 @@ const CalendarScreen = ({ navigation }) => {
         eventIds.push(eventId);
       }
 
+      // Update pill status
       if (selectedMedication && eventIds.length > 0) {
         await supabase
           .from('pills_warning')
-          .update({ status: 'calendar_added' })
+          .update({ 
+            status: 'calendar_added',
+            all_schedules_saved: true
+          })
           .eq('id', selectedMedication.id);
       }
 
       Alert.alert(
         'Sucesso', 
-        `${eventIds.length} lembrete(s) adicionado(s) ao calendário para "${selectedMedication.titulo}".`
+        `${eventIds.length} lembretes adicionados ao calendário.\n${savedSchedulesCount} agendamentos salvos no banco de dados.`
       );
 
     } catch (error) {
-      console.error('Erro ao adicionar ao calendário:', error);
-      Alert.alert('Erro', 'Não foi possível adicionar ao calendário. Tente novamente.');
+      console.error('Erro ao finalizar agendamentos:', error);
+      Alert.alert('Erro', 'Não foi possível salvar todos os agendamentos.');
     } finally {
-      setConfirmModal(false);
+      setScheduleConfirmModal(false);
       setPendingEvents([]);
       setSelectedMedication(null);
+      setScheduleItems([]);
     }
   };
 
@@ -931,6 +1041,61 @@ const CalendarScreen = ({ navigation }) => {
         </View>
       </Modal>
 
+      {/* New Modal for Schedule Times Confirmation */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={scheduleConfirmModal}
+        onRequestClose={() => setScheduleConfirmModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalContent, { width: '95%' }]}>
+            <Text style={styles.modalTitle}>Confirmação de Agendamentos</Text>
+            
+            <Text style={styles.modalSubtitle}>
+              Confirme os {scheduleItems.length} horários a serem salvos no banco de dados:
+            </Text>
+            
+            <ScrollView style={styles.scheduleListContainer}>
+              {scheduleItems.map((item, index) => (
+                <View key={index} style={styles.scheduleItem}>
+                  <View style={styles.scheduleDateTimeContainer}>
+                    <Text style={styles.scheduleDate}>{item.date}</Text>
+                    <Text style={styles.scheduleTime}>{item.time}</Text>
+                  </View>
+                  <Text style={styles.scheduleNotes}>{item.notes}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            
+            <Text style={styles.saveWarning}>
+              Estes horários serão salvos na tabela medication_schedule_times
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => {
+                  setScheduleConfirmModal(false);
+                  setPendingEvents([]);
+                  setSelectedMedication(null);
+                  setScheduleItems([]);
+                }}
+              >
+                <Text style={styles.buttonText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]} 
+                onPress={finalizeCalendarAndScheduleSave}
+              >
+                <Text style={styles.buttonText}>Salvar Todos</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Navbar navigation={navigation} />
     </View>
   );
@@ -1228,6 +1393,43 @@ const styles = StyleSheet.create({
   selectedTimesContainer: { marginTop: 15, padding: 10, backgroundColor: '#f8f9fa', borderRadius: 10 },
   selectedTimeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 5 },
   selectedTimeText: { fontSize: 16, color: '#34495e' },
+  scheduleListContainer: {
+    maxHeight: 300,
+    marginVertical: 10
+  },
+  scheduleItem: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db'
+  },
+  scheduleDateTimeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4
+  },
+  scheduleDate: {
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    fontSize: 14
+  },
+  scheduleTime: {
+    fontWeight: 'bold',
+    color: '#3498db',
+    fontSize: 14
+  },
+  scheduleNotes: {
+    color: '#7f8c8d',
+    fontSize: 13
+  },
+  saveWarning: {
+    fontStyle: 'italic',
+    color: '#e67e22',
+    fontSize: 12,
+    textAlign: 'center',
+  },
 });
 
 export default CalendarScreen;
