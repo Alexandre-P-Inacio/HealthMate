@@ -200,39 +200,91 @@ const CalendarScreen = ({ navigation }) => {
       const [dataInicio, startTime] = combinedDateTime.split(';');
       const startDate = new Date(dataInicio);
       if (isNaN(startDate.getTime())) {
+        Alert.alert('Error', 'Invalid start date format');
         return;
       }
 
+      // First get the highest current ID to generate a new one (temporary solution)
+      const { data: maxIdData, error: maxIdError } = await supabase
+        .from('pills_warning')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1);
+        
+      if (maxIdError) {
+        console.error('Error getting max ID:', maxIdError);
+        Alert.alert('Error', 'Failed to generate new ID');
+        return;
+      }
+
+      // Calculate new ID (max + 1)
+      const newId = maxIdData && maxIdData.length > 0 ? maxIdData[0].id + 1 : 1;
+      console.log(`Generated new ID: ${newId}`);
+
+      // Create medication data object with proper field names and explicit ID
       const medicationData = {
+        id: selectedMedication ? selectedMedication.id : newId, // Use existing ID for updates, new one for inserts
         user_id: userId,
-        ...newMedication,
-        data_inicio: combinedDateTime,
-        horario_fixo: fixedTimes.join('; '),
+        titulo: newMedication.titulo,
         quantidade_comprimidos: parseInt(newMedication.quantidade_comprimidos),
         quantidade_comprimidos_por_vez: parseInt(newMedication.quantidade_comprimidos_por_vez),
+        data_inicio: combinedDateTime,
         intervalo_horas: newMedication.intervalo_horas,
+        horario_fixo: fixedTimes.join('; '),
+        data_fim: newMedication.data_fim,
+        status: 'pending'
       };
 
+      console.log('Saving medication:', medicationData);
+
+      // Handle update vs insert
       if (selectedMedication) {
-        const { error } = await supabase
+        console.log(`Updating existing medication with ID: ${selectedMedication.id}`);
+        const { data, error } = await supabase
           .from('pills_warning')
           .update(medicationData)
-          .eq('id', selectedMedication.id);
+          .eq('id', selectedMedication.id)
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error updating medication:', error);
+          Alert.alert('Error', `Failed to update medication: ${error.message}`);
+          return;
+        }
 
-        setMedications(medications.map(med => (med.id === selectedMedication.id ? { ...med, ...medicationData } : med)));
+        console.log('Medication updated successfully:', data);
+        setMedications(medications.map(med => 
+          med.id === selectedMedication.id ? { ...med, ...medicationData } : med
+        ));
+        
+        Alert.alert('Success', 'Medication updated successfully!');
       } else {
+        console.log('Creating new medication with ID:', newId);
       const { data, error } = await supabase
         .from('pills_warning')
         .insert([medicationData])
         .select();
 
-      if (error) throw error;
-
-      setMedications([...medications, data[0]]);
+        if (error) {
+          console.error('Error creating medication:', error);
+          Alert.alert('Error', `Failed to create medication: ${error.message}`);
+        return;
       }
 
+        console.log('Medication created successfully:', data);
+        setMedications([...medications, data[0]]);
+        
+        Alert.alert('Success', 'Medication saved successfully!');
+        
+        // Store the newly created medication for calendar/reminders
+        const savedMedication = data[0];
+        
+        // Schedule reminders and add to calendar after successful save
+        await scheduleReminders(savedMedication);
+        await handleAddToCalendarRequest(savedMedication);
+      }
+
+      // Reset form and close modal
       setModalVisible(false);
       setNewMedication({
         titulo: '',
@@ -247,11 +299,9 @@ const CalendarScreen = ({ navigation }) => {
       setFixedTimes([]);
       setIntervalStartTime('');
 
-      await scheduleReminders(medicationData);
-      await handleAddToCalendarRequest(medicationData);
-
-      Alert.alert('Success', 'Medication saved successfully!');
     } catch (error) {
+      console.error('Exception saving medication:', error);
+      Alert.alert('Error', `An error occurred: ${error.message}`);
     }
   };
 
