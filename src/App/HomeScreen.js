@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import supabase from '../../supabase';
 import Navbar from '../Components/Navbar';
 import * as Calendar from 'expo-calendar';
 import DataUser from '../../navigation/DataUser';
-import { useNavigation } from '@react-navigation/native';
 
 const HomeScreen = () => {
   const [userData, setUserData] = useState({
@@ -21,9 +20,6 @@ const HomeScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [missedMedication, setMissedMedication] = useState(null);
   const [showMedicationModal, setShowMedicationModal] = useState(false);
-  const navigation = useNavigation();
-  const hourlyScrollViewRef = useRef(null);
-  const hourRowHeight = 70; // Definir altura fixa de cada linha de hora para cálculos precisos
 
   useEffect(() => {
     fetchUserData();
@@ -43,34 +39,6 @@ const HomeScreen = () => {
       fetchEvents(calendarId);
     }
   }, [selectedDate, calendarId]);
-
-  useEffect(() => {
-    if (hourlyScrollViewRef.current) {
-      setTimeout(() => {
-        scrollToCurrentTime();
-      }, 300);
-    }
-  }, [currentHour, isLoading]);
-
-  const scrollToCurrentTime = () => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    // Calcula posição exata da hora atual (cada linha tem altura fixa de 70px)
-    const position = currentHour * hourRowHeight;
-    
-    // Ajusta a posição para centralizar a hora na tela
-    const scrollViewHeight = 350; // Altura do container do scrollview
-    const offsetToCenter = Math.max(0, position - (scrollViewHeight / 2) + (hourRowHeight / 2));
-    
-    // Scroll para a posição calculada
-    if (hourlyScrollViewRef.current) {
-      hourlyScrollViewRef.current.scrollTo({ 
-        y: offsetToCenter, 
-        animated: true 
-      });
-    }
-  };
 
   const requestCalendarPermissions = async () => {
     const { status } = await Calendar.requestCalendarPermissionsAsync();
@@ -270,232 +238,13 @@ const HomeScreen = () => {
     });
   };
 
-  const getAllHours = () => {
+  const getVisibleHours = () => {
     const hours = [];
-    for (let i = 0; i < 24; i++) {
-      hours.push(i);
+    for (let i = currentHour - 3; i <= currentHour + 3; i++) {
+      const hour = i < 0 ? i + 24 : i >= 24 ? i - 24 : i;
+      hours.push(hour);
     }
-    return hours;
-  };
-
-  // Função para calcular e salvar todos os horários de medicação na tabela medication_confirmations
-  const calculateAndSaveMedicationSchedule = async (medicationData, userId) => {
-    try {
-      if (!medicationData.id || !userId) {
-        console.error('ID do medicamento ou ID do usuário não fornecido');
-        return { error: 'Dados incompletos' };
-      }
-
-      console.log(`Calculando horários para medicamento ID: ${medicationData.id}`);
-      
-      // Array para armazenar todas as datas/horas calculadas
-      const scheduledTimes = [];
-      
-      // Data atual como referência
-      const now = new Date();
-      let startDate = medicationData.data_inicio ? new Date(medicationData.data_inicio) : now;
-      
-      // Garantir que a data de início não seja anterior à data atual
-      if (startDate < now) {
-        startDate = now;
-      }
-      
-      // Data de término (se existir)
-      const endDate = medicationData.data_fim ? new Date(medicationData.data_fim) : null;
-      
-      // Determinar o tipo de frequência e calcular os horários
-      if (medicationData.recurrence === 'daily' || !medicationData.recurrence) {
-        // Medicamento diário
-        const daysToCalculate = endDate ? 
-          Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) : 
-          30; // Padrão: 30 dias se não houver data final
-        
-        // Para cada dia no período
-        for (let day = 0; day < daysToCalculate; day++) {
-          const currentDate = new Date(startDate);
-          currentDate.setDate(currentDate.getDate() + day);
-          
-          // Se houver horários fixos específicos
-          if (medicationData.horario_fixo) {
-            const hours = medicationData.horario_fixo.split(';');
-            for (const hourStr of hours) {
-              const [hour, minute] = hourStr.trim().split(':').map(Number);
-              const datetime = new Date(currentDate);
-              datetime.setHours(hour, minute, 0, 0);
-              
-              // Só adicionar se a data/hora for no futuro
-              if (datetime > now) {
-                scheduledTimes.push(datetime.toISOString());
-              }
-            }
-          } 
-          // Se for por intervalo de horas
-          else if (medicationData.intervalo_horas) {
-            const intervalo = parseInt(medicationData.intervalo_horas);
-            const startHour = medicationData.hora_inicio || 8; // Padrão: 8h se não especificado
-            
-            for (let hour = startHour; hour < 24; hour += intervalo) {
-              const datetime = new Date(currentDate);
-              datetime.setHours(hour, 0, 0, 0);
-              
-              if (datetime > now) {
-                scheduledTimes.push(datetime.toISOString());
-              }
-            }
-          }
-          // Caso padrão: uma vez por dia
-          else {
-            const datetime = new Date(currentDate);
-            datetime.setHours(8, 0, 0, 0); // Padrão: 8h da manhã
-            
-            if (datetime > now) {
-              scheduledTimes.push(datetime.toISOString());
-            }
-          }
-        }
-      } 
-      else if (medicationData.recurrence === 'weekly') {
-        // Medicamento semanal
-        const weeksToCalculate = endDate ? 
-          Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24 * 7)) : 
-          4; // Padrão: 4 semanas
-        
-        // Dias da semana selecionados (0 = Domingo, 6 = Sábado)
-        const selectedDays = medicationData.days_of_week || [1, 3, 5]; // Padrão: Segunda, Quarta, Sexta
-        
-        // Para cada semana no período
-        for (let week = 0; week < weeksToCalculate; week++) {
-          const weekStart = new Date(startDate);
-          weekStart.setDate(weekStart.getDate() + (week * 7));
-          
-          // Para cada dia da semana selecionado
-          for (const dayOfWeek of selectedDays) {
-            const currentDate = new Date(weekStart);
-            const currentDayOfWeek = currentDate.getDay();
-            const daysToAdd = (dayOfWeek - currentDayOfWeek + 7) % 7;
-            
-            currentDate.setDate(currentDate.getDate() + daysToAdd);
-            
-            // Aplicar os mesmos cálculos de hora como no caso diário
-            if (medicationData.horario_fixo) {
-              const hours = medicationData.horario_fixo.split(';');
-              for (const hourStr of hours) {
-                const [hour, minute] = hourStr.trim().split(':').map(Number);
-                const datetime = new Date(currentDate);
-                datetime.setHours(hour, minute, 0, 0);
-                
-                if (datetime > now) {
-                  scheduledTimes.push(datetime.toISOString());
-                }
-              }
-            } else {
-              const datetime = new Date(currentDate);
-              datetime.setHours(8, 0, 0, 0); // Padrão: 8h da manhã
-              
-              if (datetime > now) {
-                scheduledTimes.push(datetime.toISOString());
-              }
-            }
-          }
-        }
-      }
-      else if (medicationData.recurrence === 'once') {
-        // Medicamento de dose única
-        const datetime = new Date(medicationData.schedule_date || startDate);
-        
-        // Definir a hora específica se fornecida
-        if (medicationData.schedule_time) {
-          const [hour, minute] = medicationData.schedule_time.split(':').map(Number);
-          datetime.setHours(hour, minute, 0, 0);
-        } else {
-          datetime.setHours(8, 0, 0, 0); // Padrão: 8h da manhã
-        }
-        
-        if (datetime > now) {
-          scheduledTimes.push(datetime.toISOString());
-        }
-      }
-      
-      console.log(`Calculados ${scheduledTimes.length} horários para tomar o medicamento`);
-      
-      // Salvar cada horário calculado na tabela
-      const results = [];
-      for (const scheduledTime of scheduledTimes) {
-        // Verificar se já existe um registro
-        const { data: existing, error: checkError } = await supabase
-          .from('medication_confirmations')
-          .select('id')
-          .eq('medication_id', medicationData.id)
-          .eq('scheduled_time', scheduledTime)
-          .maybeSingle();
-        
-        if (checkError) {
-          console.error('Erro ao verificar registro existente:', checkError);
-          continue;
-        }
-        
-        // Se não existir, criar o novo registro
-        if (!existing) {
-          const confirmationData = {
-            medication_id: medicationData.id,
-            scheduled_time: scheduledTime,
-            user_id: userId,
-            taken: null, // Inicialmente null até ser confirmado
-            notes: 'Agendado automaticamente',
-            created_at: new Date().toISOString()
-          };
-          
-          const { data, error } = await supabase
-            .from('medication_confirmations')
-            .insert(confirmationData)
-            .select('id');
-          
-          if (error) {
-            console.error('Erro ao criar registro de confirmação:', error);
-          } else {
-            results.push(data[0]);
-          }
-        } else {
-          results.push(existing);
-        }
-      }
-      
-      console.log(`Salvos ${results.length} registros na tabela medication_confirmations`);
-      return { data: results };
-    } catch (error) {
-      console.error('Erro ao calcular e salvar horários de medicação:', error);
-      return { error };
-    }
-  };
-
-  const handleSaveMedication = async (medicationData) => {
-    try {
-      // Salvar o medicamento principal
-      const { data, error } = await supabase
-        .from('pills_warning')
-        .upsert(medicationData)
-        .select('id');
-      
-      if (error) throw error;
-      
-      // Obter o ID do medicamento salvo
-      const medicationId = data[0].id;
-      
-      // Obter ID do usuário atual
-      const userData = DataUser.getUserData();
-      const userId = userData.id;
-      
-      // Calcular e salvar todos os horários
-      await calculateAndSaveMedicationSchedule({
-        ...medicationData,
-        id: medicationId
-      }, userId);
-      
-      Alert.alert('Sucesso', 'Medicamento salvo e todos os horários agendados');
-    } catch (error) {
-      console.error('Erro ao salvar medicamento:', error);
-      Alert.alert('Erro', 'Não foi possível salvar o medicamento');
-    }
+    return hours.sort((a, b) => a - b);
   };
 
   if (isLoading) {
@@ -530,26 +279,18 @@ const HomeScreen = () => {
               </Text>
             </View>
           </View>
-          <TouchableOpacity 
-            style={styles.notificationButton}
-            onPress={() => navigation.navigate('MedicationTracker')}
-          >
+          <TouchableOpacity style={styles.notificationButton}>
             <Ionicons name="notifications-outline" size={24} color="white" />
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={true}
-          nestedScrollEnabled={true}
-        >
+        <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.calendarContainer}>
             <Text style={styles.calendarTitle}>Your Schedule</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
               style={styles.dayScrollView}
-              nestedScrollEnabled={true}
             >
               <View style={styles.daySelector}>
                 {getNextDays(5).map((date, index) => (
@@ -578,53 +319,39 @@ const HomeScreen = () => {
               </View>
             </ScrollView>
 
-            <View style={styles.scrollViewContainer}>
-              <ScrollView 
-                ref={hourlyScrollViewRef}
-                style={styles.hourlySchedule}
-                showsVerticalScrollIndicator={true}
-                contentContainerStyle={styles.hourlyScheduleContent}
-                nestedScrollEnabled={true}
-              >
-                {getAllHours().map((hour) => (
-                  <View 
-                    key={hour} 
-                    style={[
-                      styles.hourRow,
-                      hour === currentHour && styles.currentHourRow
-                    ]}
-                  >
-                    <Text style={[
-                      styles.hourText,
-                      hour === currentHour && styles.currentHourText
-                    ]}>
-                      {hour.toString().padStart(2, '0')}:00
-                    </Text>
-                    <View style={styles.timelineContainer}>
-                      {events
-                        .filter(event => new Date(event.startDate).getHours() === hour)
-                        .map((event, idx) => (
-                          <View key={idx} style={styles.eventCard}>
-                            <Text style={styles.eventTitle}>{event.title}</Text>
-                            <Text style={styles.eventTime}>
-                              {new Date(event.startDate).toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
-                              })}
-                            </Text>
-                          </View>
-                        ))}
-                    </View>
+            <ScrollView 
+              style={styles.hourlySchedule}
+              showsVerticalScrollIndicator={false}
+            >
+              {getVisibleHours().map((hour) => (
+                <View key={hour} style={[
+                  styles.hourRow,
+                  hour === currentHour && styles.currentHourRow
+                ]}>
+                  <Text style={[
+                    styles.hourText,
+                    hour === currentHour && styles.currentHourText
+                  ]}>
+                    {hour.toString().padStart(2, '0')}:00
+                  </Text>
+                  <View style={styles.timelineContainer}>
+                    {events
+                      .filter(event => new Date(event.startDate).getHours() === hour)
+                      .map((event, idx) => (
+                        <View key={idx} style={styles.eventCard}>
+                          <Text style={styles.eventTitle}>{event.title}</Text>
+                          <Text style={styles.eventTime}>
+                            {new Date(event.startDate).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </Text>
+                        </View>
+                      ))}
                   </View>
-                ))}
-              </ScrollView>
-              <TouchableOpacity 
-                style={styles.currentTimeButton}
-                onPress={scrollToCurrentTime}
-              >
-                <Ionicons name="time-outline" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
+                </View>
+              ))}
+            </ScrollView>
       </View>
 
           <View style={styles.doctorsContainer}>
@@ -824,21 +551,8 @@ const styles = StyleSheet.create({
   selectedDayText: {
     color: '#ffffff',
   },
-  scrollViewContainer: {
-    position: 'relative',
-    height: 350,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-  },
   hourlySchedule: {
-    height: 350,
-  },
-  hourlyScheduleContent: {
-    paddingBottom: 10,
-    paddingHorizontal: 5,
+    maxHeight: 300,
   },
   hourRow: {
     flexDirection: 'row',
@@ -846,13 +560,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F5',
-    height: 70, // Altura fixa para cálculos precisos de posição
   },
   currentHourRow: {
     backgroundColor: '#F5F7FF',
     borderRadius: 8,
-    marginHorizontal: -5,
-    paddingHorizontal: 5,
+    marginHorizontal: -8,
+    paddingHorizontal: 8,
     borderLeftWidth: 3,
     borderLeftColor: '#6A8DFD',
   },
@@ -1011,40 +724,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#E74C3C',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#fff',
-  },
-  notificationBadgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  currentTimeButton: {
-    position: 'absolute',
-    right: 10,
-    bottom: 10,
-    backgroundColor: '#6A8DFD',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
   },
 });
 

@@ -1,74 +1,35 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { FontAwesome } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const Navbar = () => {
   const navigation = useNavigation();
-  const route = useRoute();
-  const insets = useSafeAreaInsets();
-  const currentRoute = route.name;
-
-  const isActive = (screenName) => currentRoute === screenName;
-
-  const renderIcon = (iconName, isSelected) => {
-    return (
-      <Ionicons 
-        name={isSelected ? iconName : `${iconName}-outline`}
-        size={24} 
-        color={isSelected ? '#6A8DFD' : '#9BA3B7'} 
-      />
-    );
-  };
+  const route = useRoute(); // Para acessar os parâmetros da rota atual
+  const userId = route.params?.userId; // Pegue o userId da rota atual
 
   return (
-    <View style={[
-      styles.navbar,
-      { paddingBottom: Math.max(insets.bottom, 10) }
-    ]}>
+    <View style={styles.navbar}>
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => navigation.navigate('HomeScreen')}
+        onPress={() => navigation.navigate('HomeScreen', { userId })}
       >
-        {renderIcon('home', isActive('HomeScreen'))}
-        <Text style={[
-          styles.navText,
-          isActive('HomeScreen') && styles.activeText
-        ]}>Home</Text>
+        <FontAwesome name="home" size={24} color="#4A90E2" />
+        <Text style={styles.navText}>Home</Text>
       </TouchableOpacity>
-
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => navigation.navigate('CalendarScreen')}
+        onPress={() => navigation.navigate('CalendarScreen', { userId })}
       >
-        {renderIcon('medkit', isActive('CalendarScreen'))}
-        <Text style={[
-          styles.navText,
-          isActive('CalendarScreen') && styles.activeText
-        ]}>Medications</Text>
+        <FontAwesome name="calendar" size={24} color="#4A90E2" />
+        <Text style={styles.navText}>Calendar</Text>
       </TouchableOpacity>
-
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => navigation.navigate('MedicalDiary')}
+        onPress={() => navigation.navigate('AccountScreen', { userId })}
       >
-        {renderIcon('book', isActive('MedicalDiary'))}
-        <Text style={[
-          styles.navText,
-          isActive('MedicalDiary') && styles.activeText
-        ]}>Diary</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.navItem}
-        onPress={() => navigation.navigate('AccountScreen')}
-      >
-        {renderIcon('person', isActive('AccountScreen'))}
-        <Text style={[
-          styles.navText,
-          isActive('AccountScreen') && styles.activeText
-        ]}>Profile</Text>
+        <FontAwesome name="user" size={24} color="#4A90E2" />
+        <Text style={styles.navText}>Account</Text>
       </TouchableOpacity>
     </View>
   );
@@ -80,35 +41,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    height: 60,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingTop: 12,
+    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#E8ECF4',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderTopColor: '#ddd',
+    paddingVertical: 10,
   },
   navItem: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
   },
   navText: {
     fontSize: 12,
+    color: '#4A90E2',
     marginTop: 4,
-    color: '#9BA3B7',
-    fontWeight: '500',
-  },
-  activeText: {
-    color: '#6A8DFD',
-    fontWeight: '600',
   },
 });
 

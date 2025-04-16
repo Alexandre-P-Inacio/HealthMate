@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import supabase from '../../supabase';
 import * as Notifications from 'expo-notifications';
@@ -47,7 +47,7 @@ const MedicationTracker = ({ navigation }) => {
     }
     
     if (finalStatus !== 'granted') {
-      Alert.alert('Permission required', 'Allow notifications to receive reminders.');
+      Alert.alert('Permissão necessária', 'Sem permissão para enviar notificações!');
       return;
     }
   };
@@ -160,22 +160,24 @@ const MedicationTracker = ({ navigation }) => {
 
   // Programar notificações para medicamentos
   const scheduleMedicationNotifications = async (medications) => {
+    // Cancelar notificações existentes
     await Notifications.cancelAllScheduledNotificationsAsync();
     
+    // Adicionar novas notificações para medicamentos pendentes futuros
     for (const med of medications) {
-      const triggerTime = new Date(med.scheduledDateTime).getTime();
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Medication Reminder',
-          body: `It's time to take your medication: ${med.title}`,
-          data: { medicationId: med.medicationId },
-        },
-        trigger: {
-          type: 'date',
-          timestamp: triggerTime,
-        },
-      });
+      if (!med.isPast) {
+        const trigger = new Date(med.scheduledDateTime);
+        trigger.setSeconds(0); // Remover segundos
+        
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Hora do Medicamento',
+            body: `${med.title} - ${med.scheduledTime}`,
+            data: { medicationId: med.medicationId, scheduledTime: med.scheduledTime },
+          },
+          trigger,
+        });
+      }
     }
   };
 
@@ -268,16 +270,12 @@ const MedicationTracker = ({ navigation }) => {
       
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6A8DFD" />
           <Text style={styles.loadingText}>Carregando medicamentos...</Text>
         </View>
       ) : (
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Pendentes para Hoje</Text>
-            <Text style={styles.sectionSubtitle}>
-              Toque em um medicamento para confirmar
-            </Text>
           </View>
           
           {pendingMedications.length > 0 ? (
@@ -309,9 +307,9 @@ const MedicationTracker = ({ navigation }) => {
                       </View>
                     )}
                     <Ionicons 
-                      name="checkmark-circle-outline" 
-                      size={24} 
-                      color="#6A8DFD" 
+                      name="chevron-forward" 
+                      size={20} 
+                      color="#9BA3B7" 
                     />
                   </View>
                 </TouchableOpacity>
@@ -320,11 +318,8 @@ const MedicationTracker = ({ navigation }) => {
             />
           ) : (
             <View style={styles.emptyContainer}>
-              <Ionicons name="checkmark-circle" size={64} color="#6A8DFD" />
+              <Ionicons name="checkmark-circle" size={50} color="#6A8DFD" />
               <Text style={styles.emptyText}>Nenhum medicamento pendente!</Text>
-              <Text style={styles.emptySubtext}>
-                Seus medicamentos aparecerão aqui quando estiverem programados.
-              </Text>
             </View>
           )}
         </>
@@ -416,11 +411,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2D3142',
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#9BA3B7',
-    marginTop: 4,
-  },
   listContent: {
     padding: 15,
   },
@@ -489,13 +479,6 @@ const styles = StyleSheet.create({
     color: '#9BA3B7',
     marginTop: 10,
     textAlign: 'center',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9BA3B7',
-    marginTop: 8,
-    textAlign: 'center',
-    maxWidth: '80%',
   },
   loadingContainer: {
     flex: 1,
