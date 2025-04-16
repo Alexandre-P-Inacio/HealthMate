@@ -29,6 +29,8 @@ const CalendarScreen = ({ navigation }) => {
   const [pendingEvents, setPendingEvents] = useState([]);
   const [scheduleConfirmModal, setScheduleConfirmModal] = useState(false);
   const [scheduleItems, setScheduleItems] = useState([]);
+  const [todayMedicationsModal, setTodayMedicationsModal] = useState(false);
+  const [todayMedications, setTodayMedications] = useState([]);
 
   const [newMedication, setNewMedication] = useState({
     titulo: '',
@@ -514,19 +516,55 @@ const CalendarScreen = ({ navigation }) => {
         cal.source.name === 'Default'
       ) || calendars[0];
 
-      // Prepare schedule items for confirmation
-      const scheduleItemsToSave = pendingEvents.map(event => {
-        const eventDate = new Date(event.startDate);
-        const timeStr = eventDate.toTimeString().split(' ')[0]; // HH:MM:SS
-        return {
-          date: eventDate.toLocaleDateString(),
-          time: eventDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
-          notes: event.notes,
-          rawDate: eventDate.toISOString().split('T')[0],
-          rawTime: timeStr,
-          fullDatetime: eventDate.toISOString()
-        };
+      // Agrupar eventos pelo mesmo horário
+      const groupedEvents = {};
+      pendingEvents.forEach(event => {
+        const timeKey = event.startDate.toISOString();
+        if (!groupedEvents[timeKey]) {
+          groupedEvents[timeKey] = [];
+        }
+        groupedEvents[timeKey].push(event);
       });
+
+      // Criar schedule items organizados
+      const scheduleItemsToSave = [];
+      
+      Object.keys(groupedEvents).forEach(timeKey => {
+        const eventsAtTime = groupedEvents[timeKey];
+        const firstEvent = eventsAtTime[0];
+        const eventDate = new Date(firstEvent.startDate);
+        const timeStr = eventDate.toTimeString().split(' ')[0]; // HH:MM:SS
+        
+        // Se houver múltiplos eventos no mesmo horário, combinar notas
+        if (eventsAtTime.length > 1) {
+          const combinedNotes = eventsAtTime.map(e => e.notes).join(' + ');
+          scheduleItemsToSave.push({
+            date: eventDate.toLocaleDateString(),
+            time: eventDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+            notes: `Múltiplos medicamentos: ${combinedNotes}`,
+            rawDate: eventDate.toISOString().split('T')[0],
+            rawTime: timeStr,
+            fullDatetime: eventDate.toISOString(),
+            isCombined: true,
+            originalEvents: eventsAtTime
+          });
+        } else {
+          // Caso único evento no horário
+          scheduleItemsToSave.push({
+            date: eventDate.toLocaleDateString(),
+            time: eventDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+            notes: firstEvent.notes,
+            rawDate: eventDate.toISOString().split('T')[0],
+            rawTime: timeStr,
+            fullDatetime: eventDate.toISOString(),
+            isCombined: false,
+            originalEvents: [firstEvent]
+          });
+        }
+      });
+
+      // Ordenar por horário
+      scheduleItemsToSave.sort((a, b) => new Date(a.fullDatetime) - new Date(b.fullDatetime));
 
       // Show confirmation popup for schedule items
       setScheduleItems(scheduleItemsToSave);
@@ -554,60 +592,65 @@ const CalendarScreen = ({ navigation }) => {
       // Save to both tables
       for (const item of scheduleItems) {
         try {
-          // 1. Save to medication_confirmations
-          const confirmationData = {
-            medication_id: selectedMedication.id,
-            pill_id: selectedMedication.id,
-            user_id: userId,
-            scheduled_time: item.fullDatetime,
-            confirmation_date: item.rawDate,
-            confirmation_time: null,
-            taken: false,
-            notes: item.notes || 'Medicamento agendado',
-            created_at: new Date().toISOString()
-          };
+          // Para cada evento original no grupo
+          for (const event of item.originalEvents) {
+            const eventDate = new Date(event.startDate);
+            
+            // 1. Save to medication_confirmations
+            const confirmationData = {
+              medication_id: selectedMedication.id,
+              pill_id: selectedMedication.id,
+              user_id: userId,
+              scheduled_time: eventDate.toISOString(),
+              confirmation_date: eventDate.toISOString().split('T')[0],
+              confirmation_time: null,
+              taken: false,
+              notes: event.notes || 'Medicamento agendado',
+              created_at: new Date().toISOString()
+            };
 
-          const { data: existingConfirmation, error: checkError } = await supabase
-            .from('medication_confirmations')
-            .select('id')
-            .eq('medication_id', confirmationData.medication_id)
-            .eq('scheduled_time', confirmationData.scheduled_time)
-            .maybeSingle();
-
-          if (!checkError && !existingConfirmation) {
-            const { error: insertError } = await supabase
+            const { data: existingConfirmation, error: checkError } = await supabase
               .from('medication_confirmations')
-              .insert(confirmationData);
+              .select('id')
+              .eq('medication_id', confirmationData.medication_id)
+              .eq('scheduled_time', confirmationData.scheduled_time)
+              .maybeSingle();
 
-            if (!insertError) savedConfirmationsCount++;
-          }
+            if (!checkError && !existingConfirmation) {
+              const { error: insertError } = await supabase
+                .from('medication_confirmations')
+                .insert(confirmationData);
 
-          // 2. Save to medication_schedule_times
-          const scheduleData = {
-            medication_id: selectedMedication.id,
-            scheduled_date: item.rawDate,
-            scheduled_time: item.rawTime,
-            complete_datetime: item.fullDatetime,
-            dosage: item.notes ? item.notes.replace('Tome ', '').replace(' comprimido(s)', '') : null,
-            user_id: userId,
-            pill_id: selectedMedication.id,
-            notes: item.notes || 'Agendado via CalendarScreen'
-          };
+              if (!insertError) savedConfirmationsCount++;
+            }
 
-          const { data: existingSchedule, error: checkScheduleError } = await supabase
-            .from('medication_schedule_times')
-            .select('id')
-            .eq('medication_id', scheduleData.medication_id)
-            .eq('scheduled_date', scheduleData.scheduled_date)
-            .eq('scheduled_time', scheduleData.scheduled_time)
-            .maybeSingle();
+            // 2. Save to medication_schedule_times
+            const scheduleData = {
+              medication_id: selectedMedication.id,
+              scheduled_date: eventDate.toISOString().split('T')[0],
+              scheduled_time: eventDate.toTimeString().split(' ')[0],
+              complete_datetime: eventDate.toISOString(),
+              dosage: event.notes ? event.notes.replace('Tome ', '').replace(' comprimido(s)', '') : null,
+              user_id: userId,
+              pill_id: selectedMedication.id,
+              notes: event.notes || 'Agendado via CalendarScreen'
+            };
 
-          if (!checkScheduleError && !existingSchedule) {
-            const { error: insertScheduleError } = await supabase
+            const { data: existingSchedule, error: checkScheduleError } = await supabase
               .from('medication_schedule_times')
-              .insert(scheduleData);
+              .select('id')
+              .eq('medication_id', scheduleData.medication_id)
+              .eq('scheduled_date', scheduleData.scheduled_date)
+              .eq('scheduled_time', scheduleData.scheduled_time)
+              .maybeSingle();
 
-            if (!insertScheduleError) savedSchedulesCount++;
+            if (!checkScheduleError && !existingSchedule) {
+              const { error: insertScheduleError } = await supabase
+                .from('medication_schedule_times')
+                .insert(scheduleData);
+
+              if (!insertScheduleError) savedSchedulesCount++;
+            }
           }
         } catch (err) {
           console.error('Erro ao salvar item individual:', err);
@@ -616,17 +659,41 @@ const CalendarScreen = ({ navigation }) => {
 
       console.log(`Salvos: ${savedConfirmationsCount} confirmações, ${savedSchedulesCount} agendamentos`);
 
-      // Add to calendar
+      // Add to calendar - criar eventos agrupados por horário para evitar sobreposição
       const eventIds = [];
-      for (const event of pendingEvents) {
-        const eventDetails = {
-          ...event,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          alarms: [{ relativeOffset: -15 }]
-        };
+      
+      for (const item of scheduleItems) {
+        const firstEvent = item.originalEvents[0];
         
-        const eventId = await Calendar.createEventAsync(defaultCalendar.id, eventDetails);
-        eventIds.push(eventId);
+        // Se for um grupo de eventos, criar um único evento de calendário com todos os detalhes
+        if (item.isCombined) {
+          const titles = item.originalEvents.map(e => e.title);
+          const uniqueTitles = [...new Set(titles)];
+          const combinedTitle = uniqueTitles.join(' + ');
+          const combinedNotes = item.originalEvents.map(e => e.notes).join('\n');
+          
+          const eventDetails = {
+            title: combinedTitle,
+            startDate: new Date(firstEvent.startDate),
+            endDate: new Date(firstEvent.endDate),
+            notes: combinedNotes,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            alarms: [{ relativeOffset: -15 }]
+          };
+          
+          const eventId = await Calendar.createEventAsync(defaultCalendar.id, eventDetails);
+          eventIds.push(eventId);
+        } else {
+          // Caso seja apenas um evento
+          const eventDetails = {
+            ...firstEvent,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            alarms: [{ relativeOffset: -15 }]
+          };
+          
+          const eventId = await Calendar.createEventAsync(defaultCalendar.id, eventDetails);
+          eventIds.push(eventId);
+        }
       }
 
       // Update pill status
@@ -860,6 +927,139 @@ const CalendarScreen = ({ navigation }) => {
       </View>
     </View>
   );
+
+  const fetchTodayMedications = async () => {
+    if (!userId) return;
+    
+    try {
+      setLoading(true);
+      
+      // Obtém a data atual no formato ISO (YYYY-MM-DD)
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Busca todos os agendamentos para hoje na tabela medication_schedule_times
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('medication_schedule_times')
+        .select(`
+          id,
+          medication_id,
+          scheduled_date,
+          scheduled_time,
+          complete_datetime,
+          dosage,
+          notes,
+          pills_warning (
+            id,
+            titulo,
+            quantidade_comprimidos,
+            quantidade_comprimidos_por_vez
+          )
+        `)
+        .eq('scheduled_date', today)
+        .eq('user_id', userId)
+        .order('scheduled_time', { ascending: true });
+        
+      if (scheduleError) {
+        console.error('Erro ao buscar medicamentos de hoje:', scheduleError);
+        return;
+      }
+      
+      // Organiza os medicamentos por horário
+      const medicationsByTime = {};
+      
+      if (scheduleData && scheduleData.length > 0) {
+        scheduleData.forEach(item => {
+          const timeKey = item.scheduled_time;
+          if (!medicationsByTime[timeKey]) {
+            medicationsByTime[timeKey] = [];
+          }
+          
+          medicationsByTime[timeKey].push({
+            id: item.id,
+            medicationId: item.medication_id,
+            scheduledTime: item.scheduled_time,
+            scheduledDate: item.scheduled_date,
+            completeDatetime: item.complete_datetime,
+            dosage: item.dosage,
+            notes: item.notes,
+            title: item.pills_warning?.titulo || 'Medicamento',
+            quantidade: item.pills_warning?.quantidade_comprimidos || 0,
+            dosePorVez: item.pills_warning?.quantidade_comprimidos_por_vez || 0
+          });
+        });
+      }
+      
+      // Converte para array para facilitar a exibição
+      const todayMeds = Object.keys(medicationsByTime).map(timeKey => ({
+        time: timeKey,
+        medications: medicationsByTime[timeKey]
+      }));
+      
+      // Ordena por horário
+      todayMeds.sort((a, b) => {
+        if (a.time < b.time) return -1;
+        if (a.time > b.time) return 1;
+        return 0;
+      });
+      
+      setTodayMedications(todayMeds);
+      setTodayMedicationsModal(true);
+    } catch (error) {
+      console.error('Erro ao processar medicamentos de hoje:', error);
+      Alert.alert('Erro', 'Não foi possível carregar os medicamentos para hoje.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const markMedicationAsTaken = async (scheduleId, medicationId) => {
+    try {
+      const now = new Date();
+      const currentTime = now.toTimeString().split(' ')[0];
+      
+      // Atualiza o status na tabela medication_schedule_times
+      const { error: updateError } = await supabase
+        .from('medication_schedule_times')
+        .update({
+          taken: true,
+          taken_at: now.toISOString()
+        })
+        .eq('id', scheduleId);
+        
+      if (updateError) {
+        console.error('Erro ao marcar medicamento como tomado:', updateError);
+        Alert.alert('Erro', 'Não foi possível atualizar o status do medicamento.');
+        return;
+      }
+      
+      // Adiciona também à tabela medication_confirmations
+      const { error: insertError } = await supabase
+        .from('medication_confirmations')
+        .insert({
+          medication_id: medicationId,
+          pill_id: medicationId,
+          user_id: userId,
+          scheduled_time: now.toISOString(),
+          confirmation_date: now.toISOString().split('T')[0],
+          confirmation_time: currentTime,
+          taken: true,
+          notes: 'Medicamento tomado',
+          created_at: now.toISOString()
+        });
+        
+      if (insertError) {
+        console.error('Erro ao registrar confirmação:', insertError);
+      }
+      
+      // Atualiza a lista de medicamentos do dia
+      await fetchTodayMedications();
+      
+      Alert.alert('Sucesso', 'Medicamento marcado como tomado!');
+    } catch (error) {
+      console.error('Erro ao processar medicamento:', error);
+      Alert.alert('Erro', 'Ocorreu um erro ao processar sua solicitação.');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -1227,12 +1427,14 @@ const CalendarScreen = ({ navigation }) => {
             <ScrollView style={styles.eventsList}>
               {pendingEvents.map((event, index) => (
                 <View key={index} style={styles.eventItem}>
-                  <Text style={styles.eventDate}>
-                    {event.startDate.toLocaleDateString()}
-                  </Text>
-                  <Text style={styles.eventTime}>
-                    {event.startDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                  </Text>
+                  <View style={styles.eventItemHeader}>
+                    <Text style={styles.eventDate}>
+                      {event.startDate.toLocaleDateString()}
+                    </Text>
+                    <Text style={styles.eventTime}>
+                      {event.startDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                    </Text>
+                  </View>
                   <Text style={styles.eventNotes}>{event.notes}</Text>
                 </View>
               ))}
@@ -1274,12 +1476,24 @@ const CalendarScreen = ({ navigation }) => {
             
             <ScrollView style={styles.scheduleListContainer}>
               {scheduleItems.map((item, index) => (
-                <View key={index} style={styles.scheduleItem}>
+                <View key={index} style={[
+                  styles.scheduleItem,
+                  item.isCombined && styles.combinedScheduleItem
+                ]}>
                   <View style={styles.scheduleDateTimeContainer}>
                     <Text style={styles.scheduleDate}>{item.date}</Text>
                     <Text style={styles.scheduleTime}>{item.time}</Text>
                   </View>
-                  <Text style={styles.scheduleNotes}>{item.notes}</Text>
+                  {item.isCombined ? (
+                    <View>
+                      <Text style={styles.combinedScheduleTitle}>Múltiplos medicamentos no mesmo horário:</Text>
+                      {item.originalEvents.map((event, eventIdx) => (
+                        <Text key={eventIdx} style={styles.scheduleNotes}>• {event.notes}</Text>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.scheduleNotes}>{item.notes}</Text>
+                  )}
                 </View>
               ))}
             </ScrollView>
@@ -1312,7 +1526,75 @@ const CalendarScreen = ({ navigation }) => {
         </View>
       </Modal>
 
+      {/* Modal para exibir os medicamentos do dia */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={todayMedicationsModal}
+        onRequestClose={() => setTodayMedicationsModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalContent, { width: '95%', maxHeight: '80%' }]}>
+            <TouchableOpacity 
+              style={styles.closeButton} 
+              onPress={() => setTodayMedicationsModal(false)}
+            >
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+            
+            <Text style={styles.modalTitle}>Medicamentos de Hoje</Text>
+            
+            {todayMedications.length === 0 ? (
+              <View style={styles.emptyMedsContainer}>
+                <Ionicons name="calendar-outline" size={64} color="#bdc3c7" />
+                <Text style={styles.emptyMedsText}>Não há medicamentos agendados para hoje</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.todayMedsList}>
+                {todayMedications.map((timeGroup, idx) => (
+                  <View key={idx} style={styles.timeGroupContainer}>
+                    <View style={styles.timeHeader}>
+                      <View style={styles.timeLineBefore} />
+                      <Text style={styles.timeGroupTime}>
+                        {timeGroup.time.substring(0, 5)}
+                      </Text>
+                      <View style={styles.timeLineAfter} />
+                    </View>
+                    
+                    {timeGroup.medications.map((med, medIdx) => (
+                      <View key={medIdx} style={styles.todayMedItem}>
+                        <View style={styles.todayMedItemInfo}>
+                          <Text style={styles.todayMedTitle}>{med.title}</Text>
+                          <Text style={styles.todayMedDosage}>
+                            Dose: {med.dosage || med.dosePorVez} comprimido(s)
+                          </Text>
+                        </View>
+                        
+                        <TouchableOpacity
+                          style={styles.takeMedButton}
+                          onPress={() => markMedicationAsTaken(med.id, med.medicationId)}
+                        >
+                          <Ionicons name="checkmark-circle" size={32} color="#2ecc71" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+      
       <Navbar navigation={navigation} />
+      
+      {/* Botão flutuante para mostrar medicamentos do dia */}
+      <TouchableOpacity 
+        style={styles.notificationButton}
+        onPress={fetchTodayMedications}
+      >
+        <Ionicons name="notifications" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -1530,6 +1812,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F5',
   },
+  eventItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   eventDate: {
     fontSize: 14,
     fontWeight: 'bold',
@@ -1645,6 +1932,101 @@ const styles = StyleSheet.create({
     color: '#e67e22',
     fontSize: 12,
     textAlign: 'center',
+  },
+  notificationButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    backgroundColor: '#3498db',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    zIndex: 999,
+  },
+  todayMedsList: {
+    flex: 1,
+    marginVertical: 10,
+  },
+  timeGroupContainer: {
+    marginBottom: 20,
+  },
+  timeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  timeLineBefore: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginRight: 10,
+  },
+  timeGroupTime: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#3498db',
+    paddingHorizontal: 10,
+  },
+  timeLineAfter: {
+    flex: 2,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginLeft: 10,
+  },
+  todayMedItem: {
+    flexDirection: 'row',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  todayMedItemInfo: {
+    flex: 1,
+  },
+  todayMedTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 4,
+  },
+  todayMedDosage: {
+    fontSize: 14,
+    color: '#7f8c8d',
+  },
+  takeMedButton: {
+    padding: 5,
+  },
+  emptyMedsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyMedsText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  combinedScheduleItem: {
+    borderLeftColor: '#e74c3c',
+    backgroundColor: '#fef9e7',
+  },
+  combinedScheduleTitle: {
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    fontSize: 14,
+    marginBottom: 5,
   },
 });
 

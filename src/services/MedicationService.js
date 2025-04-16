@@ -164,7 +164,6 @@ class MedicationService {
         const { data: existing, error: checkError } = await supabase
           .from('medication_confirmations')
           .select('id')
-          .eq('medication_id', medicationData.id)
           .eq('scheduled_time', scheduledTime)
           .maybeSingle();
         
@@ -176,7 +175,6 @@ class MedicationService {
         // Se não existir, criar o novo registro
         if (!existing) {
           const confirmationData = {
-            medication_id: medicationData.id,
             scheduled_time: scheduledTime,
             user_id: userId,
             taken: null, // Inicialmente null até ser confirmado
@@ -309,7 +307,6 @@ class MedicationService {
           notes: 'Cancelado - medicamento atualizado',
           taken: false
         })
-        .eq('medication_id', medicationId)
         .is('confirmation_time', null);
       
       if (error) {
@@ -435,7 +432,6 @@ class MedicationService {
       const { error } = await supabase
         .from('medication_confirmations')
         .insert({
-          medication_id: medicationId,
           uuid_user_id: userData.id,
           taken: taken,
           confirmation_date: now.toISOString().split('T')[0],
@@ -478,7 +474,6 @@ class MedicationService {
       const { data, error } = await supabase
         .from('medication_confirmations')
         .select('*')
-        .eq('medication_id', medicationId)
         .eq('uuid_user_id', userData.id)
         .eq('confirmation_date', formattedDate)
         .single();
@@ -503,7 +498,6 @@ class MedicationService {
       }
 
       const newConfirmation = {
-        medication_id: medicationId,
         scheduled_time: scheduledTime,
         user_id: userId,
         taken: false,
@@ -545,7 +539,6 @@ class MedicationService {
       
       // Then create entry in medication_confirmations
       const confirmationData = {
-        medication_id: medicationData.id,
         scheduled_time: medicationData.scheduled_time,
         user_id: medicationData.user_id,
         taken: null, // Initially null until confirmed
@@ -557,7 +550,6 @@ class MedicationService {
       const { data: existing, error: checkError } = await supabase
         .from('medication_confirmations')
         .select('id')
-        .eq('medication_id', medicationData.id)
         .eq('scheduled_time', medicationData.scheduled_time)
         .maybeSingle();
       
