@@ -108,18 +108,38 @@ const CalendarScreen = ({ navigation }) => {
 
   const handleDeleteMedication = async (medicationId) => {
     try {
-      const { error } = await supabase
-        .from('pills_warning')
-        .delete()
-        .eq('id', medicationId);
+      Alert.alert(
+        'Confirmação',
+        'Tem certeza que deseja excluir este medicamento e todos os seus horários agendados?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel'
+          },
+          {
+            text: 'Excluir',
+            style: 'destructive',
+            onPress: async () => {
+              // Always delete schedule times before deleting the medication
+              await deleteMedicationScheduleTimes(medicationId);
+              
+              // Then delete the medication
+              const { error } = await supabase
+                .from('pills_warning')
+                .delete()
+                .eq('id', medicationId);
 
-      if (error) throw error;
+              if (error) throw error;
 
-      setMedications(medications.filter((med) => med.id !== medicationId));
-      setInfoModalVisible(false);
-      Alert.alert('Success', 'Medication deleted successfully!');
+              setMedications(medications.filter((med) => med.id !== medicationId));
+              setInfoModalVisible(false);
+              Alert.alert('Sucesso', 'Medicamento e seus horários excluídos com sucesso!');
+            }
+          }
+        ]
+      );
     } catch (error) {
-      Alert.alert('Error', 'Could not delete medication');
+      Alert.alert('Erro', 'Não foi possível excluir o medicamento');
       console.error('Delete error:', error);
     }
   };
@@ -135,10 +155,6 @@ const CalendarScreen = ({ navigation }) => {
     }
     if (!newMedication.quantidade_comprimidos_por_vez || isNaN(newMedication.quantidade_comprimidos_por_vez)) {
       Alert.alert('Error', 'Please enter a valid dose amount');
-      return false;
-    }
-    if (!newMedication.data_inicio) {
-      Alert.alert('Error', 'Please select a start date');
       return false;
     }
     return true;
@@ -197,6 +213,12 @@ const CalendarScreen = ({ navigation }) => {
     if (!validateMedicationInput()) return;
 
     try {
+      // If no start date is provided, use today's date
+      if (!newMedication.data_inicio) {
+        const today = new Date().toISOString().split('T')[0];
+        newMedication.data_inicio = today;
+      }
+      
       const combinedDateTime = `${newMedication.data_inicio}; ${intervalStartTime}`;
 
       const [dataInicio, startTime] = combinedDateTime.split(';');
@@ -259,29 +281,43 @@ const CalendarScreen = ({ navigation }) => {
           med.id === selectedMedication.id ? { ...med, ...medicationData } : med
         ));
         
-        Alert.alert('Success', 'Medication updated successfully!');
+        // Automatically update schedule times without asking
+        try {
+          // First, delete old schedule times
+          await deleteMedicationScheduleTimes(selectedMedication.id);
+          // Then save new schedule times
+          await saveMedicationScheduleTimes(medicationData);
+          console.log('Schedule times updated automatically');
+        } catch (scheduleError) {
+          console.error('Error updating schedule times:', scheduleError);
+        }
+
       } else {
         console.log('Creating new medication with ID:', newId);
-      const { data, error } = await supabase
-        .from('pills_warning')
-        .insert([medicationData])
-        .select();
+        const { data, error } = await supabase
+          .from('pills_warning')
+          .insert([medicationData])
+          .select();
 
         if (error) {
           console.error('Error creating medication:', error);
           Alert.alert('Error', `Failed to create medication: ${error.message}`);
-        return;
-      }
+          return;
+        }
 
         console.log('Medication created successfully:', data);
-        setMedications([...medications, data[0]]);
-        
-        Alert.alert('Success', 'Medication saved successfully!');
-        
-        // Store the newly created medication for calendar/reminders
         const savedMedication = data[0];
+        setMedications([...medications, savedMedication]);
         
-        // Schedule reminders and add to calendar after successful save
+        // Automatically save schedule times without asking
+        try {
+          await saveMedicationScheduleTimes(savedMedication);
+          console.log('Schedule times saved automatically');
+        } catch (scheduleError) {
+          console.error('Error saving schedule times:', scheduleError);
+        }
+        
+        // Schedule reminders and add to calendar
         await scheduleReminders(savedMedication);
         await handleAddToCalendarRequest(savedMedication);
       }
@@ -300,6 +336,7 @@ const CalendarScreen = ({ navigation }) => {
       setSelectedTimes([]);
       setFixedTimes([]);
       setIntervalStartTime('');
+      setSelectedMedication(null);
 
     } catch (error) {
       console.error('Exception saving medication:', error);
@@ -619,6 +656,169 @@ const CalendarScreen = ({ navigation }) => {
     }
   };
 
+  // Function to save medication schedule times
+  const saveMedicationScheduleTimes = async (medication) => {
+    try {
+      const { 
+        id, 
+        user_id, 
+        titulo, 
+        quantidade_comprimidos, 
+        quantidade_comprimidos_por_vez, 
+        intervalo_horas, 
+        horario_fixo, 
+        data_inicio,
+        data_fim
+      } = medication;
+
+      let baseDate = new Date();
+      let initialHour = null;
+      
+      if (data_inicio && data_inicio.includes(';')) {
+        const [dateStr, timeStr] = data_inicio.split(';');
+        baseDate = new Date(dateStr.trim());
+        initialHour = timeStr.trim();
+      } else if (data_inicio) {
+        baseDate = new Date(data_inicio);
+      }
+      
+      if (isNaN(baseDate.getTime())) {
+        baseDate = new Date();
+      }
+
+      const scheduleTimes = [];
+      const totalDoses = Math.ceil(quantidade_comprimidos / quantidade_comprimidos_por_vez);
+      let remainingDoses = totalDoses;
+
+      if (horario_fixo && horario_fixo !== 'NULL') {
+        const fixedTimes = horario_fixo.split(';').map(time => time.trim()).filter(time => time);
+        
+        if (fixedTimes.length === 0) {
+          return { success: false, message: 'Horários fixos inválidos.' };
+        }
+
+        let currentDay = 0;
+        
+        while (remainingDoses > 0) {
+          for (let timeIndex = 0; timeIndex < fixedTimes.length; timeIndex++) {
+            if (remainingDoses <= 0) break;
+            
+            const time = fixedTimes[timeIndex];
+            if (!time.includes(':')) continue;
+            
+            const [hours, minutes] = time.split(':').map(num => parseInt(num, 10));
+            
+            const eventDate = new Date(baseDate);
+            eventDate.setDate(baseDate.getDate() + currentDay);
+            eventDate.setHours(hours, minutes, 0, 0);
+            
+            if (data_fim && new Date(data_fim) < eventDate) {
+              remainingDoses = 0;
+              break;
+            }
+            
+            const dosePills = Math.min(quantidade_comprimidos_por_vez, remainingDoses * quantidade_comprimidos_por_vez);
+            
+            scheduleTimes.push({
+              medication_id: id,
+              scheduled_date: eventDate.toISOString().split('T')[0],
+              scheduled_time: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`,
+              complete_datetime: eventDate.toISOString(),
+              dosage: dosePills.toString(),
+              user_id: user_id,
+              pill_id: id,
+              notes: `Tome ${dosePills} comprimido(s)`
+            });
+            
+            remainingDoses--;
+          }
+          
+          currentDay++;
+          
+          if (currentDay > 365) {
+            return { success: false, message: 'Número excessivo de dias. Verifique a configuração do medicamento.' };
+          }
+        }
+      } else if (intervalo_horas && intervalo_horas !== 'NULL') {
+        let startTime = new Date(baseDate);
+        if (initialHour) {
+          const [hours, minutes] = initialHour.split(':').map(num => parseInt(num, 10));
+          startTime.setHours(hours, minutes, 0, 0);
+        }
+        
+        const intervalHours = parseInt(intervalo_horas);
+        
+        if (isNaN(intervalHours) || intervalHours <= 0) {
+          return { success: false, message: 'Intervalo de horas inválido.' };
+        }
+        
+        for (let i = 0; i < totalDoses; i++) {
+          const intervalMillis = intervalHours * 60 * 60 * 1000;
+          const eventTime = new Date(startTime.getTime() + i * intervalMillis);
+          
+          if (data_fim && new Date(data_fim) < eventTime) break;
+          
+          const dosePills = Math.min(quantidade_comprimidos_por_vez, (totalDoses - i) * quantidade_comprimidos_por_vez);
+          
+          scheduleTimes.push({
+            medication_id: id,
+            scheduled_date: eventTime.toISOString().split('T')[0],
+            scheduled_time: eventTime.toTimeString().split(' ')[0],
+            complete_datetime: eventTime.toISOString(),
+            dosage: dosePills.toString(),
+            user_id: user_id,
+            pill_id: id,
+            notes: `Tome ${dosePills} comprimido(s)`
+          });
+        }
+      }
+
+      if (scheduleTimes.length === 0) {
+        return { success: false, message: 'Não foi possível calcular os horários para este medicamento.' };
+      }
+
+      // Insert all schedule times
+      const { data, error } = await supabase
+        .from('medication_schedule_times')
+        .insert(scheduleTimes);
+
+      if (error) {
+        console.error('Error saving schedule times:', error);
+        return { success: false, message: `Erro ao salvar horários: ${error.message}` };
+      }
+
+      // Update pill status
+      await supabase
+        .from('pills_warning')
+        .update({ all_schedules_saved: true })
+        .eq('id', id);
+
+      return { success: true, message: `${scheduleTimes.length} horários salvos com sucesso.` };
+    } catch (error) {
+      console.error('Exception saving schedule times:', error);
+      return { success: false, message: `Erro: ${error.message}` };
+    }
+  };
+
+  // Function to delete medication schedule times
+  const deleteMedicationScheduleTimes = async (medicationId) => {
+    try {
+      const { error } = await supabase
+        .from('medication_schedule_times')
+        .delete()
+        .eq('medication_id', medicationId);
+      
+      if (error) {
+        console.error('Error deleting schedule times:', error);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Exception deleting schedule times:', error);
+      return false;
+    }
+  };
+
   const renderMedicationCard = ({ item }) => (
     <View style={styles.medicationCard}>
       <View style={styles.medicationHeader}>
@@ -680,14 +880,30 @@ const CalendarScreen = ({ navigation }) => {
           data={medications}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderMedicationCard}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: 200 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
 
       <TouchableOpacity 
         style={styles.addButton} 
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          // Reset selected medication when adding new one
+          setSelectedMedication(null);
+          setFixedTimes([]);
+          setIntervalStartTime('');
+          setSelectedScheduleType('interval');
+          setNewMedication({
+            titulo: '',
+            quantidade_comprimidos: '',
+            quantidade_comprimidos_por_vez: '',
+            data_inicio: '',
+            intervalo_horas: null,
+            horario_fixo: '',
+            data_fim: '',
+          });
+          setModalVisible(true);
+        }}
         activeOpacity={0.8}
       >
         <Ionicons name="add" size={28} color="#fff" />
@@ -797,14 +1013,14 @@ const CalendarScreen = ({ navigation }) => {
               {selectedScheduleType === 'interval' && (
                 <>
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Data de Início</Text>
+                    <Text style={styles.inputLabel}>Data de Início (opcional)</Text>
                     <TouchableOpacity 
                       style={styles.datePickerButtonEnhanced}
                       onPress={() => { setShowDatePicker(true); setDateType('start'); }}
                     >
                       <Ionicons name="calendar" size={20} color="#3498db" />
                       <Text style={styles.datePickerTextEnhanced}>
-                        {newMedication.data_inicio || 'Selecione a data inicial'}
+                        {newMedication.data_inicio || 'Usar data atual'}
                       </Text>
                     </TouchableOpacity>
                   </View>
