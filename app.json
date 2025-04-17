@@ -31,7 +31,6 @@
       "package": "com.apinacio.HealthMate"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "react-native-ble-plx"

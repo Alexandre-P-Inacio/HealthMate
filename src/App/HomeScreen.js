@@ -24,7 +24,6 @@ const HomeScreen = () => {
   const [calendarView, setCalendarView] = useState('day'); // 'day', 'week', 'month'
   const [todayStats, setTodayStats] = useState({ total: 0, completed: 0 });
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState('timeline'); // 'timeline', 'list'
   const navigation = useNavigation();
   const hourlyScrollViewRef = useRef(null);
   const hourRowHeight = 70; // Definir altura fixa de cada linha de hora para cálculos precisos
@@ -46,37 +45,52 @@ const HomeScreen = () => {
     fetchEvents();
   }, [selectedDate]);
 
-  useEffect(() => {
-    if (hourlyScrollViewRef.current) {
-      setTimeout(() => {
-        scrollToCurrentTime();
-      }, 300);
-    }
-  }, [currentHour, isLoading]);
-
-  const scrollToCurrentTime = () => {
-    const now = new Date();
-    const currentHour = now.getHours();
+  const goToCurrentHourAndDay = () => {
+    // Get current date and hour
+    const today = new Date();
+    const nowHour = today.getHours();
     
-    // FlatList usa scrollToIndex em vez de scrollTo
-    if (hourlyScrollViewRef.current) {
-      hourlyScrollViewRef.current.scrollToIndex({ 
-        index: currentHour,
-        animated: true,
-        viewPosition: 0.5 // Centralizar o item na tela
-      });
-    }
+    // First update state
+    setSelectedDate(today);
+    setCurrentHour(nowHour);
+    
+    // Then scroll in a separate cycle after state updates
+    setTimeout(() => {
+      // Direct approach - use calculated offset which is most reliable
+      if (hourlyScrollViewRef.current) {
+        const hourHeight = 70; // Height of each hour row
+        
+        // Scroll to position the current hour row at the top of the visible area
+        hourlyScrollViewRef.current.scrollToOffset({
+          offset: nowHour * hourHeight,
+          animated: false // First jump instantly to correct position
+        });
+        
+        // Slight delay to ensure the initial jump happened
+        setTimeout(() => {
+          // Refresh events after date change
+          fetchEvents();
+        }, 50);
+      }
+    }, 50);
   };
 
-  // Garantir que o try/catch seja adicionado para evitar erros se o índice estiver fora dos limites
   const onScrollToIndexFailed = (info) => {
     const wait = new Promise(resolve => setTimeout(resolve, 500));
     wait.then(() => {
       if (hourlyScrollViewRef.current) {
-        hourlyScrollViewRef.current.scrollToIndex({ 
-          index: Math.min(info.highestMeasuredFrameIndex, currentHour),
-          animated: true 
-        });
+        const validIndex = Math.min(info.highestMeasuredFrameIndex, currentHour);
+        if (validIndex >= 0) {
+          hourlyScrollViewRef.current.scrollToIndex({
+            index: validIndex,
+            animated: true
+          });
+        } else {
+          hourlyScrollViewRef.current.scrollToOffset({
+            offset: 0,
+            animated: true
+          });
+        }
       }
     });
   };
@@ -86,7 +100,6 @@ const HomeScreen = () => {
       const userId = DataUser.getUserData()?.id;
       
       if (!userId) {
-        console.error('User ID not found');
         setIsLoading(false);
         return;
       }
@@ -106,7 +119,6 @@ const HomeScreen = () => {
         });
       }
     } catch (error) {
-      console.error('Error fetching user data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -119,7 +131,6 @@ const HomeScreen = () => {
       setMedications(data || []);
       return data || [];
     } catch (error) {
-      console.error('Error fetching medications:', error);
       return [];
     }
   };
@@ -135,7 +146,6 @@ const HomeScreen = () => {
       if (error) throw error;
       setDoctors(data || []);
     } catch (error) {
-      console.error('Error fetching doctors:', error);
     }
   };
 
@@ -146,19 +156,12 @@ const HomeScreen = () => {
       const userId = userData?.id;
       
       if (!userId) {
-        console.error('User ID not found');
         setIsRefreshing(false);
         return;
       }
 
-      console.log(`Buscando agendamentos para o usuário ID: ${userId}`);
-
-      // Obter a data do dia selecionado no formato YYYY-MM-DD
       const formattedDate = selectedDate.toISOString().split('T')[0];
-      console.log(`Consultando medicamentos para a data: ${formattedDate}`);
       
-      // Buscar os medicamentos agendados na tabela medication_schedule_times
-      // Foco nas colunas scheduled_date e scheduled_time
       const { data, error } = await supabase
         .from('medication_schedule_times')
         .select(`
@@ -182,22 +185,10 @@ const HomeScreen = () => {
         .eq('scheduled_date', formattedDate);
 
       if (error) {
-        console.error('Erro ao buscar medicamentos agendados:', error);
         setIsRefreshing(false);
         return;
       }
 
-      console.log(`Encontrados ${data?.length || 0} medicamentos agendados para a data ${formattedDate}`);
-      
-      // Se encontrou dados, lista os horários no console para debug
-      if (data && data.length > 0) {
-        console.log("Horários encontrados:");
-        data.forEach(item => {
-          console.log(`- Data: ${item.scheduled_date}, Hora: ${item.scheduled_time}, Medicamento: ${item.pills_warning?.titulo || 'Desconhecido'}`);
-        });
-      }
-
-      // Verificar se já existem confirmações para estes medicamentos
       const { data: confirmations, error: confirmError } = await supabase
         .from('medication_confirmations')
         .select('pill_id, confirmation_date')
@@ -206,24 +197,18 @@ const HomeScreen = () => {
         .eq('taken', true);
 
       if (confirmError) {
-        console.error('Erro ao buscar confirmações:', confirmError);
       }
 
-      // Converter os dados para o formato esperado pelo calendário
-      // Garantindo que usamos corretamente scheduled_date e scheduled_time
       const calendarEvents = data.map(item => {
-        // Verificar se este medicamento já foi tomado
         const isTaken = confirmations?.some(conf => 
           conf.pill_id === item.pill_id && conf.confirmation_date === item.scheduled_date
         ) || item.status === 'taken' || false;
 
-        // Extrair componentes de hora da string scheduled_time (formato HH:MM:SS)
         const timeComponents = item.scheduled_time?.split(':') || ['08', '00', '00'];
         const hours = parseInt(timeComponents[0], 10);
         const minutes = parseInt(timeComponents[1], 10);
         const seconds = parseInt(timeComponents[2], 10);
 
-        // Criar objeto de data combinando scheduled_date com scheduled_time
         const eventDate = new Date(item.scheduled_date);
         eventDate.setHours(hours, minutes, seconds, 0);
         
@@ -233,8 +218,8 @@ const HomeScreen = () => {
           startDate: eventDate.toISOString(),
           endDate: new Date(eventDate.getTime() + 30 * 60000).toISOString(),
           notes: `Dose: ${item.dosage || item.pills_warning?.quantidade_comprimidos_por_vez || 1} comprimido(s)`,
-          scheduledDate: item.scheduled_date,  // Armazenar a data original
-          scheduledTime: item.scheduled_time,  // Armazenar a hora original
+          scheduledDate: item.scheduled_date,
+          scheduledTime: item.scheduled_time,
           pill_id: item.pill_id,
           isTaken: isTaken,
           status: item.status || 'pending',
@@ -246,7 +231,6 @@ const HomeScreen = () => {
       setEvents(calendarEvents);
       setIsRefreshing(false);
     } catch (error) {
-      console.error('Error fetching medication schedule:', error);
       setIsRefreshing(false);
     }
   };
@@ -304,7 +288,6 @@ const HomeScreen = () => {
         );
         
       } catch (error) {
-        console.error('Error recording medication response:', error);
       }
     }
     
@@ -330,44 +313,32 @@ const HomeScreen = () => {
     return hours;
   };
 
-  // Função para calcular e salvar todos os horários de medicação na tabela medication_confirmations
   const calculateAndSaveMedicationSchedule = async (medicationData, userId) => {
     try {
       if (!medicationData.id || !userId) {
-        console.error('ID do medicamento ou ID do usuário não fornecido');
         return { error: 'Dados incompletos' };
       }
 
-      console.log(`Calculando horários para medicamento ID: ${medicationData.id}`);
-      
-      // Array para armazenar todas as datas/horas calculadas
       const scheduledTimes = [];
       
-      // Data atual como referência
       const now = new Date();
       let startDate = medicationData.data_inicio ? new Date(medicationData.data_inicio) : now;
       
-      // Garantir que a data de início não seja anterior à data atual
       if (startDate < now) {
         startDate = now;
       }
       
-      // Data de término (se existir)
       const endDate = medicationData.data_fim ? new Date(medicationData.data_fim) : null;
       
-      // Determinar o tipo de frequência e calcular os horários
       if (medicationData.recurrence === 'daily' || !medicationData.recurrence) {
-        // Medicamento diário
         const daysToCalculate = endDate ? 
           Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) : 
-          30; // Padrão: 30 dias se não houver data final
+          30;
         
-        // Para cada dia no período
         for (let day = 0; day < daysToCalculate; day++) {
           const currentDate = new Date(startDate);
           currentDate.setDate(currentDate.getDate() + day);
           
-          // Se houver horários fixos específicos
           if (medicationData.horario_fixo) {
             const hours = medicationData.horario_fixo.split(';');
             for (const hourStr of hours) {
@@ -375,16 +346,14 @@ const HomeScreen = () => {
               const datetime = new Date(currentDate);
               datetime.setHours(hour, minute, 0, 0);
               
-              // Só adicionar se a data/hora for no futuro
               if (datetime > now) {
                 scheduledTimes.push(datetime.toISOString());
               }
             }
           } 
-          // Se for por intervalo de horas
           else if (medicationData.intervalo_horas) {
             const intervalo = parseInt(medicationData.intervalo_horas);
-            const startHour = medicationData.hora_inicio || 8; // Padrão: 8h se não especificado
+            const startHour = medicationData.hora_inicio || 8;
             
             for (let hour = startHour; hour < 24; hour += intervalo) {
               const datetime = new Date(currentDate);
@@ -395,10 +364,9 @@ const HomeScreen = () => {
               }
             }
           }
-          // Caso padrão: uma vez por dia
           else {
             const datetime = new Date(currentDate);
-            datetime.setHours(8, 0, 0, 0); // Padrão: 8h da manhã
+            datetime.setHours(8, 0, 0, 0);
             
             if (datetime > now) {
               scheduledTimes.push(datetime.toISOString());
@@ -407,20 +375,16 @@ const HomeScreen = () => {
         }
       } 
       else if (medicationData.recurrence === 'weekly') {
-        // Medicamento semanal
         const weeksToCalculate = endDate ? 
           Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24 * 7)) : 
-          4; // Padrão: 4 semanas
+          4;
         
-        // Dias da semana selecionados (0 = Domingo, 6 = Sábado)
-        const selectedDays = medicationData.days_of_week || [1, 3, 5]; // Padrão: Segunda, Quarta, Sexta
+        const selectedDays = medicationData.days_of_week || [1, 3, 5];
         
-        // Para cada semana no período
         for (let week = 0; week < weeksToCalculate; week++) {
           const weekStart = new Date(startDate);
           weekStart.setDate(weekStart.getDate() + (week * 7));
           
-          // Para cada dia da semana selecionado
           for (const dayOfWeek of selectedDays) {
             const currentDate = new Date(weekStart);
             const currentDayOfWeek = currentDate.getDay();
@@ -428,7 +392,6 @@ const HomeScreen = () => {
             
             currentDate.setDate(currentDate.getDate() + daysToAdd);
             
-            // Aplicar os mesmos cálculos de hora como no caso diário
             if (medicationData.horario_fixo) {
               const hours = medicationData.horario_fixo.split(';');
               for (const hourStr of hours) {
@@ -442,7 +405,7 @@ const HomeScreen = () => {
               }
             } else {
               const datetime = new Date(currentDate);
-              datetime.setHours(8, 0, 0, 0); // Padrão: 8h da manhã
+              datetime.setHours(8, 0, 0, 0);
               
               if (datetime > now) {
                 scheduledTimes.push(datetime.toISOString());
@@ -452,15 +415,13 @@ const HomeScreen = () => {
         }
       }
       else if (medicationData.recurrence === 'once') {
-        // Medicamento de dose única
         const datetime = new Date(medicationData.schedule_date || startDate);
         
-        // Definir a hora específica se fornecida
         if (medicationData.schedule_time) {
           const [hour, minute] = medicationData.schedule_time.split(':').map(Number);
           datetime.setHours(hour, minute, 0, 0);
         } else {
-          datetime.setHours(8, 0, 0, 0); // Padrão: 8h da manhã
+          datetime.setHours(8, 0, 0, 0);
         }
         
         if (datetime > now) {
@@ -468,12 +429,8 @@ const HomeScreen = () => {
         }
       }
       
-      console.log(`Calculados ${scheduledTimes.length} horários para tomar o medicamento`);
-      
-      // Salvar cada horário calculado na tabela
       const results = [];
       for (const scheduledTime of scheduledTimes) {
-        // Verificar se já existe um registro
         const { data: existing, error: checkError } = await supabase
           .from('medication_confirmations')
           .select('id')
@@ -482,17 +439,15 @@ const HomeScreen = () => {
           .maybeSingle();
         
         if (checkError) {
-          console.error('Erro ao verificar registro existente:', checkError);
           continue;
         }
         
-        // Se não existir, criar o novo registro
         if (!existing) {
           const confirmationData = {
             medication_id: medicationData.id,
             scheduled_time: scheduledTime,
             user_id: userId,
-            taken: null, // Inicialmente null até ser confirmado
+            taken: null,
             notes: 'Agendado automaticamente',
             created_at: new Date().toISOString()
           };
@@ -503,7 +458,6 @@ const HomeScreen = () => {
             .select('id');
           
           if (error) {
-            console.error('Erro ao criar registro de confirmação:', error);
           } else {
             results.push(data[0]);
           }
@@ -512,17 +466,14 @@ const HomeScreen = () => {
         }
       }
       
-      console.log(`Salvos ${results.length} registros na tabela medication_confirmations`);
       return { data: results };
     } catch (error) {
-      console.error('Erro ao calcular e salvar horários de medicação:', error);
       return { error };
     }
   };
 
   const handleSaveMedication = async (medicationData) => {
     try {
-      // Salvar o medicamento principal
       const { data, error } = await supabase
         .from('pills_warning')
         .upsert(medicationData)
@@ -530,14 +481,11 @@ const HomeScreen = () => {
       
       if (error) throw error;
       
-      // Obter o ID do medicamento salvo
       const medicationId = data[0].id;
       
-      // Obter ID do usuário atual
       const userData = DataUser.getUserData();
       const userId = userData.id;
       
-      // Calcular e salvar todos os horários
       await calculateAndSaveMedicationSchedule({
         ...medicationData,
         id: medicationId
@@ -545,7 +493,6 @@ const HomeScreen = () => {
       
       Alert.alert('Sucesso', 'Medicamento salvo e todos os horários agendados');
     } catch (error) {
-      console.error('Erro ao salvar medicamento:', error);
       Alert.alert('Erro', 'Não foi possível salvar o medicamento');
     }
   };
@@ -553,7 +500,6 @@ const HomeScreen = () => {
   const fetchTodayMedications = async () => {
     const userId = DataUser.getUserData()?.id;
     if (!userId) {
-      console.error('Usuário não encontrado');
       Alert.alert('Erro', 'Usuário não identificado. Por favor, faça login novamente.');
       return;
     }
@@ -561,11 +507,8 @@ const HomeScreen = () => {
     try {
       setIsLoading(true);
       
-      // Obtém a data atual no formato ISO (YYYY-MM-DD)
       const today = new Date().toISOString().split('T')[0];
-      console.log(`Buscando medicamentos para data: ${today} e usuário: ${userId}`);
       
-      // Busca todos os agendamentos para hoje na tabela medication_schedule_times
       const { data: scheduleData, error: scheduleError } = await supabase
         .from('medication_schedule_times')
         .select(`
@@ -573,17 +516,16 @@ const HomeScreen = () => {
           pill_id,
           scheduled_date,
           scheduled_time,
-          complete_datetime,
           dosage,
           notes,
+          complete_datetime,
+          status,
           user_id,
           pills_warning (
             id,
             titulo,
             quantidade_comprimidos,
-            quantidade_comprimidos_por_vez,
-            horario_fixo,
-            intervalo_horas
+            quantidade_comprimidos_por_vez
           )
         `)
         .eq('scheduled_date', today)
@@ -591,96 +533,21 @@ const HomeScreen = () => {
         .order('scheduled_time', { ascending: true });
         
       if (scheduleError) {
-        console.error('Erro ao buscar medicamentos de hoje:', scheduleError);
         Alert.alert('Erro', `Falha ao buscar medicamentos: ${scheduleError.message}`);
         setIsLoading(false);
         return;
       }
       
-      console.log(`Encontrados ${scheduleData?.length || 0} agendamentos para hoje`);
+      const { data: confirmations, error: confirmError } = await supabase
+        .from('medication_confirmations')
+        .select('pill_id, confirmation_date, confirmation_time')
+        .eq('user_id', userId)
+        .eq('confirmation_date', today)
+        .eq('taken', true);
       
-      // Caso não encontre medicamentos agendados, buscar todos da tabela pills_warning
-      // e calcular os horários para hoje
-      if (!scheduleData || scheduleData.length === 0) {
-        console.log('Nenhum medicamento agendado encontrado. Buscando medicamentos na tabela pills_warning');
-        
-        const { data: pillsData, error: pillsError } = await supabase
-          .from('pills_warning')
-          .select('*')
-          .eq('user_id', userId);
-          
-        if (pillsError) {
-          console.error('Erro ao buscar medicamentos:', pillsError);
-          Alert.alert('Erro', 'Não foi possível carregar seus medicamentos.');
-          setIsLoading(false);
-          return;
-        }
-        
-        if (pillsData && pillsData.length > 0) {
-          console.log(`Encontrados ${pillsData.length} medicamentos. Calculando horários para hoje.`);
-          
-          // Para cada medicamento, calcular horários para hoje
-          const medicationsByTime = {};
-          
-          for (const pill of pillsData) {
-            // Obter horários para hoje (usando lógica simplificada)
-            let times = [];
-            
-            if (pill.horario_fixo) {
-              // Horários fixos
-              times = pill.horario_fixo.split(';').map(time => time.trim()).filter(time => time);
-            } else if (pill.intervalo_horas) {
-              // Intervalos de horas
-              const intervalo = parseInt(pill.intervalo_horas);
-              for (let hour = 8; hour < 24; hour += intervalo) {
-                times.push(`${hour.toString().padStart(2, '0')}:00:00`);
-              }
-            } else {
-              // Caso não haja configuração, assume um horário padrão
-              times = ['08:00:00'];
-            }
-            
-            // Adicionar cada horário ao mapa
-            times.forEach(time => {
-              if (!medicationsByTime[time]) {
-                medicationsByTime[time] = [];
-              }
-              
-              medicationsByTime[time].push({
-                id: `manual-${pill.id}-${time}`,
-                pillId: pill.id,
-                scheduledTime: time,
-                scheduledDate: today,
-                dosage: pill.quantidade_comprimidos_por_vez?.toString() || '1',
-                title: pill.titulo || 'Medicamento',
-                quantidade: pill.quantidade_comprimidos || 0,
-                dosePorVez: pill.quantidade_comprimidos_por_vez || 1,
-                isManuallyCalculated: true  // Flag para identificar que foi calculado manualmente
-              });
-            });
-          }
-          
-          // Converter para array
-          const todayMeds = Object.keys(medicationsByTime).map(timeKey => ({
-            time: timeKey,
-            medications: medicationsByTime[timeKey]
-          }));
-          
-          // Ordenar por horário
-          todayMeds.sort((a, b) => {
-            if (a.time < b.time) return -1;
-            if (a.time > b.time) return 1;
-            return 0;
-          });
-          
-          setTodayMedications(todayMeds);
-          setTodayMedicationsModal(true);
-          setIsLoading(false);
-          return;
-        }
+      if (confirmError) {
       }
       
-      // Organiza os medicamentos por horário
       const medicationsByTime = {};
       
       if (scheduleData && scheduleData.length > 0) {
@@ -690,40 +557,53 @@ const HomeScreen = () => {
             medicationsByTime[timeKey] = [];
           }
           
+          const now = new Date();
+          const scheduledTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
+          const canTake = scheduledTime <= now;
+          const isTaken = confirmations?.some(conf => 
+            conf.pill_id === item.pill_id && conf.confirmation_date === today
+          ) || item.status === 'taken' || false;
+          
+          const confirmation = confirmations?.find(conf => 
+            conf.pill_id === item.pill_id && conf.confirmation_date === today
+          );
+          
           medicationsByTime[timeKey].push({
             id: item.id,
             pillId: item.pill_id,
             scheduledTime: item.scheduled_time,
             scheduledDate: item.scheduled_date,
             completeDatetime: item.complete_datetime,
+            confirmationTime: confirmation?.confirmation_time || null,
             dosage: item.dosage,
             notes: item.notes,
             title: item.pills_warning?.titulo || 'Medicamento',
             quantidade: item.pills_warning?.quantidade_comprimidos || 0,
-            dosePorVez: item.pills_warning?.quantidade_comprimidos_por_vez || 0
+            dosePorVez: item.pills_warning?.quantidade_comprimidos_por_vez || 0,
+            isTaken: isTaken,
+            canTake: canTake,
+            status: item.status || 'pending'
           });
         });
       }
       
-      // Converte para array para facilitar a exibição
       const todayMeds = Object.keys(medicationsByTime).map(timeKey => ({
         time: timeKey,
         medications: medicationsByTime[timeKey]
       }));
       
-      // Ordena por horário
       todayMeds.sort((a, b) => {
         if (a.time < b.time) return -1;
         if (a.time > b.time) return 1;
         return 0;
       });
       
-      console.log(`Organizados ${todayMeds.length} grupos de horários`);
+      const now = new Date();
+      const currentHourStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:00`;
       
       setTodayMedications(todayMeds);
       setTodayMedicationsModal(true);
     } catch (error) {
-      console.error('Erro ao processar medicamentos de hoje:', error);
       Alert.alert('Erro', `Não foi possível carregar os medicamentos para hoje: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -737,9 +617,6 @@ const HomeScreen = () => {
       
       const now = new Date();
       const currentTime = now.toTimeString().split(' ')[0];
-      
-      // Não tentamos mais atualizar a tabela medication_schedule_times com taken e taken_at
-      // Apenas adicionamos o registro à tabela medication_confirmations
       
       const { error: insertError } = await supabase
         .from('medication_confirmations')
@@ -755,22 +632,18 @@ const HomeScreen = () => {
         });
         
       if (insertError) {
-        console.error('Erro ao registrar confirmação:', insertError);
         Alert.alert('Erro', 'Não foi possível registrar a confirmação do medicamento.');
         return;
       }
       
-      // Atualiza a lista de medicamentos do dia
       await fetchTodayMedications();
       
       Alert.alert('Sucesso', 'Medicamento marcado como tomado!');
     } catch (error) {
-      console.error('Erro ao processar medicamento:', error);
       Alert.alert('Erro', 'Ocorreu um erro ao processar sua solicitação.');
     }
   };
 
-  // Adicionar função para obter estatísticas dos medicamentos do dia
   const getTodayMedicationStats = async () => {
     try {
       const userId = DataUser.getUserData()?.id;
@@ -778,7 +651,6 @@ const HomeScreen = () => {
       
       const today = new Date().toISOString().split('T')[0];
       
-      // Buscar medicamentos do dia
       const { data, error } = await supabase
         .from('medication_schedule_times')
         .select('id, pill_id')
@@ -786,11 +658,9 @@ const HomeScreen = () => {
         .eq('user_id', userId);
         
       if (error) {
-        console.error('Erro ao buscar estatísticas:', error);
         return;
       }
       
-      // Buscar confirmações do dia
       const { data: confirmations, error: confirmError } = await supabase
         .from('medication_confirmations')
         .select('pill_id')
@@ -799,30 +669,18 @@ const HomeScreen = () => {
         .eq('taken', true);
       
       if (confirmError) {
-        console.error('Erro ao buscar confirmações:', confirmError);
         return;
       }
       
-      // Calcular estatísticas
       const total = data?.length || 0;
       const completed = confirmations?.length || 0;
       
       setTodayStats({ total, completed });
       
     } catch (error) {
-      console.error('Erro ao calcular estatísticas:', error);
     }
   };
 
-  // Função para atualizar todos os dados
-  const refreshCalendarData = async () => {
-    setIsRefreshing(true);
-    await fetchEvents();
-    await getTodayMedicationStats();
-    setIsRefreshing(false);
-  };
-
-  // Atualizar a função takeMedication para garantir que todos os campos usem o formato correto
   const takeMedication = async (event) => {
     try {
       const userId = DataUser.getUserData()?.id;
@@ -831,7 +689,21 @@ const HomeScreen = () => {
         return;
       }
 
-      // Agora temos diretamente o pill_id do evento
+      const now = new Date();
+      const scheduledTime = new Date(event.startDate);
+      
+      if (scheduledTime > now) {
+        const scheduledTimeStr = scheduledTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const nowTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        Alert.alert(
+          'Horário não atingido',
+          `Ainda não é hora de tomar este medicamento.\nHorário agendado: ${scheduledTimeStr}\nHorário atual: ${nowTimeStr}`,
+          [{ text: "OK", style: "cancel" }]
+        );
+        return;
+      }
+
       const pillId = event.pill_id;
       
       if (!pillId) {
@@ -839,39 +711,28 @@ const HomeScreen = () => {
         return;
       }
       
-      const now = new Date();
-      // Formato ISO completo para timestamp
       const isoTimestamp = now.toISOString();
-      // Data no formato YYYY-MM-DD
       const currentDate = isoTimestamp.split('T')[0];
       
-      console.log(`Registrando confirmação para pill_id=${pillId}, data=${currentDate}, iso=${isoTimestamp}`);
-      
-      // Usar apenas os campos necessários e no formato correto
       const confirmationData = {
         pill_id: pillId,
         user_id: userId,
-        scheduled_time: isoTimestamp, // ISO timestamp completo
-        confirmation_date: currentDate, // Apenas a data YYYY-MM-DD
+        scheduled_time: isoTimestamp,
+        confirmation_date: currentDate,
         taken: true,
         notes: `Medicamento tomado via calendário: ${event.title}`,
-        created_at: isoTimestamp // ISO timestamp completo
+        created_at: isoTimestamp
       };
       
-      console.log('Dados de confirmação a serem enviados:', confirmationData);
-      
-      // Inserir o registro na tabela medication_confirmations
       const { error: insertError } = await supabase
         .from('medication_confirmations')
         .insert(confirmationData);
         
       if (insertError) {
-        console.error('Erro ao registrar confirmação:', insertError);
         Alert.alert('Erro', `Não foi possível registrar a confirmação do medicamento: ${insertError.message}`);
         return;
       }
       
-      // Atualizar o status na tabela medication_schedule_times
       try {
         const { error: updateError } = await supabase
           .from('medication_schedule_times')
@@ -882,18 +743,15 @@ const HomeScreen = () => {
           .eq('id', event.id);
           
         if (updateError) {
-          console.error('Erro ao atualizar status do medicamento:', updateError);
         }
       } catch (updateError) {
-        console.error('Erro ao atualizar status:', updateError);
       }
       
-      // Atualizar estatísticas e dados
-      await refreshCalendarData();
+      fetchEvents();
+      getTodayMedicationStats();
       
       Alert.alert('Sucesso', `${event.title} marcado como tomado!`);
     } catch (error) {
-      console.error('Erro ao processar medicamento:', error);
       Alert.alert('Erro', `Ocorreu um erro ao processar sua solicitação: ${error.message}`);
     }
   };
@@ -908,7 +766,7 @@ const HomeScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             {userData?.profilePicture ? (
@@ -938,66 +796,12 @@ const HomeScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Conteúdo principal (sem aninhamento de ScrollViews) */}
         <View style={styles.content}>
           <View style={styles.calendarContainer}>
             <View style={styles.calendarHeader}>
-              <Text style={styles.calendarTitle}>Your Schedule</Text>
-              <View style={styles.calendarActions}>
-                <TouchableOpacity 
-                  style={[styles.viewToggle, viewMode === 'timeline' && styles.viewToggleActive]}
-                  onPress={() => setViewMode('timeline')}
-                >
-                  <Ionicons 
-                    name="time-outline" 
-                    size={18} 
-                    color={viewMode === 'timeline' ? '#fff' : '#6A8DFD'} 
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.viewToggle, viewMode === 'list' && styles.viewToggleActive]}
-                  onPress={() => setViewMode('list')}
-                >
-                  <Ionicons 
-                    name="list-outline" 
-                    size={18} 
-                    color={viewMode === 'list' ? '#fff' : '#6A8DFD'} 
-                  />
-                </TouchableOpacity>
-              </View>
+            <Text style={styles.calendarTitle}>Your Schedule</Text>
             </View>
 
-            {/* Stats do dia */}
-            <View style={styles.todayStatsContainer}>
-              <View style={styles.todayStatsContent}>
-                <View style={styles.todayStatsItem}>
-                  <Text style={styles.todayStatsNumber}>{todayStats.total}</Text>
-                  <Text style={styles.todayStatsLabel}>Total</Text>
-                </View>
-                <View style={styles.todayStatsDivider} />
-                <View style={styles.todayStatsItem}>
-                  <Text style={styles.todayStatsNumber}>{todayStats.completed}</Text>
-                  <Text style={styles.todayStatsLabel}>Tomados</Text>
-                </View>
-                <View style={styles.todayStatsDivider} />
-                <View style={styles.todayStatsItem}>
-                  <Text style={styles.todayStatsNumber}>{todayStats.total - todayStats.completed}</Text>
-                  <Text style={styles.todayStatsLabel}>Pendentes</Text>
-                </View>
-              </View>
-              
-              {/* Barra de progresso */}
-              <View style={styles.progressBarContainer}>
-                <View 
-                  style={[
-                    styles.progressBar, 
-                    { width: `${todayStats.total > 0 ? (todayStats.completed / todayStats.total) * 100 : 0}%` }
-                  ]} 
-                />
-              </View>
-            </View>
-
-            {/* Selector de dias (sem usar ScrollView) */}
             <FlatList
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1008,6 +812,10 @@ const HomeScreen = () => {
               renderItem={({item: date, index}) => {
                 const isToday = date.toDateString() === new Date().toDateString();
                 const isSelected = date.toDateString() === selectedDate.toDateString();
+                
+                const hasEvents = events.filter(e => 
+                  new Date(e.startDate).toDateString() === date.toDateString()
+                ).length > 0;
                 
                 return (
                   <TouchableOpacity 
@@ -1020,22 +828,17 @@ const HomeScreen = () => {
                   >
                     <Text style={[
                       styles.daySubText,
-                      isSelected && styles.selectedDayText,
-                      isToday && styles.todayText
+                      (isSelected || isToday) && styles.selectedDayText
                     ]}>
                       {date.toLocaleString('en-US', { weekday: 'short' }).toUpperCase()}
                     </Text>
                     <Text style={[
                       styles.dayText,
-                      isSelected && styles.selectedDayText,
-                      isToday && styles.todayText
+                      (isSelected || isToday) && styles.selectedDayText
                     ]}>
                       {date.getDate()}
                     </Text>
-                    {/* Indicador de medicamentos */}
-                    {events.filter(e => 
-                      new Date(e.startDate).toDateString() === date.toDateString()
-                    ).length > 0 && (
+                    {hasEvents && isToday && (
                       <View style={styles.dayEventIndicator} />
                     )}
                   </TouchableOpacity>
@@ -1043,175 +846,138 @@ const HomeScreen = () => {
               }}
             />
 
-            {viewMode === 'timeline' ? (
-              <View style={styles.scrollViewContainer}>
-                {isRefreshing ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#6A8DFD" />
-                  </View>
-                ) : (
-                  <>
-                    {/* Timeline View - usar FlatList em vez de ScrollView */}
-                    <FlatList
-                      ref={hourlyScrollViewRef}
-                      style={styles.hourlySchedule}
-                      showsVerticalScrollIndicator={true}
-                      contentContainerStyle={styles.hourlyScheduleContent}
-                      data={getAllHours()}
-                      keyExtractor={(hour) => hour.toString()}
-                      renderItem={({item: hour}) => {
-                        // Filtrar eventos para esta hora
-                        const hourEvents = events.filter(event => 
-                          new Date(event.startDate).getHours() === hour &&
-                          new Date(event.startDate).toDateString() === selectedDate.toDateString()
-                        );
-                        
-                        // Se não houver eventos e não for a hora atual, mostrar versão compacta
-                        const isCurrentHour = hour === currentHour;
-                        const hasEvents = hourEvents.length > 0;
-                        
-                        if (!hasEvents && !isCurrentHour) {
-                          return (
-                            <View style={styles.hourRowCompact}>
-                              <Text style={styles.hourText}>
-                                {hour.toString().padStart(2, '0')}:00
-                              </Text>
-                              <View style={styles.hourLine} />
-                            </View>
-                          );
-                        }
-                        
+            <View style={styles.scrollViewContainer}>
+              {isRefreshing ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#6A8DFD" />
+                </View>
+              ) : (
+                <>
+                  <FlatList
+                    ref={hourlyScrollViewRef}
+                    style={styles.hourlySchedule}
+                    showsVerticalScrollIndicator={true}
+                    contentContainerStyle={styles.hourlyScheduleContent}
+                    data={getAllHours()}
+                    keyExtractor={(hour) => hour.toString()}
+                    renderItem={({item: hour}) => {
+                      const hourEvents = events.filter(event => 
+                        new Date(event.startDate).getHours() === hour &&
+                        new Date(event.startDate).toDateString() === selectedDate.toDateString()
+                      );
+                      
+                      const isCurrentHour = hour === currentHour;
+                      const hasEvents = hourEvents.length > 0;
+                      
+                      if (!hasEvents && !isCurrentHour) {
                         return (
-                          <View 
-                            style={[
-                              styles.hourRow,
-                              isCurrentHour && styles.currentHourRow
-                            ]}
-                          >
-                            <Text style={[
-                              styles.hourText,
-                              isCurrentHour && styles.currentHourText
-                            ]}>
+                          <View style={styles.hourRowCompact}>
+                            <Text style={styles.hourText}>
                               {hour.toString().padStart(2, '0')}:00
                             </Text>
-                            <View style={styles.timelineContainer}>
-                              {hourEvents.map((event, idx) => {
-                                return (
-                                  <View key={idx} style={[
-                                    styles.eventCard,
-                                    event.isTaken && styles.eventCardTaken
-                                  ]}>
-                                    <View style={styles.eventCardHeader}>
-                                      <Text style={styles.eventTitle}>{event.title}</Text>
-                                      <Text style={styles.eventTime}>
-                                        {event.scheduledTime?.substring(0, 5) || '00:00'}
-                                      </Text>
-                                    </View>
-                                    {event.notes && (
-                                      <Text style={styles.eventNotes}>{event.notes}</Text>
-                                    )}
-                                    <Text style={styles.scheduledInfo}>
-                                      Agendado para: {event.scheduledDate} às {event.scheduledTime?.substring(0, 5) || '00:00'}
-                                    </Text>
-                                    {!event.isTaken && (
-                                      <TouchableOpacity 
-                                        style={styles.takePillButton}
-                                        onPress={() => takeMedication(event)}
-                                      >
-                                        <Text style={styles.takePillButtonText}>Tomar</Text>
-                                        <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                                      </TouchableOpacity>
-                                    )}
-                                    {event.isTaken && (
-                                      <View style={styles.takenPillIndicator}>
-                                        <Text style={styles.takenPillText}>Medicamento tomado</Text>
-                                        <Ionicons name="checkmark-circle" size={16} color="#2ECC71" />
-                                      </View>
-                                    )}
-                                  </View>
-                                );
-                              })}
-                            </View>
+                            <View style={styles.hourLine} />
                           </View>
                         );
-                      }}
-                      getItemLayout={(data, index) => (
-                        {length: 70, offset: 70 * index, index}
-                      )}
-                      initialScrollIndex={Math.max(0, currentHour - 2)} // Scroll para a hora atual
-                      onScrollToIndexFailed={onScrollToIndexFailed}
-                      maxToRenderPerBatch={24}
-                      windowSize={10}
-                    />
-                    <TouchableOpacity 
-                      style={styles.currentTimeButton}
-                      onPress={() => {
-                        hourlyScrollViewRef.current?.scrollToIndex({
-                          index: currentHour,
-                          animated: true
-                        });
-                      }}
-                    >
-                      <Ionicons name="time-outline" size={20} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.refreshButton}
-                      onPress={refreshCalendarData}
-                    >
-                      <Ionicons name="refresh-outline" size={20} color="#fff" />
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            ) : (
-              // Visualização em lista
-              <View style={styles.listViewContainer}>
-                {events
-                  .filter(event => new Date(event.startDate).toDateString() === selectedDate.toDateString())
-                  .length === 0 ? (
-                  <View style={styles.emptyListContainer}>
-                    <Ionicons name="calendar-outline" size={64} color="#e0e0e0" />
-                    <Text style={styles.emptyListText}>Nenhum medicamento agendado para este dia</Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={events.filter(event => 
-                      new Date(event.startDate).toDateString() === selectedDate.toDateString()
-                    )}
-                    keyExtractor={(item, index) => `${item.id || ''}-${index}`}
-                    renderItem={({ item }) => {
-                      const eventTime = new Date(item.startDate);
+                      }
+                      
                       return (
-                        <View style={styles.listEventCard}>
-                          <View style={styles.listEventTime}>
-                            <Text style={styles.listEventHour}>
-                              {eventTime.getHours().toString().padStart(2, '0')}
-                            </Text>
-                            <Text style={styles.listEventMinute}>
-                              {eventTime.getMinutes().toString().padStart(2, '0')}
-                            </Text>
-                          </View>
-                          <View style={styles.listEventContent}>
-                            <Text style={styles.listEventTitle}>{item.title}</Text>
-                            {item.notes && (
-                              <Text style={styles.listEventNotes}>{item.notes}</Text>
-                            )}
-                            <TouchableOpacity 
-                              style={styles.listTakePillButton}
-                              onPress={() => takeMedication(item)}
-                            >
-                              <Text style={styles.listTakePillButtonText}>Tomar medicamento</Text>
-                              <Ionicons name="checkmark-circle" size={16} color="#6A8DFD" />
-                            </TouchableOpacity>
+                        <View 
+                          style={[
+                            styles.hourRow,
+                            isCurrentHour && styles.currentHourRow
+                          ]}
+                        >
+                          <Text style={[
+                            styles.hourText,
+                            isCurrentHour && styles.currentHourText
+                          ]}>
+                            {hour.toString().padStart(2, '0')}:00
+                          </Text>
+                          <View style={styles.timelineContainer}>
+                            {hourEvents.map((event, idx) => {
+                              const now = new Date();
+                              const scheduledTime = new Date(event.startDate);
+                              const canTake = scheduledTime <= now;
+
+                              return (
+                                <View key={idx} style={[
+                                  styles.eventCard,
+                                  event.isTaken && styles.eventCardTaken,
+                                  !canTake && !event.isTaken && styles.eventCardFuture
+                                ]}>
+                                  <View style={styles.eventCardHeader}>
+                                    <Text style={styles.eventTitle}>{event.title}</Text>
+                                    <Text style={styles.eventTime}>
+                                      {event.scheduledTime?.substring(0, 5) || '00:00'}
+                                    </Text>
+                                  </View>
+                                  {event.notes && (
+                                    <Text style={styles.eventNotes}>{event.notes}</Text>
+                                  )}
+                                  <Text style={styles.scheduledInfo}>
+                                    Agendado para: {event.scheduledDate} às {event.scheduledTime?.substring(0, 5) || '00:00'}
+                                  </Text>
+                                  {!event.isTaken && canTake && (
+                                    <TouchableOpacity 
+                                      style={styles.takePillButton}
+                                      onPress={() => takeMedication(event)}
+                                    >
+                                      <Text style={styles.takePillButtonText}>Tomar</Text>
+                                      <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                                    </TouchableOpacity>
+                                  )}
+                                  {!event.isTaken && !canTake && (
+                                    <View style={styles.futureIndicator}>
+                                      <Text style={styles.futureText}>Aguardando horário</Text>
+                                      <Ionicons name="time-outline" size={16} color="#f39c12" />
+                                    </View>
+                                  )}
+                                  {event.isTaken && (
+                                    <View style={styles.takenPillIndicator}>
+                                      <Text style={styles.takenPillText}>Medicamento tomado</Text>
+                                      <Ionicons name="checkmark-circle" size={16} color="#2ECC71" />
+                                    </View>
+                                  )}
+                                </View>
+                              );
+                            })}
                           </View>
                         </View>
                       );
                     }}
-                    contentContainerStyle={styles.listContentContainer}
+                    getItemLayout={(data, index) => (
+                      {length: 70, offset: 70 * index, index}
+                    )}
+                    initialScrollIndex={Math.max(0, currentHour - 2)}
+                    onScrollToIndexFailed={() => {
+                      // Simple fallback - just scroll to offset
+                      const hourHeight = 70;
+                      hourlyScrollViewRef.current?.scrollToOffset({
+                        offset: currentHour * hourHeight,
+                        animated: true
+                      });
+                    }}
+                    maxToRenderPerBatch={24}
+                    windowSize={10}
+                    scrollEventThrottle={16}
+                    removeClippedSubviews={false}
+                    scrollEnabled={true}
+                    maintainVisibleContentPosition={{
+                      minIndexForVisible: 0,
+                      autoscrollToTopThreshold: 10
+                    }}
+                    bounces={false}
+                    overScrollMode="never"
                   />
-                )}
-              </View>
-            )}
+                  <TouchableOpacity 
+                    style={styles.currentTimeFloatingButton}
+                    onPress={goToCurrentHourAndDay}
+                  >
+                    <Ionicons name="time-outline" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
           </View>
         </View>
 
@@ -1259,15 +1025,55 @@ const HomeScreen = () => {
           onRequestClose={() => setTodayMedicationsModal(false)}
         >
           <View style={styles.modalContainer}>
-            <View style={[styles.modalContent, { width: '95%', maxHeight: '80%' }]}>
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={() => setTodayMedicationsModal(false)}
-              >
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
+            <View style={[styles.modalContent, { width: '95%', maxHeight: '85%' }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Seus Medicamentos de Hoje</Text>
+                <TouchableOpacity 
+                  style={styles.closeButton} 
+                  onPress={() => setTodayMedicationsModal(false)}
+                >
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
               
-              <Text style={styles.modalTitle}>Medicamentos de Hoje</Text>
+              <View style={styles.modalStatsContainer}>
+                <View style={styles.modalStatsItem}>
+                  <Ionicons name="calendar" size={20} color="#6A8DFD" />
+                  <Text style={styles.modalStatsValue}>{todayMedications.length}</Text>
+                  <Text style={styles.modalStatsLabel}>Horários</Text>
+                </View>
+                
+                <View style={styles.modalStatsDivider} />
+                
+                <View style={styles.modalStatsItem}>
+                  <Ionicons name="checkmark-circle" size={20} color="#2ecc71" />
+                  <Text style={styles.modalStatsValue}>
+                    {todayMedications.reduce((total, group) => 
+                      total + group.medications.filter(med => med.isTaken).length, 0
+                    )}
+                  </Text>
+                  <Text style={styles.modalStatsLabel}>Tomados</Text>
+                </View>
+                
+                <View style={styles.modalStatsDivider} />
+                
+                <View style={styles.modalStatsItem}>
+                  <Ionicons name="time" size={20} color="#f39c12" />
+                  <Text style={styles.modalStatsValue}>
+                    {todayMedications.reduce((total, group) => 
+                      total + group.medications.filter(med => !med.isTaken && med.canTake).length, 0
+                    )}
+                  </Text>
+                  <Text style={styles.modalStatsLabel}>Pendentes</Text>
+                </View>
+              </View>
+              
+              <View style={styles.currentTimeIndicator}>
+                <Ionicons name="time-outline" size={18} color="#6A8DFD" />
+                <Text style={styles.currentTimeText}>
+                  Horário atual: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </Text>
+              </View>
               
               {todayMedications.length === 0 ? (
                 <View style={styles.emptyMedsContainer}>
@@ -1279,48 +1085,164 @@ const HomeScreen = () => {
                   style={styles.todayMedsList}
                   data={todayMedications}
                   keyExtractor={(item, index) => `timegroup-${index}`}
-                  renderItem={({item: timeGroup, index: idx}) => (
-                    <View style={styles.timeGroupContainer}>
-                      <View style={styles.timeHeader}>
-                        <View style={styles.timeLineBefore} />
-                        <Text style={styles.timeGroupTime}>
-                          {timeGroup.time.substring(0, 5)}
-                        </Text>
-                        <View style={styles.timeLineAfter} />
-                      </View>
-                      
-                      <FlatList
-                        data={timeGroup.medications}
-                        keyExtractor={(med, medIdx) => `med-${med.id || medIdx}`}
-                        renderItem={({item: med, index: medIdx}) => (
-                          <View style={styles.todayMedItem}>
-                            <View style={styles.todayMedItemInfo}>
-                              <Text style={styles.todayMedTitle}>{med.title}</Text>
-                              <Text style={styles.todayMedDosage}>
-                                Dose: {med.dosage || med.dosePorVez} comprimido(s)
-                              </Text>
-                            </View>
-                            
-                            <TouchableOpacity
-                              style={styles.takeMedButton}
-                              onPress={() => markMedicationAsTaken(med.id, med.pillId)}
-                            >
-                              <Ionicons name="checkmark-circle" size={32} color="#2ecc71" />
-                            </TouchableOpacity>
+                  renderItem={({item: timeGroup, index: idx}) => {
+                    const now = new Date();
+                    const timeParts = timeGroup.time.split(':');
+                    const groupTime = new Date();
+                    groupTime.setHours(parseInt(timeParts[0], 10), parseInt(timeParts[1], 10), 0);
+                    
+                    const timeHasPassed = groupTime <= now;
+                    const isCurrentHour = now.getHours() === parseInt(timeParts[0], 10) && 
+                                        Math.abs(now.getMinutes() - parseInt(timeParts[1], 10)) < 30;
+                    
+                    return (
+                      <View style={[
+                        styles.timeGroupContainer,
+                        isCurrentHour && styles.currentTimeGroup
+                      ]}>
+                        <View style={styles.timeHeader}>
+                          <View style={[
+                            styles.timeLineBefore,
+                            isCurrentHour && styles.currentTimeLine
+                          ]} />
+                          <View style={[
+                            styles.timeGroupTimeContainer,
+                            isCurrentHour && styles.currentTimeGroupContainer
+                          ]}>
+                            <Text style={[
+                              styles.timeGroupTime,
+                              isCurrentHour && styles.currentTimeGroupTime
+                            ]}>
+                              {timeGroup.time.substring(0, 5)}
+                            </Text>
+                            {isCurrentHour && (
+                              <Ionicons name="arrow-forward" size={16} color="#fff" style={{marginLeft: 5}} />
+                            )}
                           </View>
-                        )}
-                        scrollEnabled={false} // Importante: desabilitar scroll interno
-                      />
-                    </View>
-                  )}
+                          <View style={[
+                            styles.timeLineAfter,
+                            isCurrentHour && styles.currentTimeLine
+                          ]} />
+                        </View>
+                        
+                        <FlatList
+                          data={timeGroup.medications}
+                          keyExtractor={(med, medIdx) => `med-${med.id || medIdx}`}
+                          renderItem={({item: med, index: medIdx}) => (
+                            <View style={[
+                              styles.todayMedItem,
+                              med.isTaken && styles.todayMedItemTaken,
+                              !med.canTake && !med.isTaken && styles.todayMedItemFuture
+                            ]}>
+                              <View style={styles.todayMedItemInfo}>
+                                <Text style={styles.todayMedTitle}>{med.title}</Text>
+                                <Text style={styles.todayMedDosage}>
+                                  Dose: {med.dosage || med.dosePorVez} comprimido(s)
+                                </Text>
+                                {med.notes && (
+                                  <Text style={styles.todayMedNotes}>{med.notes}</Text>
+                                )}
+                                
+                                {med.isTaken && (
+                                  <View style={styles.medStatusContainer}>
+                                    <Ionicons name="checkmark-circle" size={16} color="#2ecc71" />
+                                    <Text style={styles.medTakenText}>
+                                      Tomado {med.confirmationTime ? `às ${med.confirmationTime.substring(0, 5)}` : ''}
+                                    </Text>
+                                  </View>
+                                )}
+                                
+                                {!med.isTaken && !med.canTake && (
+                                  <View style={styles.medStatusContainer}>
+                                    <Ionicons name="time-outline" size={16} color="#f39c12" />
+                                    <Text style={styles.medFutureText}>
+                                      Horário não atingido
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              
+                              <View style={styles.medActionsContainer}>
+                                {!med.isTaken && med.canTake && (
+                                  <View style={styles.medButtonsContainer}>
+                                    <TouchableOpacity
+                                      style={styles.takeMedButton}
+                                      onPress={() => {
+                                        setTodayMedicationsModal(false);
+                                        setTimeout(() => takeMedication(med), 300);
+                                      }}
+                                    >
+                                      <Text style={styles.takeMedButtonText}>Tomar</Text>
+                                      <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                                    </TouchableOpacity>
+                                    
+                                    <TouchableOpacity
+                                      style={styles.skipMedButton}
+                                      onPress={() => {
+                                        Alert.alert(
+                                          "Pular medicamento",
+                                          `Deseja realmente pular ${med.title}?`,
+                                          [
+                                            {
+                                              text: "Cancelar",
+                                              style: "cancel"
+                                            },
+                                            {
+                                              text: "Sim, pular",
+                                              onPress: () => {
+                                                Alert.alert("Medicamento pulado", "Registrado como não tomado");
+                                                fetchTodayMedications();
+                                              }
+                                            }
+                                          ]
+                                        );
+                                      }}
+                                    >
+                                      <Text style={styles.skipMedButtonText}>Pular</Text>
+                                      <Ionicons name="close-circle" size={18} color="#fff" />
+                                    </TouchableOpacity>
+                                  </View>
+                                )}
+                                
+                                {!med.isTaken && !med.canTake && (
+                                  <View style={styles.waitingContainer}>
+                                    <Ionicons name="time-outline" size={24} color="#f39c12" />
+                                  </View>
+                                )}
+                                
+                                {med.isTaken && (
+                                  <View style={styles.takenContainer}>
+                                    <Ionicons name="checkmark-done-circle" size={24} color="#2ecc71" />
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                          )}
+                          scrollEnabled={false}
+                        />
+                      </View>
+                    );
+                  }}
+                  ListFooterComponent={
+                    <TouchableOpacity 
+                      style={styles.refreshAllButton}
+                      onPress={() => {
+                        setTodayMedicationsModal(false);
+                        setTimeout(() => fetchTodayMedications(), 300);
+                      }}
+                    >
+                      <Ionicons name="refresh" size={18} color="#fff" />
+                      <Text style={styles.refreshAllButtonText}>Atualizar lista</Text>
+                    </TouchableOpacity>
+                  }
                 />
               )}
             </View>
           </View>
         </Modal>
 
-        <Navbar />
-      </View>
+      <Navbar />
+    </View>
     </SafeAreaView>
   );
 };
@@ -1382,12 +1304,17 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
   },
   content: {
     padding: 15,
@@ -1408,20 +1335,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  calendarActions: {
-    flexDirection: 'row',
-    backgroundColor: '#F5F7FA',
-    borderRadius: 12,
-    padding: 2,
-  },
-  viewToggle: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  viewToggleActive: {
-    backgroundColor: '#6A8DFD',
   },
   calendarTitle: {
     fontSize: 20,
@@ -1518,19 +1431,19 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   todayText: {
-    color: '#6A8DFD',
+    color: '#ffffff',
   },
   dayEventIndicator: {
     position: 'absolute',
     bottom: 8,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#FF6B6B',
   },
   scrollViewContainer: {
     position: 'relative',
-    height: 350,
+    height: 280,
     borderWidth: 1,
     borderColor: '#F0F0F5',
     borderRadius: 12,
@@ -1538,7 +1451,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   hourlySchedule: {
-    height: 350,
+    height: 280,
   },
   hourlyScheduleContent: {
     paddingBottom: 10,
@@ -1546,7 +1459,7 @@ const styles = StyleSheet.create({
   },
   hourRow: {
     flexDirection: 'row',
-    paddingVertical: 10,
+    paddingVertical: 12,
     alignItems: 'flex-start',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F5',
@@ -1573,6 +1486,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderLeftWidth: 3,
     borderLeftColor: '#6A8DFD',
+    borderRightWidth: 3,
+    borderRightColor: '#6A8DFD',
   },
   hourText: {
     width: 55,
@@ -1604,6 +1519,10 @@ const styles = StyleSheet.create({
   eventCardTaken: {
     backgroundColor: '#F0FFF4',
     borderLeftColor: '#2ECC71',
+  },
+  eventCardFuture: {
+    backgroundColor: '#f5f5f5',
+    borderLeftColor: '#f39c12',
   },
   eventCardHeader: {
     flexDirection: 'row',
@@ -1643,120 +1562,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 4,
   },
-  currentTimeButton: {
-    position: 'absolute',
-    right: 10,
-    bottom: 10,
-    backgroundColor: '#6A8DFD',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  refreshButton: {
-    position: 'absolute',
-    right: 10,
-    bottom: 56,
-    backgroundColor: '#75C1E7',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  // Estilos para a visualização em lista
-  listViewContainer: {
-    height: 350,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-  },
-  listContentContainer: {
-    padding: 10,
-  },
-  listEventCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-  },
-  listEventTime: {
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  listEventHour: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2D3142',
-  },
-  listEventMinute: {
-    fontSize: 14,
-    color: '#9BA3B7',
-  },
-  listEventContent: {
-    flex: 1,
-  },
-  listEventTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2D3142',
-    marginBottom: 4,
-  },
-  listEventNotes: {
-    fontSize: 13,
-    color: '#9BA3B7',
-    marginBottom: 8,
-  },
-  listTakePillButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#6A8DFD',
-  },
-  listTakePillButtonText: {
-    color: '#6A8DFD',
-    fontSize: 12,
-    fontWeight: '600',
-    marginRight: 4,
-  },
-  emptyListContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyListText: {
-    fontSize: 16,
-    color: '#9BA3B7',
-    textAlign: 'center',
-    marginTop: 16,
-  },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1773,19 +1578,106 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
   closeButton: { 
     position: 'absolute', 
-    top: 15, 
-    right: 15, 
+    right: 0, 
+    top: 0, 
     zIndex: 1, 
     padding: 5 
   },
-  modalTitle: {
-    fontSize: 20,
+  modalStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  modalStatsItem: {
+    alignItems: 'center',
+  },
+  modalStatsValue: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#2D3142',
+    marginVertical: 4,
+  },
+  modalStatsLabel: {
+    fontSize: 12,
+    color: '#9BA3B7',
+  },
+  modalStatsDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#E0E4F1',
+  },
+  todayMedItemTaken: {
+    borderLeftColor: '#2ecc71',
+    backgroundColor: '#f0fff4',
+  },
+  todayMedItemFuture: {
+    borderLeftColor: '#f39c12',
+    backgroundColor: '#fffbf0',
+  },
+  todayMedNotes: {
+    color: '#7f8c8d',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  waitingContainer: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fffbf0',
+    borderRadius: 25,
+  },
+  takenContainer: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0fff4',
+    borderRadius: 25,
+  },
+  refreshAllButton: {
+    backgroundColor: '#6A8DFD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginTop: 15,
     marginBottom: 10,
-    textAlign: 'center',
+    alignSelf: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+  },
+  refreshAllButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 15,
   },
   todayMedsList: {
     flex: 1,
@@ -1797,7 +1689,7 @@ const styles = StyleSheet.create({
   timeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   timeLineBefore: {
     flex: 1,
@@ -1805,31 +1697,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e0e0',
     marginRight: 10,
   },
+  timeGroupTimeContainer: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currentTimeGroupContainer: {
+    backgroundColor: '#6A8DFD',
+  },
   timeGroupTime: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#3498db',
-    paddingHorizontal: 10,
+    color: '#2D3142',
   },
-  timeLineAfter: {
-    flex: 2,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginLeft: 10,
+  currentTimeGroupTime: {
+    color: '#fff',
+  },
+  currentTimeLine: {
+    backgroundColor: '#6A8DFD',
+    height: 2,
   },
   todayMedItem: {
     flexDirection: 'row',
     backgroundColor: '#f8f9fa',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 15,
-    marginBottom: 8,
+    marginBottom: 10,
     borderLeftWidth: 4,
-    borderLeftColor: '#3498db',
+    borderLeftColor: '#6A8DFD',
     justifyContent: 'space-between',
     alignItems: 'center',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
   todayMedItemInfo: {
     flex: 1,
+    marginRight: 10,
   },
   todayMedTitle: {
     fontSize: 16,
@@ -1842,7 +1751,51 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
   },
   takeMedButton: {
-    padding: 5,
+    backgroundColor: '#2ecc71',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    minWidth: 100,
+  },
+  takeMedButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginRight: 5,
+  },
+  skipMedButton: {
+    backgroundColor: '#e74c3c',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  skipMedButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginRight: 5,
+  },
+  currentTimeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f7ff',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  currentTimeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#2D3142',
+    marginLeft: 8,
   },
   emptyMedsContainer: {
     alignItems: 'center',
@@ -1888,6 +1841,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9BA3B7',
     marginBottom: 8,
+  },
+  futureIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  futureText: {
+    fontSize: 12,
+    color: '#f39c12',
+    fontStyle: 'italic',
+    marginRight: 4,
+  },
+  listEventCardTaken: {
+    borderLeftColor: '#2ecc71',
+    backgroundColor: '#f0fff4',
+  },
+  listEventCardFuture: {
+    borderLeftColor: '#f39c12',
+    backgroundColor: '#fffbf0',
+  },
+  listFutureIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 6,
+    marginTop: 8,
+    backgroundColor: '#fffbf0',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  listFutureText: {
+    fontSize: 12,
+    color: '#f39c12',
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  listTakenIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 6,
+    marginTop: 8,
+    backgroundColor: '#f0fff4',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  listTakenText: {
+    fontSize: 12,
+    color: '#2ecc71',
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  circleButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  currentTimeFloatingButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#6A8DFD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    zIndex: 1000,
   },
 });
 
