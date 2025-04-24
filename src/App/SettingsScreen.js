@@ -218,32 +218,6 @@ const SettingsScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive', 
-          onPress: async () => {
-            try {
-              const { error } = await supabase.auth.signOut();
-              if (error) throw error;
-              
-              DataUser.clearUserData();
-              navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
-            } catch (error) {
-              console.error('Error during logout:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          } 
-        },
-      ]
-    );
-  };
-
   const toggleNotifications = () => {
     setNotificationsEnabled(previousState => !previousState);
   };
@@ -276,9 +250,7 @@ const SettingsScreen = ({ navigation, route }) => {
           <Ionicons name="arrow-back" size={28} color="#3498db" />
         </TouchableOpacity>
         <Text style={styles.header}>Settings</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color="#e74c3c" />
-        </TouchableOpacity>
+        <View style={{ width: 24 }} /> {/* Empty view for balance */}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -406,9 +378,6 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eaeaea',
   },
   backButton: { 
-    padding: 5,
-  },
-  logoutButton: {
     padding: 5,
   },
   header: { 
@@ -572,6 +541,23 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
     color: '#666',
+  },
+  logoutButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 30,
+    borderWidth: 1,
+    borderColor: '#e74c3c',
+  },
+  logoutButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    marginLeft: 10,
   },
 });
 

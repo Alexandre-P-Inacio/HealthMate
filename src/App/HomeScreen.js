@@ -251,7 +251,7 @@ const HomeScreen = () => {
           const { data } = await supabase
             .from('medication_confirmations')
             .select('*')
-            .eq('medication_id', med.id)
+            .eq('pill_id', med.id)
             .eq('confirmation_date', now.toISOString().split('T')[0])
             .single();
             
@@ -269,7 +269,7 @@ const HomeScreen = () => {
     if (missedMedication) {
       try {
         await supabase.from('medication_confirmations').insert({
-          medication_id: missedMedication.id,
+          pill_id: missedMedication.id,
           taken: taken,
           confirmation_date: new Date().toISOString().split('T')[0],
           confirmation_time: new Date().toISOString()
@@ -434,7 +434,7 @@ const HomeScreen = () => {
         const { data: existing, error: checkError } = await supabase
           .from('medication_confirmations')
           .select('id')
-          .eq('medication_id', medicationData.id)
+          .eq('pill_id', medicationData.id)
           .eq('scheduled_time', scheduledTime)
           .maybeSingle();
         
@@ -444,7 +444,7 @@ const HomeScreen = () => {
         
         if (!existing) {
           const confirmationData = {
-            medication_id: medicationData.id,
+            pill_id: medicationData.id,
             scheduled_time: scheduledTime,
             user_id: userId,
             taken: null,
@@ -497,6 +497,12 @@ const HomeScreen = () => {
     }
   };
 
+  const checkPlatform = () => {
+    const platform = Platform.OS;
+    console.log('Plataforma detectada:', platform);
+    return platform;
+  };
+
   const fetchTodayMedications = async () => {
     const userId = DataUser.getUserData()?.id;
     if (!userId) {
@@ -507,8 +513,19 @@ const HomeScreen = () => {
     try {
       setIsLoading(true);
       
-      const today = new Date().toISOString().split('T')[0];
+      // Verificar plataforma
+      const platform = checkPlatform();
       
+      // Obtém a data atual no formato ISO (YYYY-MM-DD)
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      
+      console.log('===== INICIANDO BUSCA DE MEDICAMENTOS DO DIA =====');
+      console.log('Data atual do dispositivo:', now);
+      console.log('Data formatada para consulta:', today);
+      console.log('ID do usuário:', userId);
+      
+      // Busca todos os agendamentos para hoje na tabela medication_schedule_times
       const { data: scheduleData, error: scheduleError } = await supabase
         .from('medication_schedule_times')
         .select(`
@@ -533,9 +550,35 @@ const HomeScreen = () => {
         .order('scheduled_time', { ascending: true });
         
       if (scheduleError) {
+        console.log('Erro ao buscar medicamentos:', scheduleError);
         Alert.alert('Erro', `Falha ao buscar medicamentos: ${scheduleError.message}`);
         setIsLoading(false);
         return;
+      }
+      
+      console.log(`Encontrados ${scheduleData?.length || 0} medicamentos para hoje`);
+      
+      // Se não encontrou medicamentos, vamos buscar todos para debug
+      if (!scheduleData || scheduleData.length === 0) {
+        console.log('Não foram encontrados medicamentos para hoje. Verificando banco de dados:');
+        
+        const { data: allData, error: allError } = await supabase
+          .from('medication_schedule_times')
+          .select('id, scheduled_date, status')
+          .eq('user_id', userId)
+          .order('scheduled_date', { ascending: false })
+          .limit(10);
+          
+        if (allError) {
+          console.log('Erro ao verificar banco de dados:', allError);
+        } else if (allData && allData.length > 0) {
+          console.log('Últimos 10 medicamentos no banco:');
+          allData.forEach(item => {
+            console.log(`ID: ${item.id}, Data: ${item.scheduled_date}, Status: ${item.status}`);
+          });
+        } else {
+          console.log('Nenhum medicamento encontrado no banco de dados.');
+        }
       }
       
       const { data: confirmations, error: confirmError } = await supabase
@@ -546,6 +589,7 @@ const HomeScreen = () => {
         .eq('taken', true);
       
       if (confirmError) {
+        console.log('Erro ao buscar confirmações:', confirmError);
       }
       
       const medicationsByTime = {};
@@ -557,7 +601,6 @@ const HomeScreen = () => {
             medicationsByTime[timeKey] = [];
           }
           
-          const now = new Date();
           const scheduledTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
           const canTake = scheduledTime <= now;
           const isTaken = confirmations?.some(conf => 
@@ -598,12 +641,19 @@ const HomeScreen = () => {
         return 0;
       });
       
-      const now = new Date();
-      const currentHourStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:00`;
+      console.log(`Organizados ${todayMeds.length} grupos de medicamentos`);
       
+      // Atualizar estado e garantir que o modal seja exibido
       setTodayMedications(todayMeds);
-      setTodayMedicationsModal(true);
+      
+      // Adicionar um pequeno delay antes de mostrar o modal (ajuda em algumas plataformas)
+      setTimeout(() => {
+        console.log('Exibindo modal de medicamentos em plataforma:', platform);
+        setTodayMedicationsModal(true);
+      }, 300);
+      
     } catch (error) {
+      console.log('Erro não tratado ao buscar medicamentos:', error);
       Alert.alert('Erro', `Não foi possível carregar os medicamentos para hoje: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -986,10 +1036,29 @@ const HomeScreen = () => {
           transparent={true}
           visible={showMedicationModal}
           onRequestClose={() => setShowMedicationModal(false)}
+          statusBarTranslucent={true}
+          hardwareAccelerated={true}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Medication Reminder</Text>
+          <View style={[
+            styles.modalContainer,
+            Platform.OS === 'web' && styles.modalContainerWeb
+          ]}>
+            <View style={[
+              styles.modalContent, 
+              { width: Platform.OS === 'web' ? '80%' : '95%', maxHeight: '85%' },
+              Platform.OS === 'web' && styles.modalContentWeb
+            ]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  Medication Reminder
+                </Text>
+                <TouchableOpacity 
+                  style={styles.closeButton} 
+                  onPress={() => setShowMedicationModal(false)}
+                >
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
               
               <Text style={styles.modalText}>
                 Did you take your medication: {missedMedication?.nome}?
@@ -1023,11 +1092,22 @@ const HomeScreen = () => {
           transparent={true}
           visible={todayMedicationsModal}
           onRequestClose={() => setTodayMedicationsModal(false)}
+          statusBarTranslucent={true}
+          hardwareAccelerated={true}
         >
-          <View style={styles.modalContainer}>
-            <View style={[styles.modalContent, { width: '95%', maxHeight: '85%' }]}>
+          <View style={[
+            styles.modalContainer,
+            Platform.OS === 'web' && styles.modalContainerWeb
+          ]}>
+            <View style={[
+              styles.modalContent, 
+              { width: Platform.OS === 'web' ? '80%' : '95%', maxHeight: '85%' },
+              Platform.OS === 'web' && styles.modalContentWeb
+            ]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Seus Medicamentos de Hoje</Text>
+                <Text style={styles.modalTitle}>
+                  Seus Medicamentos de Hoje ({new Date().toLocaleDateString()})
+                </Text>
                 <TouchableOpacity 
                   style={styles.closeButton} 
                   onPress={() => setTodayMedicationsModal(false)}
@@ -1919,6 +1999,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
     zIndex: 1000,
+  },
+  modalContainerWeb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContentWeb: {
+    maxWidth: 800,
   },
 });
 

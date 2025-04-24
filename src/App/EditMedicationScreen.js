@@ -78,7 +78,7 @@ const EditMedicationScreen = ({ navigation, route }) => {
       const { data: scheduleData, error: scheduleError } = await supabase
         .from('medication_schedule')
         .select('*')
-        .eq('medication_id', medicationId)
+        .eq('pill_id', medicationId)
         .eq('active', true);
       
       if (scheduleError) throw scheduleError;
@@ -168,7 +168,7 @@ const EditMedicationScreen = ({ navigation, route }) => {
       const { error: deactivateError } = await supabase
         .from('medication_schedule')
         .update({ active: false, updated_at: new Date().toISOString() })
-        .eq('medication_id', medicationId);
+        .eq('pill_id', medicationId);
       
       if (deactivateError) throw deactivateError;
       
@@ -220,7 +220,7 @@ const EditMedicationScreen = ({ navigation, route }) => {
           
           scheduleEntries.push({
             user_id: userId,
-            medication_id: medicationId,
+            pill_id: medicationId,
             medication_name: medication.name,
             dosage: medication.dosage,
             scheduled_date: formattedDate,

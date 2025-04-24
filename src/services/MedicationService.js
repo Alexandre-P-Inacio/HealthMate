@@ -177,6 +177,7 @@ class MedicationService {
           const confirmationData = {
             scheduled_time: scheduledTime,
             user_id: userId,
+            pill_id: medicationData.id,
             taken: null, // Inicialmente null até ser confirmado
             notes: 'Agendado automaticamente',
             created_at: new Date().toISOString()
@@ -500,6 +501,7 @@ class MedicationService {
       const newConfirmation = {
         scheduled_time: scheduledTime,
         user_id: userId,
+        pill_id: medicationId,
         taken: false,
         notes: 'Automatically scheduled',
         created_at: new Date().toISOString()
@@ -541,6 +543,7 @@ class MedicationService {
       const confirmationData = {
         scheduled_time: medicationData.scheduled_time,
         user_id: medicationData.user_id,
+        pill_id: medicationData.id,
         taken: null, // Initially null until confirmed
         notes: 'Scheduled automatically via MedicationService',
         created_at: new Date().toISOString()

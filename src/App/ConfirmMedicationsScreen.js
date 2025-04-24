@@ -92,7 +92,7 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
         const { data: existingConfirmations, error: checkError } = await supabase
           .from('medication_confirmations')
           .select('id')
-          .eq('medication_id', medication.id)
+          .eq('pill_id', medication.id)
           .eq('scheduled_time', medication.scheduled_time);
         
         if (checkError) {
@@ -105,7 +105,7 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
           console.log(`Creating confirmation record for medication ID ${medication.id}`);
           
           const newConfirmation = {
-            medication_id: medication.id,
+            pill_id: medication.id,
             scheduled_time: medication.scheduled_time,
             user_id: userId,
             taken: null, // Initially null until confirmed
@@ -144,7 +144,7 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
         .from('medication_confirmations')
         .select(`
           id,
-          medication_id,
+          pill_id,
           scheduled_time,
           taken,
           notes,
@@ -163,7 +163,7 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
       // Format the data for display
       const formattedMedications = data.map(confirmation => ({
         id: confirmation.id,
-        medication_id: confirmation.medication_id,
+        pill_id: confirmation.pill_id,
         scheduled_time: confirmation.scheduled_time,
         nome_medicamento: confirmation.pills_warning?.nome_medicamento || 'Unknown',
         dosage: confirmation.pills_warning?.dosage || 'Standard dose'
@@ -204,7 +204,7 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
       // Also update the status in pills_warning table if needed
       const { data: confirmation, error: getError } = await supabase
         .from('medication_confirmations')
-        .select('medication_id')
+        .select('pill_id')
         .eq('id', id)
         .single();
         
@@ -217,7 +217,7 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
             confirmation_time: confirmationTime,
             taken: taken
           })
-          .eq('id', confirmation.medication_id);
+          .eq('id', confirmation.pill_id);
       }
 
       Alert.alert('Success', 'Medication status updated.');

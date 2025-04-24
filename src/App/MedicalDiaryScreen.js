@@ -206,8 +206,8 @@ const MedicalDiaryScreen = ({ navigation }) => {
         const processedData = [];
         
         if (confirmations && confirmations.length > 0) {
-          // Get all medication_ids from confirmations
-          const medIds = confirmations.map(conf => conf.medication_id);
+          // Get all pill_ids from confirmations
+          const medIds = confirmations.map(conf => conf.pill_id);
           
           // Fetch medication details
           const { data: medicationsData, error: medError } = await supabase
@@ -224,10 +224,10 @@ const MedicalDiaryScreen = ({ navigation }) => {
             
             // Process confirmations with medication details
             for (const item of confirmations) {
-              const med = medMap[item.medication_id];
+              const med = medMap[item.pill_id];
               processedData.push({
                 id: item.id,
-                medication_id: item.medication_id,
+                pill_id: item.pill_id,
                 nome_medicamento: med?.nome_medicamento || 'Unknown Medication',
                 dosage: med?.dosage || 'Standard dose',
                 scheduled_time: item.scheduled_time,
@@ -245,7 +245,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
             for (const item of confirmations) {
               processedData.push({
                 id: item.id,
-                medication_id: item.medication_id,
+                pill_id: item.pill_id,
                 nome_medicamento: 'Unknown Medication',
                 dosage: 'Standard dose',
                 scheduled_time: item.scheduled_time,

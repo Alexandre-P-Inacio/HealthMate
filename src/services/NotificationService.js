@@ -85,7 +85,7 @@ class NotificationService {
       const { error } = await supabase
         .from('medication_confirmations')
         .insert({
-          medication_id: medicationId,
+          pill_id: medicationId,
           user_id: userData.id,
           taken: taken,
           confirmation_date: now.toISOString().split('T')[0],
@@ -131,7 +131,7 @@ class NotificationService {
           const { data } = await supabase
             .from('medication_confirmations')
             .select('*')
-            .eq('medication_id', med.id)
+            .eq('pill_id', med.id)
             .eq('user_id', userData.id)
             .eq('confirmation_date', today)
             .single();

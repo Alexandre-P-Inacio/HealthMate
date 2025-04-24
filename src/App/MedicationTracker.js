@@ -125,7 +125,7 @@ const MedicationTracker = ({ navigation }) => {
             
             // Verificar se já foi confirmado
             const isConfirmed = confirmations?.some(conf => 
-              conf.medication_id === med.id && 
+              conf.pill_id === med.id && 
               conf.scheduled_time === time
             );
             
@@ -218,7 +218,7 @@ const MedicationTracker = ({ navigation }) => {
       
       // Registrar no banco de dados
       const { error } = await supabase.from('medication_confirmations').insert({
-        medication_id: medication.medicationId,
+        pill_id: medication.medicationId,
         scheduled_time: medication.scheduledTime,
         confirmation_date: todayStr,
         confirmation_time: new Date().toISOString(),

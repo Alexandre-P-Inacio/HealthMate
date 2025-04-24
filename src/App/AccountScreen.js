@@ -46,10 +46,12 @@ const AccountScreen = ({ navigation }) => {
   }, []);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] }) },
-    ]);
+    // Directly navigate to Welcome screen without confirmation
+    // The reset action clears the navigation history preventing the user from coming back
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Welcome' }],
+    });
   };
 
   const toggleNotifications = () => {
