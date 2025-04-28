@@ -1670,7 +1670,7 @@ const CalendarScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa', paddingTop: 40 },
+  container: { flex: 1, backgroundColor: '#f5f7fa', paddingTop: 40, paddingBottom: 80 },
   headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#2c3e50', textAlign: 'center', marginVertical: 20, letterSpacing: 0.5 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   noDataText: { fontSize: 20, color: '#7f8c8d', marginTop: 20, fontWeight: '600' },

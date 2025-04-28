@@ -43,13 +43,48 @@ const MedicalDiaryScreen = ({ navigation }) => {
   const [userId, setUserId] = useState(null);
   const [selectedMedication, setSelectedMedication] = useState(null);
   const [medicationDetailsModalVisible, setMedicationDetailsModalVisible] = useState(false);
+  const [pendingMedications, setPendingMedications] = useState([]);
+  const [loadingPendingMedications, setLoadingPendingMedications] = useState(false);
+
+  // Add this new useEffect to get the user ID when component mounts
+  useEffect(() => {
+    const loadUserData = () => {
+      try {
+        const userData = DataUser.getUserData();
+        if (userData && userData.id) {
+          setUserId(userData.id);
+        } else {
+          console.warn('User data not available in DataUser');
+          // Try to get user data from navigation params if available
+          const userIdFromParams = navigation.getParam ? 
+            navigation.getParam('userId') : 
+            navigation.route?.params?.userId;
+            
+          if (userIdFromParams) {
+            setUserId(userIdFromParams);
+          } else {
+            // As a last resort, try to get from Supabase session
+            supabase.auth.getSession().then(({ data }) => {
+              if (data?.session?.user?.id) {
+                setUserId(data.session.user.id);
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error getting user data:', error);
+      }
+    };
+
+    loadUserData();
+  }, [navigation]);
 
   useEffect(() => {
-    // Load user data when component mounts
+    // Fetch data for the selected date
     fetchEntriesByDate(selectedDate);
-    fetchMedicationsForDate(selectedDate);
     fetchConfirmedMedications(selectedDate);
-  }, [selectedDate, userId]);
+    fetchPendingMedications(selectedDate);
+  }, [selectedDate]);
 
   // Add focus listener to refresh data when screen is focused
   useEffect(() => {
@@ -67,6 +102,16 @@ const MedicalDiaryScreen = ({ navigation }) => {
       const storedMeds = await AsyncStorage.getItem(MEDS_STORAGE_KEY);
       if (!storedMeds) return;
       
+      // Try to get user ID if not already set
+      let currentUserId = userId;
+      if (!currentUserId) {
+        const userData = DataUser.getUserData();
+        if (userData && userData.id) {
+          currentUserId = userData.id;
+          setUserId(userData.id); // Update the state for future use
+        }
+      }
+      
       const medications = JSON.parse(storedMeds);
       const selectedDateStr = date.toISOString().split('T')[0];
       
@@ -74,7 +119,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
       const medsForDate = medications.filter(med => {
         const medDate = new Date(med.nextDose).toISOString().split('T')[0];
         return medDate === selectedDateStr && 
-               (med.user_id === userId || med.user_id === undefined); // Include legacy records
+               (med.user_id === currentUserId || med.user_id === undefined); // Include legacy records
       });
       
       // Sort by time
@@ -98,32 +143,39 @@ const MedicalDiaryScreen = ({ navigation }) => {
       const storedEntries = await AsyncStorage.getItem(STORAGE_KEY);
       const asyncStorageEntries = storedEntries ? JSON.parse(storedEntries) : [];
       
-      // 2. Then fetch from Supabase
-      let supabaseEntries = [];
-      if (userId) {
-        const startOfDay = new Date(formattedDate);
-        const endOfDay = new Date(formattedDate);
-        endOfDay.setDate(endOfDay.getDate() + 1);
-        
-        const { data, error } = await supabase
-          .from('diary_entries')
-          .select('*')
-          .eq('user_id', userId)
-          .gte('created_at', startOfDay.toISOString())
-          .lt('created_at', endOfDay.toISOString());
-        
-        if (error) {
-          console.error('Error fetching from Supabase:', error);
-        } else {
-          supabaseEntries = data || [];
+      // Try to get user ID if not already set
+      let currentUserId = userId;
+      if (!currentUserId) {
+        const userData = DataUser.getUserData();
+        if (userData && userData.id) {
+          currentUserId = userData.id;
+          setUserId(userData.id); // Update the state for future use
         }
       }
       
-      // 3. Filter AsyncStorage entries by date AND user ID (for legacy entries)
+      // 2. Then fetch from Supabase
+      let supabaseEntries = [];
+      const startOfDay = new Date(formattedDate);
+      const endOfDay = new Date(formattedDate);
+      endOfDay.setDate(endOfDay.getDate() + 1);
+      
+      const { data, error } = await supabase
+        .from('diary_entries')
+        .select('*')
+        .gte('created_at', startOfDay.toISOString())
+        .lt('created_at', endOfDay.toISOString());
+      
+      if (error) {
+        console.error('Error fetching from Supabase:', error);
+      } else {
+        // No filtering by user ID since column doesn't exist
+        supabaseEntries = data || [];
+      }
+      
+      // 3. Filter AsyncStorage entries by date only (remove user ID filtering)
       const filteredAsyncEntries = asyncStorageEntries.filter(entry => {
         const entryDate = new Date(entry.created_at).toISOString().split('T')[0];
-        return entryDate === formattedDate && 
-               (entry.user_id === userId || entry.user_id === undefined); // Include legacy records
+        return entryDate === formattedDate;
       });
       
       // 4. Combine entries from both sources, avoiding duplicates
@@ -156,7 +208,17 @@ const MedicalDiaryScreen = ({ navigation }) => {
     try {
       setLoadingMedications(true);
       
-      if (!userId) {
+      // Try to get user ID if not already set
+      let currentUserId = userId;
+      if (!currentUserId) {
+        const userData = DataUser.getUserData();
+        if (userData && userData.id) {
+          currentUserId = userData.id;
+          setUserId(userData.id); // Update the state for future use
+        }
+      }
+      
+      if (!currentUserId) {
         setLoadingMedications(false);
         return;
       }
@@ -170,7 +232,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
         .from('medication_confirmations')
         .select('*')
         .eq('confirmation_date', formattedDate)
-        .eq('user_id', userId)
+        .eq('user_id', currentUserId)
         .not('confirmation_time', 'is', null);
       
       if (confirmError) {
@@ -180,7 +242,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
         const { data: oldData, error } = await supabase
           .from('pills_warning')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', currentUserId)
           .eq('status', 'in', ['taken', 'missed']);
         
         if (error) throw error;
@@ -200,7 +262,19 @@ const MedicalDiaryScreen = ({ navigation }) => {
           }
         }) || [];
         
-        setConfirmedMedications(filteredData);
+        // Map to the expected format
+        const processedOldData = filteredData.map(med => ({
+          id: med.id,
+          pill_id: med.id,
+          nome_medicamento: med.titulo || 'Unknown Medication',
+          dosage: med.quantidade_comprimidos_por_vez || 'Standard dose',
+          status: med.status,
+          confirmation_date: med.data_status_update ? med.data_status_update.split('T')[0] : formattedDate,
+          confirmation_time: med.data_status_update || null,
+          notes: med.notes || ''
+        }));
+        
+        setConfirmedMedications(processedOldData);
       } else {
         // We need to fetch medication details separately to avoid the relationship error
         const processedData = [];
@@ -212,7 +286,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
           // Fetch medication details
           const { data: medicationsData, error: medError } = await supabase
             .from('pills_warning')
-            .select('id, nome_medicamento, dosage')
+            .select('id, titulo, quantidade_comprimidos_por_vez')
             .in('id', medIds);
           
           if (!medError && medicationsData) {
@@ -228,8 +302,8 @@ const MedicalDiaryScreen = ({ navigation }) => {
               processedData.push({
                 id: item.id,
                 pill_id: item.pill_id,
-                nome_medicamento: med?.nome_medicamento || 'Unknown Medication',
-                dosage: med?.dosage || 'Standard dose',
+                nome_medicamento: med?.titulo || 'Unknown Medication',
+                dosage: med?.quantidade_comprimidos_por_vez || 'Standard dose',
                 scheduled_time: item.scheduled_time,
                 confirmation_date: item.confirmation_date,
                 confirmation_time: item.confirmation_time,
@@ -270,6 +344,110 @@ const MedicalDiaryScreen = ({ navigation }) => {
     }
   };
 
+  const fetchPendingMedications = async (date) => {
+    try {
+      setLoadingPendingMedications(true);
+      
+      // Try to get user ID if not already set
+      let currentUserId = userId;
+      if (!currentUserId) {
+        const userData = DataUser.getUserData();
+        if (userData && userData.id) {
+          currentUserId = userData.id;
+          setUserId(userData.id); // Update the state for future use
+        }
+      }
+      
+      if (!currentUserId) {
+        setLoadingPendingMedications(false);
+        return;
+      }
+
+      // Format date to ISO string (YYYY-MM-DD)
+      const formattedDate = date.toISOString().split('T')[0];
+      
+      // Get all scheduled medications for the date, including skipped ones
+      const { data: scheduledData, error: scheduledError } = await supabase
+        .from('medication_schedule_times')
+        .select(`
+          id,
+          pill_id,
+          scheduled_date,
+          scheduled_time,
+          dosage,
+          notes,
+          status,
+          user_id,
+          pills_warning (
+            id,
+            titulo,
+            quantidade_comprimidos,
+            quantidade_comprimidos_por_vez
+          )
+        `)
+        .eq('scheduled_date', formattedDate)
+        .eq('user_id', currentUserId);
+        
+      if (scheduledError) {
+        console.error('Error fetching scheduled medications:', scheduledError);
+        setLoadingPendingMedications(false);
+        return;
+      }
+      
+      // Process scheduled medications
+      const processedData = [];
+      
+      // Process all medications (pending, skipped, etc.)
+      if (scheduledData && scheduledData.length > 0) {
+        // Get all already processed medications (confirmed or taken)
+        const { data: allConfirmations, error: confError } = await supabase
+          .from('medication_confirmations')
+          .select('pill_id')
+          .eq('confirmation_date', formattedDate)
+          .eq('user_id', currentUserId)
+          .eq('taken', true); // Only exclude medications that are confirmed as taken
+        
+        if (confError) {
+          console.error('Error fetching all confirmations:', confError);
+        }
+        
+        // Get all pill IDs that are already taken
+        const takenPillIds = allConfirmations?.map(conf => conf.pill_id) || [];
+        
+        // Process all medications that either have status='skipped' or aren't taken yet
+        for (const item of scheduledData) {
+          // Skip medications that are already marked as taken
+          if (takenPillIds.includes(item.pill_id)) {
+            continue;
+          }
+          
+          if (item.pills_warning) {
+            processedData.push({
+              id: item.id,
+              pill_id: item.pill_id,
+              nome_medicamento: item.pills_warning?.titulo || 'Unknown Medication',
+              dosage: item.dosage || item.pills_warning?.quantidade_comprimidos_por_vez || 'Standard dose',
+              scheduled_time: item.scheduled_time,
+              scheduled_date: item.scheduled_date,
+              taken: false,
+              skipped: item.status === 'skipped',
+              status: item.status || 'pending', // Use the status from the database or default to 'pending'
+              notes: item.notes
+            });
+          }
+        }
+      }
+      
+      setPendingMedications(processedData);
+    } catch (error) {
+      console.error('Error fetching pending medications:', error);
+      Alert.alert('Error', 'Failed to load pending medications');
+      setPendingMedications([]);
+    } finally {
+      setLoadingPendingMedications(false);
+    }
+  };
+
   const handleDateChange = (event, date) => {
     setShowDatePicker(false);
     if (date) {
@@ -284,7 +462,27 @@ const MedicalDiaryScreen = ({ navigation }) => {
         return;
       }
 
-      if (!userId) {
+      // Try to get user ID if not already set
+      let entryUserId = userId;
+      if (!entryUserId) {
+        const userData = DataUser.getUserData();
+        if (userData && userData.id) {
+          entryUserId = userData.id;
+          setUserId(userData.id); // Update the state for future use
+        } else {
+          // Try to get from navigation params
+          const userIdFromParams = navigation.getParam ? 
+            navigation.getParam('userId') : 
+            navigation.route?.params?.userId;
+          
+          if (userIdFromParams) {
+            entryUserId = userIdFromParams;
+            setUserId(userIdFromParams);
+          }
+        }
+      }
+
+      if (!entryUserId) {
         console.warn('No user ID available, cannot save entry');
         Alert.alert('Error', 'User information not available. Please try again later.');
         return;
@@ -304,7 +502,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
         // Update existing entry
         entryData = {
           id: editingEntry.id,
-          user_id: userId,
+          user_id: entryUserId, // Keep this in local storage only
           title: newEntry.title,
           description: newEntry.description,
           mood: newEntry.mood,
@@ -323,11 +521,11 @@ const MedicalDiaryScreen = ({ navigation }) => {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedEntries));
         
         // 2. Update in Supabase - use upsert to handle both insert and update
+        // Don't include user_id since it doesn't exist in the table
         const { error } = await supabase
           .from('diary_entries')
           .upsert({
             id: parseInt(editingEntry.id), // Supabase expects numeric id
-            user_id: userId,
             title: newEntry.title,
             description: newEntry.description,
             mood: newEntry.mood,
@@ -343,7 +541,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
         const newId = Date.now().toString();
         entryData = {
           id: newId,
-          user_id: userId,
+          user_id: entryUserId, // Keep this in local storage only
           title: newEntry.title,
           description: newEntry.description,
           mood: newEntry.mood,
@@ -356,11 +554,11 @@ const MedicalDiaryScreen = ({ navigation }) => {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedEntries));
         
         // 2. Save to Supabase
+        // Don't include user_id since it doesn't exist in the table
         const { error } = await supabase
           .from('diary_entries')
           .insert({
             id: parseInt(newId), // Supabase expects numeric id
-            user_id: userId,
             title: newEntry.title,
             description: newEntry.description,
             mood: newEntry.mood,
@@ -410,17 +608,14 @@ const MedicalDiaryScreen = ({ navigation }) => {
       const updatedEntries = allEntries.filter(entry => entry.id !== entryId);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedEntries));
       
-      // 2. Delete from Supabase if userId exists
-      if (userId) {
-        const { error } = await supabase
-          .from('diary_entries')
-          .delete()
-          .eq('id', parseInt(entryId)) // Supabase expects numeric id
-          .eq('user_id', userId);
-        
-        if (error) {
-          console.error('Error deleting entry from Supabase:', error);
-        }
+      // 2. Delete from Supabase
+      const { error } = await supabase
+        .from('diary_entries')
+        .delete()
+        .eq('id', parseInt(entryId)); // Supabase expects numeric id
+      
+      if (error) {
+        console.error('Error deleting entry from Supabase:', error);
       }
       
       // 3. Refresh the list
@@ -577,104 +772,67 @@ const MedicalDiaryScreen = ({ navigation }) => {
     setMedicationDetailsModalVisible(true);
   };
 
-  // Modified renderMedication function to handle confirmed medications with touch action
-  const renderMedication = ({ item, type }) => {
-    // Handle rendering for confirmed medications from Supabase
-    if (type === 'confirmed') {
-      // Handle potential date format issues
-      let formattedTime;
-      try {
-        // First try to format the scheduled_time
-        formattedTime = new Date(item.scheduled_time).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        });
-        
-        // If the result is 'Invalid Date', try with confirmation_time
-        if (formattedTime === 'Invalid Date' && item.confirmation_time) {
-          formattedTime = new Date(item.confirmation_time).toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          });
-        }
-      } catch (error) {
-        console.error('Error formatting medication time:', error);
-        formattedTime = 'Time unavailable';
-      }
-      
-      // Determine if the medication was taken
-      const isTaken = item.taken === true || item.status === 'taken';
-      
-      return (
-        <TouchableOpacity 
-          style={[
-            styles.medicationItem,
-            isTaken ? styles.medicationItemTaken : styles.medicationItemMissed
-          ]}
-          onPress={() => showMedicationDetails(item)}
-        >
-          <View style={[
-            styles.medicationIcon,
-            isTaken ? styles.medicationIconTaken : styles.medicationIconMissed
-          ]}>
-            <Ionicons name={isTaken ? "checkmark" : "close"} size={20} color="#FFF" />
-          </View>
-          <View style={styles.medicationInfo}>
-            <Text style={styles.medicationName}>{item.nome_medicamento || 'Unknown Medication'}</Text>
-            <Text style={styles.medicationDetails}>
-              {item.dosage || 'Standard dose'} • {formattedTime}
-            </Text>
-            <Text style={[
-              styles.statusText,
-              isTaken ? styles.takenText : styles.missedText
-            ]}>
-              {isTaken ? 'TAKEN' : 'MISSED'}
-            </Text>
-          </View>
-          <View style={styles.medicationMoreIcon}>
-            <Ionicons name="information-circle-outline" size={16} color="#999" />
-          </View>
-        </TouchableOpacity>
-      );
+  // Modified renderMedication function to handle all medication types
+  const renderMedication = ({ item }) => {
+    let backgroundColor, statusText, statusColor, statusIcon;
+    
+    // Determine styling based on status
+    if (item.status === 'taken' || item.taken === true) {
+      backgroundColor = '#e8f7f0';
+      statusText = 'Taken';
+      statusColor = '#2ecc71';
+      statusIcon = 'checkmark-circle';
+    } else if (item.status === 'skipped') {
+      backgroundColor = '#fcf3e7';
+      statusText = 'Skipped';
+      statusColor = '#e67e22';
+      statusIcon = 'close-circle';
+    } else {
+      backgroundColor = '#f0f3ff';
+      statusText = 'Pending';
+      statusColor = '#f39c12';
+      statusIcon = 'time-outline';
     }
     
-    // Original rendering for scheduled medications
-    const doseTime = new Date(item.nextDose);
-    const formattedTime = doseTime.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-    
-    const now = new Date();
-    const isPastDue = now > doseTime;
-    const isUpcoming = doseTime > now && (doseTime - now) < 2 * 60 * 60 * 1000; // Next 2 hours
-
+    const timeString = item.confirmation_time 
+      ? new Date(`2000-01-01T${item.confirmation_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : item.scheduled_time
+        ? new Date(`2000-01-01T${item.scheduled_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '';
+        
     return (
-      <View style={[
-        styles.medicationItem, 
-        isPastDue && styles.medicationItemPastDue,
-        isUpcoming && styles.medicationItemUpcoming
-      ]}>
-        <View style={[
-          styles.medicationIcon, 
-          isPastDue && styles.medicationIconPastDue,
-          isUpcoming && styles.medicationIconUpcoming
-        ]}>
-          <Ionicons name="medkit" size={20} color="#FFF" />
-        </View>
-        <View style={styles.medicationInfo}>
-          <Text style={styles.medicationName}>{item.name}</Text>
-          <Text style={styles.medicationDetails}>
-            {item.dosage} • {formattedTime}
+      <TouchableOpacity 
+        style={[styles.medicationCard, {backgroundColor: backgroundColor}]}
+        onPress={() => showMedicationDetails(item)}
+      >
+        <View style={styles.medicationCardHeader}>
+          <Ionicons name={statusIcon} size={16} color={statusColor} />
+          <Text style={[styles.medicationCardStatus, {color: statusColor}]}>
+            {statusText}
           </Text>
-          {isPastDue && (
-            <Text style={styles.pastDueText}>OVERDUE</Text>
-          )}
-          {isUpcoming && (
-            <Text style={styles.upcomingText}>UPCOMING</Text>
-          )}
         </View>
-      </View>
+        
+        <Text style={styles.medicationCardTitle} numberOfLines={2}>
+          {item.nome_medicamento}
+        </Text>
+        
+        <Text style={styles.medicationCardDosage}>
+          {item.dosage} {typeof item.dosage === 'number' ? 'unit(s)' : ''}
+        </Text>
+        
+        <View style={styles.medicationCardTime}>
+          <Ionicons name="time-outline" size={14} color="#666" />
+          <Text style={styles.medicationCardTimeText}>
+            {timeString}
+          </Text>
+        </View>
+        
+        {item.notes && (
+          <Text style={styles.medicationCardNotes} numberOfLines={1}>
+            {item.notes}
+          </Text>
+        )}
+      </TouchableOpacity>
     );
   };
 
@@ -682,14 +840,24 @@ const MedicalDiaryScreen = ({ navigation }) => {
   // This can be called when the component mounts
   const syncAsyncStorageToSupabase = async () => {
     try {
-      if (!userId) return;
+      // Try to get user ID if not already set
+      let currentUserId = userId;
+      if (!currentUserId) {
+        const userData = DataUser.getUserData();
+        if (userData && userData.id) {
+          currentUserId = userData.id;
+          setUserId(userData.id); // Update the state for future use
+        }
+      }
+      
+      if (!currentUserId) return;
       
       const storedEntries = await AsyncStorage.getItem(STORAGE_KEY);
       const allEntries = storedEntries ? JSON.parse(storedEntries) : [];
       
       // Filter entries for this user
       const userEntries = allEntries.filter(entry => 
-        entry.user_id === userId || entry.user_id === undefined
+        entry.user_id === currentUserId || entry.user_id === undefined
       );
       
       if (userEntries.length === 0) return;
@@ -697,7 +865,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
       // Prepare entries for Supabase (ensure all required fields are present)
       const formattedEntries = userEntries.map(entry => ({
         id: parseInt(entry.id),
-        user_id: userId,
+        user_id: currentUserId,
         title: entry.title,
         description: entry.description || null,
         mood: entry.mood || 'normal',
@@ -737,25 +905,25 @@ const MedicalDiaryScreen = ({ navigation }) => {
         
         {renderDateSelector()}
         
-        {/* Confirmed Medications Section */}
+        {/* All Medications Section */}
         <View style={styles.medicationsContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Taken Medications</Text>
+            <Text style={styles.sectionTitle}>All Medications</Text>
             <Text style={styles.sectionSubtitle}>
-              {confirmedMedications.length} confirmed medication(s)
+              {confirmedMedications.length + pendingMedications.length} medication(s)
             </Text>
           </View>
           
-          {loadingMedications ? (
+          {loadingMedications || loadingPendingMedications ? (
             <View style={styles.loadingMedicationsContainer}>
               <ActivityIndicator size="small" color="#6A8DFD" />
               <Text style={styles.loadingMedicationsText}>Loading medications...</Text>
             </View>
-          ) : confirmedMedications.length > 0 ? (
+          ) : confirmedMedications.length > 0 || pendingMedications.length > 0 ? (
             <FlatList
-              data={confirmedMedications}
-              renderItem={(props) => renderMedication({...props, type: 'confirmed'})}
-              keyExtractor={(item) => item.id.toString()}
+              data={[...confirmedMedications, ...pendingMedications]}
+              renderItem={(props) => renderMedication({...props, type: 'all'})}
+              keyExtractor={(item) => `med-${item.id}`}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.medicationsList}
@@ -764,31 +932,11 @@ const MedicalDiaryScreen = ({ navigation }) => {
             <View style={styles.emptyMedications}>
               <Ionicons name="document-text-outline" size={24} color="#6A8DFD" />
               <Text style={styles.emptyMedicationsText}>
-                No confirmed medications for this date
+                No medications for this date
               </Text>
             </View>
           )}
         </View>
-        
-        {/* Scheduled Medications Section */}
-        {dailyMedications.length > 0 && (
-          <View style={styles.medicationsContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Scheduled Medications</Text>
-              <Text style={styles.sectionSubtitle}>
-                {dailyMedications.length} medication(s) for this day
-              </Text>
-            </View>
-            <FlatList
-              data={dailyMedications}
-              renderItem={(props) => renderMedication({...props, type: 'scheduled'})}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.medicationsList}
-            />
-          </View>
-        )}
 
         <View style={styles.entriesSection}>
           <View style={styles.sectionHeader}>
@@ -887,12 +1035,16 @@ const MedicalDiaryScreen = ({ navigation }) => {
                       styles.statusBadge,
                       selectedMedication.status === 'taken' || selectedMedication.taken === true
                         ? styles.takenBadge
-                        : styles.missedBadge
+                        : selectedMedication.status === 'skipped'
+                          ? styles.skippedBadge
+                          : styles.pendingBadge
                     ]}>
                       <Text style={styles.statusBadgeText}>
                         {selectedMedication.status === 'taken' || selectedMedication.taken === true
                           ? 'TAKEN'
-                          : 'MISSED'}
+                          : selectedMedication.status === 'skipped'
+                            ? 'SKIPPED'
+                            : 'PENDING'}
                       </Text>
                     </View>
                   </View>
@@ -1055,11 +1207,28 @@ const styles = StyleSheet.create({
   sectionSubtitle: { fontSize: 14, color: '#6A8DFD' },
   entriesCount: { fontSize: 14, color: '#6A8DFD', fontWeight: '500' },
   medicationsList: { paddingVertical: 10 },
-  medicationItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 16, padding: 15, marginRight: 15, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, borderWidth: 1, borderColor: '#F0F3FF', minWidth: 200 },
-  medicationIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#4A67E3', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  medicationInfo: { flex: 1 },
-  medicationName: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 },
-  medicationDetails: { fontSize: 14, color: '#888' },
+  medicationCard: { 
+    backgroundColor: '#FFF', 
+    borderRadius: 16, 
+    padding: 15, 
+    marginRight: 15, 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 2, 
+    borderWidth: 1, 
+    borderColor: '#F0F3FF', 
+    width: 180,
+    minHeight: 150,
+  },
+  medicationCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  medicationCardStatus: { fontSize: 14, fontWeight: 'bold', color: '#333', marginLeft: 8 },
+  medicationCardTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4, flex: 1 },
+  medicationCardDosage: { fontSize: 14, color: '#888' },
+  medicationCardTime: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  medicationCardTimeText: { fontSize: 12, color: '#888', marginLeft: 8 },
+  medicationCardNotes: { fontSize: 14, color: '#888', marginTop: 4 },
   entriesSection: { flex: 1, marginTop: 20, marginHorizontal: 20 },
   listContent: { paddingVertical: 10, paddingBottom: 100 },
   entryCard: { backgroundColor: '#FFF', borderRadius: 22, padding: 20, marginBottom: 16, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, borderWidth: 1, borderColor: '#F0F3FF' },
@@ -1125,6 +1294,8 @@ const styles = StyleSheet.create({
   statusBadgeText: { fontWeight: 'bold', fontSize: 14 },
   floatingButton: { position: 'absolute', right: 25, bottom: 30, width: 65, height: 65, borderRadius: 35, backgroundColor: '#4A67E3', justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, zIndex: 999 },
   titleTimeContainer: { flex: 1 },
+  skippedBadge: { backgroundColor: '#fcf3e7' },
+  pendingBadge: { backgroundColor: '#f0f3ff' },
 });
 
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Alert, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal, FlatList, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import supabase from '../../supabase';
 import Navbar from '../Components/Navbar';
@@ -24,18 +24,22 @@ const HomeScreen = () => {
   const [calendarView, setCalendarView] = useState('day'); // 'day', 'week', 'month'
   const [todayStats, setTodayStats] = useState({ total: 0, completed: 0 });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
   const navigation = useNavigation();
   const hourlyScrollViewRef = useRef(null);
   const hourRowHeight = 70; // Definir altura fixa de cada linha de hora para cálculos precisos
+  const [pulseAnimation, setPulseAnimation] = useState(new Animated.Value(1));
 
   useEffect(() => {
     fetchUserData();
     checkMissedMedications();
     getTodayMedicationStats();
+    checkPendingMedications();
     
     const interval = setInterval(() => {
       setCurrentHour(new Date().getHours());
       checkMissedMedications();
+      checkPendingMedications();
     }, 60000);
 
     return () => clearInterval(interval);
@@ -44,6 +48,33 @@ const HomeScreen = () => {
   useEffect(() => {
     fetchEvents();
   }, [selectedDate]);
+
+  useEffect(() => {
+    // Create pulsing effect for notification button when there are pending medications
+    if (notificationCount > 0) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnimation, {
+            toValue: 1.2,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnimation, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      // Reset animation when there are no notifications
+      Animated.timing(pulseAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [notificationCount]);
 
   const goToCurrentHourAndDay = () => {
     // Get current date and hour
@@ -513,20 +544,45 @@ const HomeScreen = () => {
     try {
       setIsLoading(true);
       
-      // Verificar plataforma
-      const platform = checkPlatform();
-      
-      // Obtém a data atual no formato ISO (YYYY-MM-DD)
+      // Get the current device date in YYYY-MM-DD format
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const deviceDate = now.toISOString().split('T')[0];
       
       console.log('===== INICIANDO BUSCA DE MEDICAMENTOS DO DIA =====');
       console.log('Data atual do dispositivo:', now);
-      console.log('Data formatada para consulta:', today);
+      console.log('Data formatada para consulta:', deviceDate);
       console.log('ID do usuário:', userId);
       
-      // Busca todos os agendamentos para hoje na tabela medication_schedule_times
-      const { data: scheduleData, error: scheduleError } = await supabase
+      // Busca todos os medicamentos na tabela pills_warning associados ao usuário
+      const { data: pillsData, error: pillsError } = await supabase
+        .from('pills_warning')
+        .select('*')
+        .eq('user_id', userId);
+        
+      if (pillsError) {
+        console.log('Erro ao buscar pills_warning:', pillsError);
+        return;
+      }
+      
+      console.log(`Encontrados ${pillsData?.length || 0} medicamentos na tabela pills_warning`);
+      
+      // Filtrar medicamentos de teste
+      const validPillsData = pillsData?.filter(pill => {
+        // Skip test or invalid medications
+        if (!pill.titulo || 
+            pill.titulo.toLowerCase().includes('test')) {
+          console.log(`Skipping test pill: ${pill.titulo}`);
+          return false;
+        }
+        return true;
+      });
+      
+      // Extrair IDs de todos os medicamentos válidos
+      const pillIds = validPillsData.map(pill => pill.id);
+      console.log(`IDs de medicamentos válidos: ${pillIds.join(', ')}`);
+      
+      // Buscar todos os agendamentos para esses medicamentos
+      const { data: allSchedules, error: allSchedulesError } = await supabase
         .from('medication_schedule_times')
         .select(`
           id,
@@ -545,47 +601,27 @@ const HomeScreen = () => {
             quantidade_comprimidos_por_vez
           )
         `)
-        .eq('scheduled_date', today)
         .eq('user_id', userId)
-        .order('scheduled_time', { ascending: true });
+        .in('pill_id', pillIds.length > 0 ? pillIds : [0]);
         
-      if (scheduleError) {
-        console.log('Erro ao buscar medicamentos:', scheduleError);
-        Alert.alert('Erro', `Falha ao buscar medicamentos: ${scheduleError.message}`);
-        setIsLoading(false);
+      if (allSchedulesError) {
+        console.log('Erro ao buscar agendamentos:', allSchedulesError);
         return;
       }
       
-      console.log(`Encontrados ${scheduleData?.length || 0} medicamentos para hoje`);
+      console.log(`Encontrados ${allSchedules?.length || 0} agendamentos para medicamentos do usuário`);
       
-      // Se não encontrou medicamentos, vamos buscar todos para debug
-      if (!scheduleData || scheduleData.length === 0) {
-        console.log('Não foram encontrados medicamentos para hoje. Verificando banco de dados:');
-        
-        const { data: allData, error: allError } = await supabase
-          .from('medication_schedule_times')
-          .select('id, scheduled_date, status')
-          .eq('user_id', userId)
-          .order('scheduled_date', { ascending: false })
-          .limit(10);
-          
-        if (allError) {
-          console.log('Erro ao verificar banco de dados:', allError);
-        } else if (allData && allData.length > 0) {
-          console.log('Últimos 10 medicamentos no banco:');
-          allData.forEach(item => {
-            console.log(`ID: ${item.id}, Data: ${item.scheduled_date}, Status: ${item.status}`);
-          });
-        } else {
-          console.log('Nenhum medicamento encontrado no banco de dados.');
-        }
-      }
+      // Filtrar apenas agendamentos para a data atual do dispositivo
+      const scheduleData = allSchedules?.filter(item => item.scheduled_date === deviceDate);
       
+      console.log(`Encontrados ${scheduleData?.length || 0} medicamentos agendados para hoje (${deviceDate})`);
+      
+      // Get confirmation records for TODAY ONLY - data do dispositivo exata
       const { data: confirmations, error: confirmError } = await supabase
         .from('medication_confirmations')
         .select('pill_id, confirmation_date, confirmation_time')
         .eq('user_id', userId)
-        .eq('confirmation_date', today)
+        .eq('confirmation_date', deviceDate) // Strict match with device date
         .eq('taken', true);
       
       if (confirmError) {
@@ -594,21 +630,41 @@ const HomeScreen = () => {
       
       const medicationsByTime = {};
       
-      if (scheduleData && scheduleData.length > 0) {
-        scheduleData.forEach(item => {
+      // Filter valid schedule data (exclude test data and enforce date match)
+      const validScheduleData = scheduleData?.filter(item => {
+        // Skip test or invalid medications
+        if (!item.pills_warning?.titulo || 
+            item.pills_warning?.titulo.toLowerCase().includes('test')) {
+          console.log(`Skipping test medication: ${item.pills_warning?.titulo}`);
+          return false;
+        }
+        
+        // Double check date matches device date exactly
+        if (item.scheduled_date !== deviceDate) {
+          console.log(`Skipping medication with non-matching date: ${item.scheduled_date} vs ${deviceDate}`);
+          return false;
+        }
+        
+        console.log(`Medicamento válido: ${item.pills_warning?.titulo} para a data: ${item.scheduled_date}`);
+        return true;
+      });
+      
+      // Add medications from schedule for TODAY ONLY
+      if (validScheduleData && validScheduleData.length > 0) {
+        validScheduleData.forEach(item => {
           const timeKey = item.scheduled_time;
           if (!medicationsByTime[timeKey]) {
             medicationsByTime[timeKey] = [];
           }
           
-          const scheduledTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
-          const canTake = scheduledTime <= now;
+          const medScheduledTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
+          const canTake = medScheduledTime <= now;
           const isTaken = confirmations?.some(conf => 
-            conf.pill_id === item.pill_id && conf.confirmation_date === today
+            conf.pill_id === item.pill_id && conf.confirmation_date === deviceDate
           ) || item.status === 'taken' || false;
           
           const confirmation = confirmations?.find(conf => 
-            conf.pill_id === item.pill_id && conf.confirmation_date === today
+            conf.pill_id === item.pill_id && conf.confirmation_date === deviceDate
           );
           
           medicationsByTime[timeKey].push({
@@ -630,11 +686,69 @@ const HomeScreen = () => {
         });
       }
       
+      // Também verificar medicamentos da tabela pills_warning que ainda não estão agendados
+      // mas que deveriam ser tomados hoje de acordo com a frequência
+      try {
+        if (validPillsData && validPillsData.length > 0) {
+          validPillsData.forEach(pill => {
+            try {
+              // Check if this pill should be taken today based on frequency and start date
+              const shouldTakeToday = shouldTakePillToday(pill, deviceDate);
+              if (!shouldTakeToday) {
+                console.log(`Pill ${pill.titulo} should not be taken today according to schedule`);
+                return;
+              }
+              
+              // Verify this medication isn't already added from the schedule
+              const alreadyScheduled = Object.values(medicationsByTime).flat().some(
+                med => med.pillId === pill.id
+              );
+              
+              if (!alreadyScheduled) {
+                // Define a default time if none exists
+                let timeKey = pill.horario_fixo ? 
+                  pill.horario_fixo.split(';')[0].trim() : 
+                  '08:00:00';
+                
+                if (!medicationsByTime[timeKey]) {
+                  medicationsByTime[timeKey] = [];
+                }
+                
+                const pillScheduledTime = new Date(`${deviceDate}T${timeKey}`);
+                const canTake = pillScheduledTime <= now;
+                const isTaken = confirmations?.some(conf => 
+                  conf.pill_id === pill.id && conf.confirmation_date === deviceDate
+                );
+                
+                medicationsByTime[timeKey].push({
+                  id: `pill-${pill.id}`,
+                  pillId: pill.id,
+                  scheduledTime: timeKey,
+                  scheduledDate: deviceDate,
+                  title: pill.titulo,
+                  quantidade: pill.quantidade_comprimidos || 0,
+                  dosePorVez: pill.quantidade_comprimidos_por_vez || 1,
+                  dosage: `${pill.quantidade_comprimidos_por_vez || 1} comprimido(s)`,
+                  isTaken: isTaken || false,
+                  canTake: canTake,
+                  status: 'pending'
+                });
+              }
+            } catch (pillError) {
+              console.log(`Erro ao processar medicamento ${pill.titulo}: ${pillError.message}`);
+            }
+          });
+        }
+      } catch (pillsProcessError) {
+        console.log(`Erro ao processar medicamentos: ${pillsProcessError.message}`);
+      }
+      
       const todayMeds = Object.keys(medicationsByTime).map(timeKey => ({
         time: timeKey,
         medications: medicationsByTime[timeKey]
       }));
       
+      // Prioritize groups with pending medications 
       todayMeds.sort((a, b) => {
         if (a.time < b.time) return -1;
         if (a.time > b.time) return 1;
@@ -643,13 +757,25 @@ const HomeScreen = () => {
       
       console.log(`Organizados ${todayMeds.length} grupos de medicamentos`);
       
-      // Atualizar estado e garantir que o modal seja exibido
+      // Display log of medications for debugging
+      todayMeds.forEach((group, i) => {
+        console.log(`Grupo ${i+1}: ${group.time}`);
+        group.medications.forEach((med, j) => {
+          console.log(`- Med ${j+1}: ${med.title} (${med.dosage}) - Data: ${med.scheduledDate}`);
+        });
+      });
+      
+      // Mostrar modal mesmo se não houver medicamentos pendentes
       setTodayMedications(todayMeds);
       
-      // Adicionar um pequeno delay antes de mostrar o modal (ajuda em algumas plataformas)
       setTimeout(() => {
-        console.log('Exibindo modal de medicamentos em plataforma:', platform);
-        setTodayMedicationsModal(true);
+        if (todayMeds.length > 0) {
+          console.log('Exibindo modal de medicamentos para o dia atual: ', deviceDate);
+          setTodayMedicationsModal(true);
+        } else {
+          console.log('Não há medicamentos para exibir na data atual: ', deviceDate);
+          Alert.alert('Informação', 'Não há medicamentos agendados para hoje.');
+        }
       }, 300);
       
     } catch (error) {
@@ -657,6 +783,125 @@ const HomeScreen = () => {
       Alert.alert('Erro', `Não foi possível carregar os medicamentos para hoje: ${error.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Helper function to determine if a pill should be taken today based on frequency
+  const shouldTakePillToday = (pill, today) => {
+    try {
+      if (!pill.data_inicio) {
+        console.log(`Medicamento ${pill.titulo} sem data de início, considerando válido`);
+        return true; // If no start date, assume it should be taken
+      }
+      
+      // Validate date format safely
+      let startDate;
+      try {
+        startDate = new Date(pill.data_inicio);
+        // Check if date is valid
+        if (isNaN(startDate.getTime())) {
+          console.log(`Medicamento ${pill.titulo} com data de início inválida: ${pill.data_inicio}`);
+          return false;
+        }
+      } catch (e) {
+        console.log(`Erro ao processar data de início de ${pill.titulo}: ${e.message}`);
+        return false;
+      }
+      
+      // Get date strings in YYYY-MM-DD format for comparison
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
+      let todayDate;
+      try {
+        todayDate = new Date(today);
+        // Check if date is valid
+        if (isNaN(todayDate.getTime())) {
+          console.log(`Data atual inválida: ${today}`);
+          return false;
+        }
+      } catch (e) {
+        console.log(`Erro ao processar data atual: ${e.message}`);
+        return false;
+      }
+      
+      const todayDateStr = today; // today is already in YYYY-MM-DD format
+      
+      console.log(`Verificando medicamento: ${pill.titulo}, data início: ${startDateStr}, today: ${todayDateStr}`);
+      
+      // If pill hasn't started yet, don't take it
+      if (startDate > todayDate) {
+        console.log(`Medicamento ${pill.titulo} ainda não iniciou`);
+        return false;
+      }
+      
+      // If pill has ended, don't take it
+      if (pill.data_fim) {
+        try {
+          const endDate = new Date(pill.data_fim);
+          
+          // Check if end date is valid
+          if (isNaN(endDate.getTime())) {
+            console.log(`Medicamento ${pill.titulo} com data de fim inválida: ${pill.data_fim}`);
+            return false;
+          }
+          
+          const endDateStr = endDate.toISOString().split('T')[0];
+          if (endDate < todayDate) {
+            console.log(`Medicamento ${pill.titulo} já terminou em ${endDateStr}`);
+            return false;
+          }
+        } catch (e) {
+          console.log(`Erro ao processar data de fim de ${pill.titulo}: ${e.message}`);
+          // If there's an error with the end date, we'll ignore it and continue checking
+        }
+      }
+      
+      // Check frequency
+      if (!pill.recurrence || pill.recurrence === 'daily') {
+        console.log(`Medicamento ${pill.titulo} é diário`);
+        return true;
+      }
+      
+      if (pill.recurrence === 'weekly') {
+        // If no specific days are set, default to today
+        if (!pill.days_of_week || !Array.isArray(pill.days_of_week) || pill.days_of_week.length === 0) {
+          console.log(`Medicamento ${pill.titulo} é semanal sem dias específicos, considerando válido`);
+          return true;
+        }
+        
+        // Check if today's day of week is in the selected days
+        const todayDayOfWeek = todayDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const shouldTake = pill.days_of_week.includes(todayDayOfWeek);
+        console.log(`Medicamento ${pill.titulo} é semanal, dia da semana: ${todayDayOfWeek}, deve tomar: ${shouldTake}`);
+        return shouldTake;
+      }
+      
+      if (pill.recurrence === 'monthly') {
+        // Check if today's day of month matches the start date's day
+        const shouldTake = todayDate.getDate() === startDate.getDate();
+        console.log(`Medicamento ${pill.titulo} é mensal, deve tomar: ${shouldTake}`);
+        return shouldTake;
+      }
+      
+      if (pill.recurrence === 'once') {
+        // For one-time medications, check if it's exactly the scheduled date
+        try {
+          const scheduledDate = pill.schedule_date || pill.data_inicio;
+          const scheduleDay = new Date(scheduledDate).toISOString().split('T')[0];
+          const shouldTake = scheduleDay === todayDateStr;
+          console.log(`Medicamento ${pill.titulo} é de dose única, data programada: ${scheduleDay}, deve tomar: ${shouldTake}`);
+          return shouldTake;
+        } catch (e) {
+          console.log(`Erro ao processar data de dose única de ${pill.titulo}: ${e.message}`);
+          return false;
+        }
+      }
+      
+      console.log(`Medicamento ${pill.titulo} sem regra específica, considerando válido`);
+      return true; // Default to showing the medication
+    } catch (err) {
+      console.warn(`Error checking pill schedule: ${err.message}`);
+      return false; // When in doubt, don't show the medication
     }
   };
 
@@ -740,18 +985,22 @@ const HomeScreen = () => {
       }
 
       const now = new Date();
-      const scheduledTime = new Date(event.startDate);
       
-      if (scheduledTime > now) {
-        const scheduledTimeStr = scheduledTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const nowTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      // If we're taking it from the schedule view, check scheduling time
+      if (event.startDate) {
+        const scheduledTime = new Date(event.startDate);
         
-        Alert.alert(
-          'Horário não atingido',
-          `Ainda não é hora de tomar este medicamento.\nHorário agendado: ${scheduledTimeStr}\nHorário atual: ${nowTimeStr}`,
-          [{ text: "OK", style: "cancel" }]
-        );
-        return;
+        if (scheduledTime > now) {
+          const scheduledTimeStr = scheduledTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const nowTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          
+          Alert.alert(
+            'Horário não atingido',
+            `Ainda não é hora de tomar este medicamento.\nHorário agendado: ${scheduledTimeStr}\nHorário atual: ${nowTimeStr}`,
+            [{ text: "OK", style: "cancel" }]
+          );
+          return;
+        }
       }
 
       const pillId = event.pill_id;
@@ -770,7 +1019,7 @@ const HomeScreen = () => {
         scheduled_time: isoTimestamp,
         confirmation_date: currentDate,
         taken: true,
-        notes: `Medicamento tomado via calendário: ${event.title}`,
+        notes: `Medicamento tomado via aplicativo: ${event.title}`,
         created_at: isoTimestamp
       };
       
@@ -783,25 +1032,252 @@ const HomeScreen = () => {
         return;
       }
       
-      try {
-        const { error: updateError } = await supabase
-          .from('medication_schedule_times')
-          .update({
-            status: 'taken',
-            complete_datetime: isoTimestamp
-          })
-          .eq('id', event.id);
-          
-        if (updateError) {
+      // If it was taken from the calendar view and has an ID, update the schedule
+      if (event.id && !event.id.toString().startsWith('pill-')) {
+        try {
+          const { error: updateError } = await supabase
+            .from('medication_schedule_times')
+            .update({
+              status: 'taken',
+              complete_datetime: isoTimestamp
+            })
+            .eq('id', event.id);
+            
+          if (updateError) {
+            console.error('Error updating schedule status:', updateError);
+          }
+        } catch (updateError) {
+          console.error('Exception updating schedule status:', updateError);
         }
-      } catch (updateError) {
       }
       
       fetchEvents();
       getTodayMedicationStats();
       
       Alert.alert('Sucesso', `${event.title} marcado como tomado!`);
+
+      // Update notification count after taking a medication
+      checkPendingMedications();
     } catch (error) {
+      Alert.alert('Erro', `Ocorreu um erro ao processar sua solicitação: ${error.message}`);
+    }
+  };
+
+  const checkPendingMedications = async () => {
+    try {
+      const userId = DataUser.getUserData()?.id;
+      if (!userId) return;
+
+      // Get current device date and format it
+      const deviceNow = new Date();
+      const deviceToday = deviceNow.toISOString().split('T')[0];
+      
+      console.log(`===== INICIANDO BUSCA DE MEDICAMENTOS DO DIA =====`);
+      console.log(`Data atual do dispositivo: ${deviceNow.toISOString()}`);
+      console.log(`Data formatada para consulta: ${deviceToday}`);
+      console.log(`ID do usuário: ${userId}`);
+      
+      // Busca todos os medicamentos na tabela pills_warning associados ao usuário
+      const { data: pillsData, error: pillsError } = await supabase
+        .from('pills_warning')
+        .select('*')
+        .eq('user_id', userId);
+        
+      if (pillsError) {
+        console.error('Erro ao buscar pills_warning:', pillsError);
+        return;
+      }
+      
+      // Filtrar medicamentos de teste
+      const validPillsData = pillsData?.filter(pill => {
+        // Skip test or invalid medications
+        if (!pill.titulo || 
+            pill.titulo.toLowerCase().includes('test')) {
+          console.log(`Skipping test pill: ${pill.titulo}`);
+          return false;
+        }
+        return true;
+      });
+      
+      // Extrair IDs de todos os medicamentos válidos
+      const pillIds = validPillsData.map(pill => pill.id);
+      
+      // Buscar todos os agendamentos para esses medicamentos
+      const { data: allSchedules, error: allSchedulesError } = await supabase
+        .from('medication_schedule_times')
+        .select('id, pill_id, scheduled_time, scheduled_date')
+        .eq('user_id', userId)
+        .in('pill_id', pillIds.length > 0 ? pillIds : [0]);
+        
+      if (allSchedulesError) {
+        console.error('Error fetching scheduled medications:', allSchedulesError);
+        return;
+      }
+      
+      // Filtrar apenas agendamentos para a data atual do dispositivo
+      const scheduled = allSchedules?.filter(item => item.scheduled_date === deviceToday);
+      
+      console.log(`Encontrados ${scheduled?.length || 0} medicamentos agendados para hoje (${deviceToday})`);
+      
+      // Get all confirmed medications for today
+      const { data: confirmed, error: confirmError } = await supabase
+        .from('medication_confirmations')
+        .select('pill_id, confirmation_date')
+        .eq('confirmation_date', deviceToday) // Strict match with device date
+        .eq('user_id', userId)
+        .eq('taken', true);
+      
+      if (confirmError) {
+        console.error('Error fetching medication confirmations:', confirmError);
+        return;
+      }
+      
+      // Filter out any scheduled medications where the database date doesn't match device date
+      const validScheduled = scheduled?.filter(item => {
+        // Double check that the scheduled date matches today's device date exactly
+        const isMatch = item.scheduled_date === deviceToday;
+        if (!isMatch) {
+          console.log(`Skipping medication with non-matching date: ${item.scheduled_date} vs ${deviceToday}`);
+        }
+        return isMatch;
+      });
+      
+      // Cria lista completa de medicamentos para o dia
+      const allMedsForToday = [];
+      
+      // Adiciona medicamentos do agendamento
+      for (const item of validScheduled || []) {
+        try {
+          allMedsForToday.push({
+            pill_id: item.pill_id,
+            scheduled_time: item.scheduled_time,
+            scheduled_date: item.scheduled_date,
+            isTaken: confirmed?.some(conf => 
+              conf.pill_id === item.pill_id && 
+              conf.confirmation_date === deviceToday
+            ) || false
+          });
+        } catch (err) {
+          console.log(`Erro ao processar agendamento: ${err.message}`);
+        }
+      }
+      
+      // Também verificar medicamentos que devem ser tomados hoje conforme a frequência
+      for (const pill of validPillsData || []) {
+        try {
+          const shouldTakeToday = shouldTakePillToday(pill, deviceToday);
+          if (!shouldTakeToday) continue;
+          
+          // Verificar se este medicamento já não está incluído nos agendamentos
+          const alreadyScheduled = validScheduled?.some(schedule => schedule.pill_id === pill.id);
+          if (alreadyScheduled) continue;
+          
+          // Verificar se já foi tomado hoje
+          const isTaken = confirmed?.some(conf => 
+            conf.pill_id === pill.id && 
+            conf.confirmation_date === deviceToday
+          );
+          
+          // Definir horário padrão se não existir
+          let timeKey = pill.horario_fixo ? 
+            pill.horario_fixo.split(';')[0].trim() : 
+            '08:00:00';
+            
+          try {
+            allMedsForToday.push({
+              pill_id: pill.id,
+              scheduled_time: timeKey,
+              scheduled_date: deviceToday,
+              isTaken: isTaken || false
+            });
+          } catch (timeErr) {
+            console.log(`Erro ao processar horário para ${pill.titulo}: ${timeErr.message}`);
+          }
+        } catch (pillErr) {
+          console.log(`Erro ao processar medicamento ${pill.titulo}: ${pillErr.message}`);
+        }
+      }
+      
+      // Contar todos os medicamentos do dia
+      const totalMedsCount = allMedsForToday.length;
+      
+      // Contar os medicamentos pendentes (não tomados)
+      const pendingCount = allMedsForToday.filter(med => !med.isTaken).length;
+      
+      console.log(`Total de ${totalMedsCount} medicamentos para o dia: ${deviceToday}`);
+      console.log(`- ${pendingCount} pendentes (não tomados)`);
+      console.log(`- ${totalMedsCount - pendingCount} tomados`);
+      
+      // Mostrar notificação para todos os medicamentos do dia, independente de terem sido tomados
+      setNotificationCount(totalMedsCount);
+    } catch (error) {
+      console.error('Error checking pending medications:', error);
+    }
+  };
+
+  const skipMedication = async (medication) => {
+    try {
+      const userId = DataUser.getUserData()?.id;
+      if (!userId) {
+        Alert.alert('Erro', 'Usuário não identificado');
+        return;
+      }
+
+      const now = new Date();
+      const isoTimestamp = now.toISOString();
+      const currentDate = isoTimestamp.split('T')[0];
+      
+      const confirmationData = {
+        pill_id: medication.pillId,
+        user_id: userId,
+        scheduled_time: `${medication.scheduledDate}T${medication.scheduledTime}`,
+        confirmation_date: currentDate,
+        confirmation_time: now.toTimeString().split(' ')[0],
+        taken: false,
+        status: 'skipped',
+        notes: `Medicamento pulado pelo usuário: ${medication.title}`,
+        created_at: isoTimestamp
+      };
+      
+      const { error: insertError } = await supabase
+        .from('medication_confirmations')
+        .insert(confirmationData);
+        
+      if (insertError) {
+        console.error('Erro ao registrar medicamento pulado:', insertError);
+        Alert.alert('Erro', `Não foi possível registrar o medicamento como pulado: ${insertError.message}`);
+        return;
+      }
+      
+      // If it's a scheduled medication and has an ID, update the schedule
+      if (medication.id && !medication.id.toString().startsWith('pill-')) {
+        try {
+          const { error: updateError } = await supabase
+            .from('medication_schedule_times')
+            .update({
+              status: 'skipped',
+              complete_datetime: isoTimestamp
+            })
+            .eq('id', medication.id);
+            
+          if (updateError) {
+            console.error('Error updating schedule status:', updateError);
+          }
+        } catch (updateError) {
+          console.error('Exception updating schedule status:', updateError);
+        }
+      }
+      
+      fetchEvents();
+      getTodayMedicationStats();
+      fetchTodayMedications();
+      
+      Alert.alert('Marcado como pulado', `${medication.title} foi registrado como pulado.`);
+
+      // Update notification count after skipping a medication
+      checkPendingMedications();
+    } catch (error) {
+      console.error('Erro ao pular medicamento:', error);
       Alert.alert('Erro', `Ocorreu um erro ao processar sua solicitação: ${error.message}`);
     }
   };
@@ -838,12 +1314,53 @@ const HomeScreen = () => {
               </Text>
             </View>
           </View>
-          <TouchableOpacity 
-            style={styles.notificationButton}
-            onPress={fetchTodayMedications}
-          >
-            <Ionicons name="notifications-outline" size={24} color="white" />
-          </TouchableOpacity>
+          <Animated.View style={{
+            transform: [{ scale: pulseAnimation }]
+          }}>
+            <TouchableOpacity 
+              style={[
+                styles.notificationButton,
+                notificationCount > 0 && styles.notificationButtonAll
+              ]}
+              onPress={() => {
+                fetchTodayMedications();
+                // Add haptic feedback if available
+                if (Platform.OS === 'ios' || Platform.OS === 'android') {
+                  // This requires react-native-haptic-feedback library
+                  // For now, we'll use a small timeout to simulate a response
+                  setTimeout(() => {
+                    if (notificationCount > 0) {
+                      // If there are pending medications, vibrate
+                      try {
+                        if (Platform.OS === 'android') {
+                          // Android vibration
+                          const vibrationPattern = [0, 50, 50, 50];
+                          if (navigator && navigator.vibrate) {
+                            navigator.vibrate(vibrationPattern);
+                          }
+                        }
+                      } catch (error) {
+                        console.log('Vibration not supported');
+                      }
+                    }
+                  }, 50);
+                }
+              }}
+            >
+              <Ionicons 
+                name={notificationCount > 0 ? "notifications" : "notifications-outline"} 
+                size={24} 
+                color="white" 
+              />
+              {notificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {notificationCount > 9 ? '9+' : notificationCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
         </View>
 
         <View style={styles.content}>
@@ -1095,18 +1612,11 @@ const HomeScreen = () => {
           statusBarTranslucent={true}
           hardwareAccelerated={true}
         >
-          <View style={[
-            styles.modalContainer,
-            Platform.OS === 'web' && styles.modalContainerWeb
-          ]}>
-            <View style={[
-              styles.modalContent, 
-              { width: Platform.OS === 'web' ? '80%' : '95%', maxHeight: '85%' },
-              Platform.OS === 'web' && styles.modalContentWeb
-            ]}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  Seus Medicamentos de Hoje ({new Date().toLocaleDateString()})
+                  Todos os Medicamentos de Hoje ({new Date().toLocaleDateString()})
                 </Text>
                 <TouchableOpacity 
                   style={styles.closeButton} 
@@ -1114,38 +1624,6 @@ const HomeScreen = () => {
                 >
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
-              </View>
-              
-              <View style={styles.modalStatsContainer}>
-                <View style={styles.modalStatsItem}>
-                  <Ionicons name="calendar" size={20} color="#6A8DFD" />
-                  <Text style={styles.modalStatsValue}>{todayMedications.length}</Text>
-                  <Text style={styles.modalStatsLabel}>Horários</Text>
-                </View>
-                
-                <View style={styles.modalStatsDivider} />
-                
-                <View style={styles.modalStatsItem}>
-                  <Ionicons name="checkmark-circle" size={20} color="#2ecc71" />
-                  <Text style={styles.modalStatsValue}>
-                    {todayMedications.reduce((total, group) => 
-                      total + group.medications.filter(med => med.isTaken).length, 0
-                    )}
-                  </Text>
-                  <Text style={styles.modalStatsLabel}>Tomados</Text>
-                </View>
-                
-                <View style={styles.modalStatsDivider} />
-                
-                <View style={styles.modalStatsItem}>
-                  <Ionicons name="time" size={20} color="#f39c12" />
-                  <Text style={styles.modalStatsValue}>
-                    {todayMedications.reduce((total, group) => 
-                      total + group.medications.filter(med => !med.isTaken && med.canTake).length, 0
-                    )}
-                  </Text>
-                  <Text style={styles.modalStatsLabel}>Pendentes</Text>
-                </View>
               </View>
               
               <View style={styles.currentTimeIndicator}>
@@ -1161,161 +1639,123 @@ const HomeScreen = () => {
                   <Text style={styles.emptyMedsText}>Não há medicamentos agendados para hoje</Text>
                 </View>
               ) : (
-                <FlatList
-                  style={styles.todayMedsList}
-                  data={todayMedications}
-                  keyExtractor={(item, index) => `timegroup-${index}`}
-                  renderItem={({item: timeGroup, index: idx}) => {
-                    const now = new Date();
-                    const timeParts = timeGroup.time.split(':');
-                    const groupTime = new Date();
-                    groupTime.setHours(parseInt(timeParts[0], 10), parseInt(timeParts[1], 10), 0);
-                    
-                    const timeHasPassed = groupTime <= now;
-                    const isCurrentHour = now.getHours() === parseInt(timeParts[0], 10) && 
-                                        Math.abs(now.getMinutes() - parseInt(timeParts[1], 10)) < 30;
-                    
-                    return (
-                      <View style={[
-                        styles.timeGroupContainer,
-                        isCurrentHour && styles.currentTimeGroup
-                      ]}>
-                        <View style={styles.timeHeader}>
-                          <View style={[
-                            styles.timeLineBefore,
-                            isCurrentHour && styles.currentTimeLine
-                          ]} />
-                          <View style={[
-                            styles.timeGroupTimeContainer,
-                            isCurrentHour && styles.currentTimeGroupContainer
-                          ]}>
-                            <Text style={[
-                              styles.timeGroupTime,
-                              isCurrentHour && styles.currentTimeGroupTime
-                            ]}>
-                              {timeGroup.time.substring(0, 5)}
+                <ScrollView style={styles.medicationListScroll}>
+                  {todayMedications.map((timeGroup, idx) => (
+                    <View key={`time-${idx}`} style={styles.timeGroupContainer}>
+                      <View style={styles.timeHeaderWrapper}>
+                        <Text style={styles.timeHeader}>
+                          {timeGroup.time.substring(0, 5)}
+                        </Text>
+                      </View>
+                      
+                      {timeGroup.medications.map((med, medIdx) => (
+                        <View 
+                          key={`med-${med.id || medIdx}`} 
+                          style={[
+                            styles.medicationCard,
+                            med.isTaken ? styles.medicationCardTaken : 
+                            !med.canTake ? styles.medicationCardFuture : null
+                          ]}
+                        >
+                          <View style={styles.medicationInfo}>
+                            <Text style={styles.medicationTitle}>{med.title}</Text>
+                            <Text style={styles.medicationDosage}>
+                              Dose: {med.dosage || med.dosePorVez || '1'} comprimido(s)
                             </Text>
-                            {isCurrentHour && (
-                              <Ionicons name="arrow-forward" size={16} color="#fff" style={{marginLeft: 5}} />
+                            
+                            {med.isTaken && (
+                              <View style={styles.statusContainer}>
+                                <Ionicons name="checkmark-circle" size={16} color="#2ecc71" />
+                                <Text style={styles.statusTextTaken}>
+                                  Tomado {med.confirmationTime ? `às ${med.confirmationTime.substring(0, 5)}` : ''}
+                                </Text>
+                              </View>
+                            )}
+                            
+                            {!med.isTaken && !med.canTake && (
+                              <View style={styles.statusContainer}>
+                                <Ionicons name="time-outline" size={16} color="#f39c12" />
+                                <Text style={styles.statusTextPending}>
+                                  Horário não atingido
+                                </Text>
+                              </View>
                             )}
                           </View>
-                          <View style={[
-                            styles.timeLineAfter,
-                            isCurrentHour && styles.currentTimeLine
-                          ]} />
+                          
+                          <View style={styles.medicationActions}>
+                            {!med.isTaken && med.canTake && (
+                              <View style={styles.actionButtonsRow}>
+                                <TouchableOpacity
+                                  style={styles.takeButton}
+                                  onPress={() => {
+                                    setTodayMedicationsModal(false);
+                                    setTimeout(() => takeMedication({
+                                      id: med.id,
+                                      pill_id: med.pillId,
+                                      title: med.title,
+                                      startDate: `${med.scheduledDate}T${med.scheduledTime}`,
+                                      scheduledDate: med.scheduledDate,
+                                      scheduledTime: med.scheduledTime
+                                    }), 300);
+                                  }}
+                                >
+                                  <Text style={styles.takeButtonText}>Tomar</Text>
+                                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity
+                                  style={styles.skipButton}
+                                  onPress={() => {
+                                    Alert.alert(
+                                      "Pular medicamento",
+                                      `Deseja realmente pular ${med.title}?`,
+                                      [
+                                        { text: "Cancelar", style: "cancel" },
+                                        { 
+                                          text: "Sim, pular",
+                                          onPress: () => {
+                                            setTodayMedicationsModal(false);
+                                            setTimeout(() => skipMedication(med), 300);
+                                          }
+                                        }
+                                      ]
+                                    );
+                                  }}
+                                >
+                                  <Text style={styles.skipButtonText}>Pular</Text>
+                                  <Ionicons name="close-circle" size={18} color="#fff" />
+                                </TouchableOpacity>
+                              </View>
+                            )}
+                            
+                            {!med.isTaken && !med.canTake && (
+                              <View style={styles.waitingIcon}>
+                                <Ionicons name="time-outline" size={24} color="#f39c12" />
+                              </View>
+                            )}
+                            
+                            {med.isTaken && (
+                              <View style={styles.takenIcon}>
+                                <Ionicons name="checkmark-done-circle" size={24} color="#2ecc71" />
+                              </View>
+                            )}
+                          </View>
                         </View>
-                        
-                        <FlatList
-                          data={timeGroup.medications}
-                          keyExtractor={(med, medIdx) => `med-${med.id || medIdx}`}
-                          renderItem={({item: med, index: medIdx}) => (
-                            <View style={[
-                              styles.todayMedItem,
-                              med.isTaken && styles.todayMedItemTaken,
-                              !med.canTake && !med.isTaken && styles.todayMedItemFuture
-                            ]}>
-                              <View style={styles.todayMedItemInfo}>
-                                <Text style={styles.todayMedTitle}>{med.title}</Text>
-                                <Text style={styles.todayMedDosage}>
-                                  Dose: {med.dosage || med.dosePorVez} comprimido(s)
-                                </Text>
-                                {med.notes && (
-                                  <Text style={styles.todayMedNotes}>{med.notes}</Text>
-                                )}
-                                
-                                {med.isTaken && (
-                                  <View style={styles.medStatusContainer}>
-                                    <Ionicons name="checkmark-circle" size={16} color="#2ecc71" />
-                                    <Text style={styles.medTakenText}>
-                                      Tomado {med.confirmationTime ? `às ${med.confirmationTime.substring(0, 5)}` : ''}
-                                    </Text>
-                                  </View>
-                                )}
-                                
-                                {!med.isTaken && !med.canTake && (
-                                  <View style={styles.medStatusContainer}>
-                                    <Ionicons name="time-outline" size={16} color="#f39c12" />
-                                    <Text style={styles.medFutureText}>
-                                      Horário não atingido
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
-                              
-                              <View style={styles.medActionsContainer}>
-                                {!med.isTaken && med.canTake && (
-                                  <View style={styles.medButtonsContainer}>
-                                    <TouchableOpacity
-                                      style={styles.takeMedButton}
-                                      onPress={() => {
-                                        setTodayMedicationsModal(false);
-                                        setTimeout(() => takeMedication(med), 300);
-                                      }}
-                                    >
-                                      <Text style={styles.takeMedButtonText}>Tomar</Text>
-                                      <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                                    </TouchableOpacity>
-                                    
-                                    <TouchableOpacity
-                                      style={styles.skipMedButton}
-                                      onPress={() => {
-                                        Alert.alert(
-                                          "Pular medicamento",
-                                          `Deseja realmente pular ${med.title}?`,
-                                          [
-                                            {
-                                              text: "Cancelar",
-                                              style: "cancel"
-                                            },
-                                            {
-                                              text: "Sim, pular",
-                                              onPress: () => {
-                                                Alert.alert("Medicamento pulado", "Registrado como não tomado");
-                                                fetchTodayMedications();
-                                              }
-                                            }
-                                          ]
-                                        );
-                                      }}
-                                    >
-                                      <Text style={styles.skipMedButtonText}>Pular</Text>
-                                      <Ionicons name="close-circle" size={18} color="#fff" />
-                                    </TouchableOpacity>
-                                  </View>
-                                )}
-                                
-                                {!med.isTaken && !med.canTake && (
-                                  <View style={styles.waitingContainer}>
-                                    <Ionicons name="time-outline" size={24} color="#f39c12" />
-                                  </View>
-                                )}
-                                
-                                {med.isTaken && (
-                                  <View style={styles.takenContainer}>
-                                    <Ionicons name="checkmark-done-circle" size={24} color="#2ecc71" />
-                                  </View>
-                                )}
-                              </View>
-                            </View>
-                          )}
-                          scrollEnabled={false}
-                        />
-                      </View>
-                    );
-                  }}
-                  ListFooterComponent={
-                    <TouchableOpacity 
-                      style={styles.refreshAllButton}
-                      onPress={() => {
-                        setTodayMedicationsModal(false);
-                        setTimeout(() => fetchTodayMedications(), 300);
-                      }}
-                    >
-                      <Ionicons name="refresh" size={18} color="#fff" />
-                      <Text style={styles.refreshAllButtonText}>Atualizar lista</Text>
-                    </TouchableOpacity>
-                  }
-                />
+                      ))}
+                    </View>
+                  ))}
+                  
+                  <TouchableOpacity 
+                    style={styles.refreshButton}
+                    onPress={() => {
+                      setTodayMedicationsModal(false);
+                      setTimeout(() => fetchTodayMedications(), 300);
+                    }}
+                  >
+                    <Ionicons name="refresh" size={18} color="#fff" />
+                    <Text style={styles.refreshButtonText}>Atualizar lista</Text>
+                  </TouchableOpacity>
+                </ScrollView>
               )}
             </View>
           </View>
@@ -1336,6 +1776,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F6FA',
+    paddingBottom: 80, // Added padding to account for the navbar height
   },
   header: {
     backgroundColor: '#6A8DFD',
@@ -1395,6 +1836,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.5,
+  },
+  notificationButtonActive: {
+    backgroundColor: 'rgba(231, 76, 60, 0.3)',
+  },
+  notificationButtonAll: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   content: {
     padding: 15,
@@ -1651,6 +2098,8 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: 'white',
     borderRadius: 20,
+    width: '90%',
+    maxHeight: '90%',
     padding: 20,
     elevation: 5,
     shadowColor: '#000',
@@ -1721,12 +2170,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   waitingContainer: {
-    width: 50,
-    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fffbf0',
-    borderRadius: 25,
+    marginLeft: 8,
   },
   takenContainer: {
     width: 50,
@@ -1802,7 +2248,7 @@ const styles = StyleSheet.create({
   },
   todayMedItem: {
     flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 15,
     marginBottom: 10,
@@ -1829,6 +2275,30 @@ const styles = StyleSheet.create({
   todayMedDosage: {
     fontSize: 14,
     color: '#7f8c8d',
+  },
+  medStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  medFutureText: {
+    fontSize: 12,
+    color: '#f39c12',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  medTakenText: {
+    fontSize: 12,
+    color: '#2ecc71',
+    fontWeight: '500',
+  },
+  medActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  medButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   takeMedButton: {
     backgroundColor: '#2ecc71',
@@ -1900,6 +2370,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
   },
   notificationBadgeText: {
     color: '#ffffff',
@@ -2006,6 +2481,143 @@ const styles = StyleSheet.create({
   },
   modalContentWeb: {
     maxWidth: 800,
+  },
+  medicationListScroll: {
+    maxHeight: 400,
+  },
+  timeGroupContainer: {
+    marginBottom: 15,
+  },
+  timeHeaderWrapper: {
+    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 5,
+  },
+  timeHeader: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  medicationCard: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6A8DFD',
+    justifyContent: 'space-between',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  medicationCardTaken: {
+    borderLeftColor: '#2ecc71',
+    backgroundColor: '#f0fff4',
+  },
+  medicationCardFuture: {
+    borderLeftColor: '#f39c12',
+    backgroundColor: '#fffbf0',
+  },
+  medicationInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  medicationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 4,
+  },
+  medicationDosage: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginBottom: 4,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  statusTextTaken: {
+    fontSize: 12,
+    color: '#2ecc71',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  statusTextPending: {
+    fontSize: 12,
+    color: '#f39c12',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  medicationActions: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+  },
+  takeButton: {
+    backgroundColor: '#2ecc71',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 6,
+  },
+  takeButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginRight: 4,
+    fontSize: 14,
+  },
+  skipButton: {
+    backgroundColor: '#e74c3c',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  skipButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginRight: 4,
+    fontSize: 14,
+  },
+  waitingIcon: {
+    padding: 4,
+  },
+  takenIcon: {
+    padding: 4,
+  },
+  refreshButton: {
+    backgroundColor: '#6A8DFD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginTop: 15,
+    marginBottom: 10,
+    alignSelf: 'center',
+  },
+  refreshButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 15,
   },
 });
 

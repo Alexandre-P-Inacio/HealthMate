@@ -80,6 +80,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    width: '100%',
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -94,6 +95,9 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    zIndex: 1000,
+    height: Platform.OS === 'ios' ? 80 : 60, // Account for different platform heights
+    alignItems: 'center',
   },
   navItem: {
     alignItems: 'center',
