@@ -18,6 +18,12 @@ import PrivacyPolicyScreen from './src/App/PrivacyPolicyScreen';
 import TermsScreen from './src/App/TermsScreen';
 import HelpScreen from './src/App/HelpScreen';
 import EditProfileScreen from './src/App/EditProfileScreen';
+import MedicationHistoryScreen from './src/App/MedicationHistoryScreen';
+import MedicationTrackingScreen from './src/App/MedicationTrackingScreen';
+import ComingSoonScreen from './src/App/ComingSoonScreen';
+import WaterTrackerScreen from './src/App/WaterTrackerScreen';
+import BMICalculatorScreen from './src/App/BMICalculatorScreen';
+import HealthTipsScreen from './src/App/HealthTipsScreen';
 
 const Stack = createStackNavigator();
 
@@ -50,6 +56,12 @@ const App = () => {
         <Stack.Screen name="TermsScreen" component={TermsScreen} />
         <Stack.Screen name="HelpScreen" component={HelpScreen} />
         <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
+        <Stack.Screen name="MedicationHistoryScreen" component={MedicationHistoryScreen} />
+        <Stack.Screen name="ComingSoonScreen" component={ComingSoonScreen} />
+        <Stack.Screen name="MedicationTrackingScreen" component={MedicationTrackingScreen} />
+        <Stack.Screen name="WaterTrackerScreen" component={WaterTrackerScreen} />
+        <Stack.Screen name="BMICalculatorScreen" component={BMICalculatorScreen} />
+        <Stack.Screen name="HealthTipsScreen" component={HealthTipsScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

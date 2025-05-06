@@ -17,6 +17,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import DataUser from '../../navigation/DataUser';
 import Navbar from '../Components/Navbar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import supabase from '../../supabase';
 
 const AccountScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -29,6 +30,8 @@ const AccountScreen = ({ navigation }) => {
   const [generalUpdates, setGeneralUpdates] = useState(true);
   const [promotionalOffers, setPromotionalOffers] = useState(false);
   const [showNotificationOptions, setShowNotificationOptions] = useState(false);
+  const [showMedicsModal, setShowMedicsModal] = useState(false);
+  const [medics, setMedics] = useState([]);
 
   useEffect(() => {
     const user = DataUser.getUserData();
@@ -112,6 +115,20 @@ const AccountScreen = ({ navigation }) => {
     }
   ];
 
+  // fetch users with role 'medic'
+  const fetchMedics = async () => {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, fullname, pfpimg')
+      .eq('role', 'medic');
+    if (error) {
+      Alert.alert('Erro', 'Falha ao carregar médicos: ' + error.message);
+      return;
+    }
+    setMedics(data);
+    setShowMedicsModal(true);
+  };
+
   if (!userData) {
     return (
       <View style={styles.loadingContainer}>
@@ -188,23 +205,32 @@ const AccountScreen = ({ navigation }) => {
 
           {/* Quick Actions */}
           <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={fetchMedics}
+            >
               <View style={styles.actionIcon}>
                 <FontAwesome name="user-md" size={20} color="#3498db" />
               </View>
               <Text style={styles.actionText}>Médicos</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('ComingSoonScreen')}
+            >
               <View style={styles.actionIcon}>
                 <FontAwesome name="calendar" size={20} color="#3498db" />
               </View>
               <Text style={styles.actionText}>Consultas</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('MedicationTrackingScreen')}
+            >
               <View style={styles.actionIcon}>
-                <FontAwesome name="heartbeat" size={20} color="#3498db" />
+                <FontAwesome name="medkit" size={20} color="#3498db" />
               </View>
-              <Text style={styles.actionText}>Exames</Text>
+              <Text style={styles.actionText}>Medicamentos</Text>
             </TouchableOpacity>
           </View>
 
@@ -327,6 +353,49 @@ const AccountScreen = ({ navigation }) => {
                     </View>
                   </View>
                 )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Medics Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showMedicsModal}
+          onRequestClose={() => setShowMedicsModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}> 
+              <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setShowMedicsModal(false)}>
+                  {Platform.OS === 'ios' ? (
+                    <FontAwesome name="chevron-down" size={20} color="#666" />
+                  ) : (
+                    <FontAwesome name="times" size={24} color="#666" />
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Médicos</Text>
+                <View style={styles.modalHeaderRight} />
+              </View>
+              <ScrollView style={styles.modalScroll}>
+                {medics.map((doc) => (
+                  <View key={doc.id} style={styles.medicsCard}>
+                    <Image
+                      source={
+                        doc.pfpimg
+                          ? doc.pfpimg.includes('http')
+                            ? { uri: doc.pfpimg }
+                            : { uri: `data:image/png;base64,${doc.pfpimg}` }
+                          : { uri: 'https://i.pravatar.cc/100' }
+                      }
+                      style={styles.medicsAvatar}
+                    />
+                    <View style={styles.medicsInfo}>
+                      <Text style={styles.medicsName}>{doc.fullname || 'Usuário'}</Text>
+                    </View>
+                  </View>
+                ))}
               </ScrollView>
             </View>
           </View>
@@ -617,6 +686,26 @@ const styles = StyleSheet.create({
   },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 18, color: '#666' },
+  medicsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  medicsAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  medicsInfo: {
+    flex: 1,
+  },
+  medicsName: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
 });
 
 export default AccountScreen;

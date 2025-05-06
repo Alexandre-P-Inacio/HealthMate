@@ -274,10 +274,11 @@ const HomeScreen = () => {
       if (med.data_inicio) {
         const medTime = new Date(med.data_inicio);
         
+        // Only consider a medication missed if the current hour is more than 1 hour later than scheduled
         if (medTime.getDate() === now.getDate() && 
             medTime.getMonth() === now.getMonth() && 
             medTime.getFullYear() === now.getFullYear() && 
-            medTime.getHours() < now.getHours()) {
+            (now.getHours() - medTime.getHours()) > 1) {
             
           const { data } = await supabase
             .from('medication_confirmations')
@@ -645,6 +646,16 @@ const HomeScreen = () => {
           return false;
         }
         
+        // Skip medications already taken
+        const isTaken = confirmations?.some(conf => 
+          conf.pill_id === item.pill_id && conf.confirmation_date === deviceDate
+        ) || item.status === 'taken';
+        
+        if (isTaken) {
+          console.log(`Skipping medication already taken: ${item.pills_warning?.titulo}`);
+          return false;
+        }
+        
         console.log(`Medicamento válido: ${item.pills_warning?.titulo} para a data: ${item.scheduled_date}`);
         return true;
       });
@@ -658,14 +669,11 @@ const HomeScreen = () => {
           }
           
           const medScheduledTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
+          // Consider medication takeable if scheduled time is passed or within 1 hour grace period
+          const timeDifferenceMs = now - medScheduledTime;
+          const hoursDifference = timeDifferenceMs / (1000 * 60 * 60);
+          // Can take if scheduled time is passed (but within 1 hour grace period) or if it's scheduled for now or past
           const canTake = medScheduledTime <= now;
-          const isTaken = confirmations?.some(conf => 
-            conf.pill_id === item.pill_id && conf.confirmation_date === deviceDate
-          ) || item.status === 'taken' || false;
-          
-          const confirmation = confirmations?.find(conf => 
-            conf.pill_id === item.pill_id && conf.confirmation_date === deviceDate
-          );
           
           medicationsByTime[timeKey].push({
             id: item.id,
@@ -673,14 +681,15 @@ const HomeScreen = () => {
             scheduledTime: item.scheduled_time,
             scheduledDate: item.scheduled_date,
             completeDatetime: item.complete_datetime,
-            confirmationTime: confirmation?.confirmation_time || null,
             dosage: item.dosage,
             notes: item.notes,
             title: item.pills_warning?.titulo || 'Medicamento',
             quantidade: item.pills_warning?.quantidade_comprimidos || 0,
             dosePorVez: item.pills_warning?.quantidade_comprimidos_por_vez || 0,
-            isTaken: isTaken,
+            isTaken: false, // Já removemos os medicamentos tomados no filtro
             canTake: canTake,
+            // Consider a medication "missed" only if more than 1 hour has passed since scheduled time
+            isMissed: hoursDifference > 1,
             status: item.status || 'pending'
           });
         });
@@ -705,6 +714,16 @@ const HomeScreen = () => {
               );
               
               if (!alreadyScheduled) {
+                // Verificar se já foi tomado hoje - se sim, pular
+                const isTaken = confirmations?.some(conf => 
+                  conf.pill_id === pill.id && conf.confirmation_date === deviceDate
+                );
+                
+                if (isTaken) {
+                  console.log(`Skipping non-scheduled medication already taken: ${pill.titulo}`);
+                  return;
+                }
+                
                 // Define a default time if none exists
                 let timeKey = pill.horario_fixo ? 
                   pill.horario_fixo.split(';')[0].trim() : 
@@ -715,10 +734,9 @@ const HomeScreen = () => {
                 }
                 
                 const pillScheduledTime = new Date(`${deviceDate}T${timeKey}`);
+                const timeDifferenceMs = now - pillScheduledTime;
+                const hoursDifference = timeDifferenceMs / (1000 * 60 * 60);
                 const canTake = pillScheduledTime <= now;
-                const isTaken = confirmations?.some(conf => 
-                  conf.pill_id === pill.id && conf.confirmation_date === deviceDate
-                );
                 
                 medicationsByTime[timeKey].push({
                   id: `pill-${pill.id}`,
@@ -729,8 +747,9 @@ const HomeScreen = () => {
                   quantidade: pill.quantidade_comprimidos || 0,
                   dosePorVez: pill.quantidade_comprimidos_por_vez || 1,
                   dosage: `${pill.quantidade_comprimidos_por_vez || 1} comprimido(s)`,
-                  isTaken: isTaken || false,
+                  isTaken: false, // Já verificamos que não foi tomado acima
                   canTake: canTake,
+                  isMissed: hoursDifference > 1,
                   status: 'pending'
                 });
               }
@@ -1001,6 +1020,15 @@ const HomeScreen = () => {
           );
           return;
         }
+        
+        // Check if medication was missed beyond the grace period (more than 1 hour)
+        const timeDifferenceMs = now - scheduledTime;
+        const hoursDifference = timeDifferenceMs / (1000 * 60 * 60);
+        
+        if (hoursDifference > 1) {
+          // Medication is outside the 1-hour grace period - mark it as missed but still allow taking
+          console.log(`Medication ${event.title} is outside grace period (${hoursDifference.toFixed(1)} hours late)`);
+        }
       }
 
       const pillId = event.pill_id;
@@ -1105,8 +1133,9 @@ const HomeScreen = () => {
       // Buscar todos os agendamentos para esses medicamentos
       const { data: allSchedules, error: allSchedulesError } = await supabase
         .from('medication_schedule_times')
-        .select('id, pill_id, scheduled_time, scheduled_date')
+        .select('id, pill_id, scheduled_time, scheduled_date, status')
         .eq('user_id', userId)
+        .eq('scheduled_date', deviceToday)
         .in('pill_id', pillIds.length > 0 ? pillIds : [0]);
         
       if (allSchedulesError) {
@@ -1122,10 +1151,9 @@ const HomeScreen = () => {
       // Get all confirmed medications for today
       const { data: confirmed, error: confirmError } = await supabase
         .from('medication_confirmations')
-        .select('pill_id, confirmation_date')
+        .select('pill_id, confirmation_date, taken')
         .eq('confirmation_date', deviceToday) // Strict match with device date
-        .eq('user_id', userId)
-        .eq('taken', true);
+        .eq('user_id', userId);
       
       if (confirmError) {
         console.error('Error fetching medication confirmations:', confirmError);
@@ -1148,14 +1176,22 @@ const HomeScreen = () => {
       // Adiciona medicamentos do agendamento
       for (const item of validScheduled || []) {
         try {
+          // Verificar se este medicamento já foi tomado
+          const confirmedMed = confirmed?.find(conf => 
+            conf.pill_id === item.pill_id && 
+            conf.confirmation_date === deviceToday
+          );
+          
+          const isTaken = confirmedMed?.taken === true || item.status === 'taken';
+          const isSkipped = item.status === 'skipped';
+          
           allMedsForToday.push({
             pill_id: item.pill_id,
             scheduled_time: item.scheduled_time,
             scheduled_date: item.scheduled_date,
-            isTaken: confirmed?.some(conf => 
-              conf.pill_id === item.pill_id && 
-              conf.confirmation_date === deviceToday
-            ) || false
+            isTaken: isTaken,
+            isSkipped: isSkipped,
+            isPending: !isTaken && !isSkipped
           });
         } catch (err) {
           console.log(`Erro ao processar agendamento: ${err.message}`);
@@ -1173,10 +1209,13 @@ const HomeScreen = () => {
           if (alreadyScheduled) continue;
           
           // Verificar se já foi tomado hoje
-          const isTaken = confirmed?.some(conf => 
+          const confirmedMed = confirmed?.find(conf => 
             conf.pill_id === pill.id && 
             conf.confirmation_date === deviceToday
           );
+          
+          const isTaken = confirmedMed?.taken === true;
+          const isSkipped = false; // Não há status para estes medicamentos
           
           // Definir horário padrão se não existir
           let timeKey = pill.horario_fixo ? 
@@ -1188,7 +1227,9 @@ const HomeScreen = () => {
               pill_id: pill.id,
               scheduled_time: timeKey,
               scheduled_date: deviceToday,
-              isTaken: isTaken || false
+              isTaken: isTaken,
+              isSkipped: isSkipped,
+              isPending: !isTaken && !isSkipped
             });
           } catch (timeErr) {
             console.log(`Erro ao processar horário para ${pill.titulo}: ${timeErr.message}`);
@@ -1201,15 +1242,15 @@ const HomeScreen = () => {
       // Contar todos os medicamentos do dia
       const totalMedsCount = allMedsForToday.length;
       
-      // Contar os medicamentos pendentes (não tomados)
-      const pendingCount = allMedsForToday.filter(med => !med.isTaken).length;
+      // Contar apenas os medicamentos pendentes (não tomados E não pulados)
+      const pendingCount = allMedsForToday.filter(med => med.isPending).length;
       
       console.log(`Total de ${totalMedsCount} medicamentos para o dia: ${deviceToday}`);
-      console.log(`- ${pendingCount} pendentes (não tomados)`);
-      console.log(`- ${totalMedsCount - pendingCount} tomados`);
+      console.log(`- ${pendingCount} pendentes (não tomados e não pulados)`);
+      console.log(`- ${totalMedsCount - pendingCount} já respondidos (tomados ou pulados)`);
       
-      // Mostrar notificação para todos os medicamentos do dia, independente de terem sido tomados
-      setNotificationCount(totalMedsCount);
+      // Mostrar apenas medicamentos pendentes na notificação (não tomados e não pulados)
+      setNotificationCount(pendingCount);
     } catch (error) {
       console.error('Error checking pending medications:', error);
     }
@@ -1465,12 +1506,16 @@ const HomeScreen = () => {
                               const now = new Date();
                               const scheduledTime = new Date(event.startDate);
                               const canTake = scheduledTime <= now;
+                              const timeDifferenceMs = now - scheduledTime;
+                              const hoursDifference = timeDifferenceMs / (1000 * 60 * 60);
+                              const isMissed = hoursDifference > 1 && !event.isTaken;
 
                               return (
                                 <View key={idx} style={[
                                   styles.eventCard,
-                                  event.isTaken && styles.eventCardTaken,
-                                  !canTake && !event.isTaken && styles.eventCardFuture
+                                  event.isTaken ? styles.eventCardTaken :
+                                  isMissed ? styles.eventCardMissed :
+                                  !canTake && !event.isTaken ? styles.eventCardFuture : null
                                 ]}>
                                   <View style={styles.eventCardHeader}>
                                     <Text style={styles.eventTitle}>{event.title}</Text>
@@ -1484,12 +1529,21 @@ const HomeScreen = () => {
                                   <Text style={styles.scheduledInfo}>
                                     Agendado para: {event.scheduledDate} às {event.scheduledTime?.substring(0, 5) || '00:00'}
                                   </Text>
-                                  {!event.isTaken && canTake && (
+                                  {!event.isTaken && canTake && !isMissed && (
                                     <TouchableOpacity 
                                       style={styles.takePillButton}
                                       onPress={() => takeMedication(event)}
                                     >
                                       <Text style={styles.takePillButtonText}>Tomar</Text>
+                                      <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                                    </TouchableOpacity>
+                                  )}
+                                  {!event.isTaken && canTake && isMissed && (
+                                    <TouchableOpacity 
+                                      style={styles.takePillButtonMissed}
+                                      onPress={() => takeMedication(event)}
+                                    >
+                                      <Text style={styles.takePillButtonText}>Tomar (Atrasado)</Text>
                                       <Ionicons name="checkmark-circle" size={16} color="#fff" />
                                     </TouchableOpacity>
                                   )}
@@ -1654,6 +1708,7 @@ const HomeScreen = () => {
                           style={[
                             styles.medicationCard,
                             med.isTaken ? styles.medicationCardTaken : 
+                            med.isMissed ? styles.medicationCardMissed :
                             !med.canTake ? styles.medicationCardFuture : null
                           ]}
                         >
@@ -1677,6 +1732,15 @@ const HomeScreen = () => {
                                 <Ionicons name="time-outline" size={16} color="#f39c12" />
                                 <Text style={styles.statusTextPending}>
                                   Horário não atingido
+                                </Text>
+                              </View>
+                            )}
+                            
+                            {!med.isTaken && med.canTake && med.isMissed && (
+                              <View style={styles.statusContainer}>
+                                <Ionicons name="alert-circle-outline" size={16} color="#e74c3c" />
+                                <Text style={styles.statusTextMissed}>
+                                  Atrasado (mais de 1 hora)
                                 </Text>
                               </View>
                             )}
@@ -2051,6 +2115,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     borderLeftColor: '#f39c12',
   },
+  eventCardMissed: {
+    backgroundColor: '#fff5f5',
+    borderLeftColor: '#e74c3c',
+  },
   eventCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2075,6 +2143,16 @@ const styles = StyleSheet.create({
   },
   takePillButton: {
     backgroundColor: '#6A8DFD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  takePillButtonMissed: {
+    backgroundColor: '#e74c3c',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2525,6 +2603,10 @@ const styles = StyleSheet.create({
     borderLeftColor: '#f39c12',
     backgroundColor: '#fffbf0',
   },
+  medicationCardMissed: {
+    borderLeftColor: '#e74c3c',
+    backgroundColor: '#fffbf0',
+  },
   medicationInfo: {
     flex: 1,
     marginRight: 10,
@@ -2554,6 +2636,12 @@ const styles = StyleSheet.create({
   statusTextPending: {
     fontSize: 12,
     color: '#f39c12',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  statusTextMissed: {
+    fontSize: 12,
+    color: '#e74c3c',
     marginLeft: 4,
     fontWeight: '500',
   },
