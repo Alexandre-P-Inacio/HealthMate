@@ -18,6 +18,9 @@ import PrivacyPolicyScreen from './src/App/PrivacyPolicyScreen';
 import TermsScreen from './src/App/TermsScreen';
 import HelpScreen from './src/App/HelpScreen';
 import EditProfileScreen from './src/App/EditProfileScreen';
+import DoctorsScreen from './src/App/DoctorsScreen';
+import AppointmentsScreen from './src/App/AppointmentsScreen';
+
 
 const Stack = createStackNavigator();
 
@@ -50,6 +53,8 @@ const App = () => {
         <Stack.Screen name="TermsScreen" component={TermsScreen} />
         <Stack.Screen name="HelpScreen" component={HelpScreen} />
         <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
+        <Stack.Screen name="DoctorsScreen" component={DoctorsScreen} />
+        <Stack.Screen name="AppointmentsScreen" component={AppointmentsScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

@@ -620,9 +620,14 @@ const HomeScreen = () => {
         console.error('Erro ao buscar agendamentos:', scheduleError);
         return;
       }
-      // Contar todos os medicamentos do dia
-      const totalMedsCount = (scheduled || []).length;
-      setNotificationCount(totalMedsCount);
+      // Contar apenas os medicamentos que podem ser tomados agora
+      const count = (scheduled || []).filter(item => {
+        if (item.status === 'taken') return false;
+        // scheduled_time is in format 'HH:MM:SS' or 'HH:MM'
+        const scheduledDateTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
+        return scheduledDateTime <= deviceNow;
+      }).length;
+      setNotificationCount(count);
     } catch (error) {
       console.error('Error checking pending medications:', error);
     }
@@ -1783,124 +1788,112 @@ const styles = StyleSheet.create({
   timeGroupContainer: {
     marginBottom: 20,
   },
+  timeHeaderWrapper: {
+    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 5,
+  },
   timeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  timeLineBefore: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginRight: 10,
-  },
-  timeGroupTimeContainer: {
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  currentTimeGroupContainer: {
-    backgroundColor: '#6A8DFD',
-  },
-  timeGroupTime: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2D3142',
+    color: '#333',
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
-  currentTimeGroupTime: {
-    color: '#fff',
-  },
-  currentTimeLine: {
-    backgroundColor: '#6A8DFD',
-    height: 2,
-  },
-  todayMedItem: {
+  medicationCard: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'white',
     borderRadius: 12,
     padding: 15,
     marginBottom: 10,
     borderLeftWidth: 4,
     borderLeftColor: '#6A8DFD',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    elevation: 1,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 1,
+    shadowRadius: 2,
   },
-  todayMedItemInfo: {
+  medicationCardTaken: {
+    borderLeftColor: '#2ecc71',
+    backgroundColor: '#f0fff4',
+  },
+  medicationCardFuture: {
+    borderLeftColor: '#f39c12',
+    backgroundColor: '#fffbf0',
+  },
+  medicationInfo: {
     flex: 1,
     marginRight: 10,
   },
-  todayMedTitle: {
+  medicationTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#2c3e50',
     marginBottom: 4,
   },
-  todayMedDosage: {
+  medicationDosage: {
     fontSize: 14,
     color: '#7f8c8d',
+    marginBottom: 4,
   },
-  medStatusContainer: {
+  statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
   },
-  medFutureText: {
+  statusTextTaken: {
+    fontSize: 12,
+    color: '#2ecc71',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  statusTextPending: {
     fontSize: 12,
     color: '#f39c12',
     marginLeft: 4,
     fontWeight: '500',
   },
-  medTakenText: {
-    fontSize: 12,
-    color: '#2ecc71',
-    fontWeight: '500',
+  medicationActions: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
   },
-  medActionsContainer: {
+  actionButtonsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
   },
-  medButtonsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  takeMedButton: {
+  takeButton: {
     backgroundColor: '#2ecc71',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    minWidth: 100,
+    borderRadius: 20,
+    marginRight: 6,
   },
-  takeMedButtonText: {
+  takeButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    marginRight: 5,
+    marginRight: 4,
+    fontSize: 14,
   },
-  skipMedButton: {
+  skipButton: {
     backgroundColor: '#e74c3c',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    minWidth: 100,
+    borderRadius: 20,
   },
-  skipMedButtonText: {
+  skipButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    marginRight: 5,
+    marginRight: 4,
+    fontSize: 14,
   },
   currentTimeIndicator: {
     flexDirection: 'row',
