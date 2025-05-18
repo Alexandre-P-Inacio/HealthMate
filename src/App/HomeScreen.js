@@ -220,20 +220,8 @@ const HomeScreen = () => {
         return;
       }
 
-      const { data: confirmations, error: confirmError } = await supabase
-        .from('medication_confirmations')
-        .select('pill_id, confirmation_date')
-        .eq('user_id', userId)
-        .eq('confirmation_date', formattedDate)
-        .eq('taken', true);
-
-      if (confirmError) {
-      }
-
       const calendarEvents = data.map(item => {
-        const isTaken = confirmations?.some(conf => 
-          conf.pill_id === item.pill_id && conf.confirmation_date === item.scheduled_date
-        ) || item.status === 'taken' || false;
+        const isTaken = item.status === 'taken' || false;
 
         const timeComponents = item.scheduled_time?.split(':') || ['08', '00', '00'];
         const hours = parseInt(timeComponents[0], 10);
@@ -540,49 +528,12 @@ const HomeScreen = () => {
       Alert.alert('Erro', 'Usuário não identificado. Por favor, faça login novamente.');
       return;
     }
-    
     try {
       setIsLoading(true);
-      
-      // Get the current device date in YYYY-MM-DD format
       const now = new Date();
       const deviceDate = now.toISOString().split('T')[0];
-      
-      console.log('===== INICIANDO BUSCA DE MEDICAMENTOS DO DIA =====');
-      console.log('Data atual do dispositivo:', now);
-      console.log('Data formatada para consulta:', deviceDate);
-      console.log('ID do usuário:', userId);
-      
-      // Busca todos os medicamentos na tabela pills_warning associados ao usuário
-      const { data: pillsData, error: pillsError } = await supabase
-        .from('pills_warning')
-        .select('*')
-        .eq('user_id', userId);
-        
-      if (pillsError) {
-        console.log('Erro ao buscar pills_warning:', pillsError);
-        return;
-      }
-      
-      console.log(`Encontrados ${pillsData?.length || 0} medicamentos na tabela pills_warning`);
-      
-      // Filtrar medicamentos de teste
-      const validPillsData = pillsData?.filter(pill => {
-        // Skip test or invalid medications
-        if (!pill.titulo || 
-            pill.titulo.toLowerCase().includes('test')) {
-          console.log(`Skipping test pill: ${pill.titulo}`);
-          return false;
-        }
-        return true;
-      });
-      
-      // Extrair IDs de todos os medicamentos válidos
-      const pillIds = validPillsData.map(pill => pill.id);
-      console.log(`IDs de medicamentos válidos: ${pillIds.join(', ')}`);
-      
-      // Buscar todos os agendamentos para esses medicamentos
-      const { data: allSchedules, error: allSchedulesError } = await supabase
+      // Busca todos os agendamentos para hoje
+      const { data: scheduleData, error: scheduleError } = await supabase
         .from('medication_schedule_times')
         .select(`
           id,
@@ -602,182 +553,49 @@ const HomeScreen = () => {
           )
         `)
         .eq('user_id', userId)
-        .in('pill_id', pillIds.length > 0 ? pillIds : [0]);
-        
-      if (allSchedulesError) {
-        console.log('Erro ao buscar agendamentos:', allSchedulesError);
+        .eq('scheduled_date', deviceDate);
+      if (scheduleError) {
+        console.log('Erro ao buscar agendamentos:', scheduleError);
         return;
       }
-      
-      console.log(`Encontrados ${allSchedules?.length || 0} agendamentos para medicamentos do usuário`);
-      
-      // Filtrar apenas agendamentos para a data atual do dispositivo
-      const scheduleData = allSchedules?.filter(item => item.scheduled_date === deviceDate);
-      
-      console.log(`Encontrados ${scheduleData?.length || 0} medicamentos agendados para hoje (${deviceDate})`);
-      
-      // Get confirmation records for TODAY ONLY - data do dispositivo exata
-      const { data: confirmations, error: confirmError } = await supabase
-        .from('medication_confirmations')
-        .select('pill_id, confirmation_date, confirmation_time')
-        .eq('user_id', userId)
-        .eq('confirmation_date', deviceDate) // Strict match with device date
-        .eq('taken', true);
-      
-      if (confirmError) {
-        console.log('Erro ao buscar confirmações:', confirmError);
-      }
-      
+      // Agrupar por horário
       const medicationsByTime = {};
-      
-      // Filter valid schedule data (exclude test data and enforce date match)
-      const validScheduleData = scheduleData?.filter(item => {
-        // Skip test or invalid medications
-        if (!item.pills_warning?.titulo || 
-            item.pills_warning?.titulo.toLowerCase().includes('test')) {
-          console.log(`Skipping test medication: ${item.pills_warning?.titulo}`);
-          return false;
+      (scheduleData || []).forEach(item => {
+        const timeKey = item.scheduled_time;
+        if (!medicationsByTime[timeKey]) {
+          medicationsByTime[timeKey] = [];
         }
-        
-        // Double check date matches device date exactly
-        if (item.scheduled_date !== deviceDate) {
-          console.log(`Skipping medication with non-matching date: ${item.scheduled_date} vs ${deviceDate}`);
-          return false;
-        }
-        
-        console.log(`Medicamento válido: ${item.pills_warning?.titulo} para a data: ${item.scheduled_date}`);
-        return true;
-      });
-      
-      // Add medications from schedule for TODAY ONLY
-      if (validScheduleData && validScheduleData.length > 0) {
-        validScheduleData.forEach(item => {
-          const timeKey = item.scheduled_time;
-          if (!medicationsByTime[timeKey]) {
-            medicationsByTime[timeKey] = [];
-          }
-          
-          const medScheduledTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
-          const canTake = medScheduledTime <= now;
-          const isTaken = confirmations?.some(conf => 
-            conf.pill_id === item.pill_id && conf.confirmation_date === deviceDate
-          ) || item.status === 'taken' || false;
-          
-          const confirmation = confirmations?.find(conf => 
-            conf.pill_id === item.pill_id && conf.confirmation_date === deviceDate
-          );
-          
-          medicationsByTime[timeKey].push({
-            id: item.id,
-            pillId: item.pill_id,
-            scheduledTime: item.scheduled_time,
-            scheduledDate: item.scheduled_date,
-            completeDatetime: item.complete_datetime,
-            confirmationTime: confirmation?.confirmation_time || null,
-            dosage: item.dosage,
-            notes: item.notes,
-            title: item.pills_warning?.titulo || 'Medicamento',
-            quantidade: item.pills_warning?.quantidade_comprimidos || 0,
-            dosePorVez: item.pills_warning?.quantidade_comprimidos_por_vez || 0,
-            isTaken: isTaken,
-            canTake: canTake,
-            status: item.status || 'pending'
-          });
+        const medScheduledTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
+        const canTake = medScheduledTime <= now;
+        medicationsByTime[timeKey].push({
+          id: item.id,
+          pillId: item.pill_id,
+          scheduledTime: item.scheduled_time,
+          scheduledDate: item.scheduled_date,
+          completeDatetime: item.complete_datetime,
+          dosage: item.dosage,
+          notes: item.notes,
+          title: item.pills_warning?.titulo || 'Medicamento',
+          quantidade: item.pills_warning?.quantidade_comprimidos || 0,
+          dosePorVez: item.pills_warning?.quantidade_comprimidos_por_vez || 0,
+          isTaken: item.status === 'taken',
+          canTake: canTake,
+          status: item.status || 'pending'
         });
-      }
-      
-      // Também verificar medicamentos da tabela pills_warning que ainda não estão agendados
-      // mas que deveriam ser tomados hoje de acordo com a frequência
-      try {
-        if (validPillsData && validPillsData.length > 0) {
-          validPillsData.forEach(pill => {
-            try {
-              // Check if this pill should be taken today based on frequency and start date
-              const shouldTakeToday = shouldTakePillToday(pill, deviceDate);
-              if (!shouldTakeToday) {
-                console.log(`Pill ${pill.titulo} should not be taken today according to schedule`);
-                return;
-              }
-              
-              // Verify this medication isn't already added from the schedule
-              const alreadyScheduled = Object.values(medicationsByTime).flat().some(
-                med => med.pillId === pill.id
-              );
-              
-              if (!alreadyScheduled) {
-                // Define a default time if none exists
-                let timeKey = pill.horario_fixo ? 
-                  pill.horario_fixo.split(';')[0].trim() : 
-                  '08:00:00';
-                
-                if (!medicationsByTime[timeKey]) {
-                  medicationsByTime[timeKey] = [];
-                }
-                
-                const pillScheduledTime = new Date(`${deviceDate}T${timeKey}`);
-                const canTake = pillScheduledTime <= now;
-                const isTaken = confirmations?.some(conf => 
-                  conf.pill_id === pill.id && conf.confirmation_date === deviceDate
-                );
-                
-                medicationsByTime[timeKey].push({
-                  id: `pill-${pill.id}`,
-                  pillId: pill.id,
-                  scheduledTime: timeKey,
-                  scheduledDate: deviceDate,
-                  title: pill.titulo,
-                  quantidade: pill.quantidade_comprimidos || 0,
-                  dosePorVez: pill.quantidade_comprimidos_por_vez || 1,
-                  dosage: `${pill.quantidade_comprimidos_por_vez || 1} comprimido(s)`,
-                  isTaken: isTaken || false,
-                  canTake: canTake,
-                  status: 'pending'
-                });
-              }
-            } catch (pillError) {
-              console.log(`Erro ao processar medicamento ${pill.titulo}: ${pillError.message}`);
-            }
-          });
-        }
-      } catch (pillsProcessError) {
-        console.log(`Erro ao processar medicamentos: ${pillsProcessError.message}`);
-      }
-      
+      });
       const todayMeds = Object.keys(medicationsByTime).map(timeKey => ({
         time: timeKey,
         medications: medicationsByTime[timeKey]
       }));
-      
-      // Prioritize groups with pending medications 
-      todayMeds.sort((a, b) => {
-        if (a.time < b.time) return -1;
-        if (a.time > b.time) return 1;
-        return 0;
-      });
-      
-      console.log(`Organizados ${todayMeds.length} grupos de medicamentos`);
-      
-      // Display log of medications for debugging
-      todayMeds.forEach((group, i) => {
-        console.log(`Grupo ${i+1}: ${group.time}`);
-        group.medications.forEach((med, j) => {
-          console.log(`- Med ${j+1}: ${med.title} (${med.dosage}) - Data: ${med.scheduledDate}`);
-        });
-      });
-      
-      // Mostrar modal mesmo se não houver medicamentos pendentes
+      todayMeds.sort((a, b) => (a.time < b.time ? -1 : 1));
       setTodayMedications(todayMeds);
-      
       setTimeout(() => {
         if (todayMeds.length > 0) {
-          console.log('Exibindo modal de medicamentos para o dia atual: ', deviceDate);
           setTodayMedicationsModal(true);
         } else {
-          console.log('Não há medicamentos para exibir na data atual: ', deviceDate);
           Alert.alert('Informação', 'Não há medicamentos agendados para hoje.');
         }
       }, 300);
-      
     } catch (error) {
       console.log('Erro não tratado ao buscar medicamentos:', error);
       Alert.alert('Erro', `Não foi possível carregar os medicamentos para hoje: ${error.message}`);
@@ -786,122 +604,27 @@ const HomeScreen = () => {
     }
   };
 
-  // Helper function to determine if a pill should be taken today based on frequency
-  const shouldTakePillToday = (pill, today) => {
+  const checkPendingMedications = async () => {
     try {
-      if (!pill.data_inicio) {
-        console.log(`Medicamento ${pill.titulo} sem data de início, considerando válido`);
-        return true; // If no start date, assume it should be taken
+      const userId = DataUser.getUserData()?.id;
+      if (!userId) return;
+      const deviceNow = new Date();
+      const deviceToday = deviceNow.toISOString().split('T')[0];
+      // Buscar todos os agendamentos para hoje
+      const { data: scheduled, error: scheduleError } = await supabase
+        .from('medication_schedule_times')
+        .select('id, pill_id, scheduled_time, scheduled_date, status')
+        .eq('user_id', userId)
+        .eq('scheduled_date', deviceToday);
+      if (scheduleError) {
+        console.error('Erro ao buscar agendamentos:', scheduleError);
+        return;
       }
-      
-      // Validate date format safely
-      let startDate;
-      try {
-        startDate = new Date(pill.data_inicio);
-        // Check if date is valid
-        if (isNaN(startDate.getTime())) {
-          console.log(`Medicamento ${pill.titulo} com data de início inválida: ${pill.data_inicio}`);
-          return false;
-        }
-      } catch (e) {
-        console.log(`Erro ao processar data de início de ${pill.titulo}: ${e.message}`);
-        return false;
-      }
-      
-      // Get date strings in YYYY-MM-DD format for comparison
-      const startDateStr = startDate.toISOString().split('T')[0];
-      
-      let todayDate;
-      try {
-        todayDate = new Date(today);
-        // Check if date is valid
-        if (isNaN(todayDate.getTime())) {
-          console.log(`Data atual inválida: ${today}`);
-          return false;
-        }
-      } catch (e) {
-        console.log(`Erro ao processar data atual: ${e.message}`);
-        return false;
-      }
-      
-      const todayDateStr = today; // today is already in YYYY-MM-DD format
-      
-      console.log(`Verificando medicamento: ${pill.titulo}, data início: ${startDateStr}, today: ${todayDateStr}`);
-      
-      // If pill hasn't started yet, don't take it
-      if (startDate > todayDate) {
-        console.log(`Medicamento ${pill.titulo} ainda não iniciou`);
-        return false;
-      }
-      
-      // If pill has ended, don't take it
-      if (pill.data_fim) {
-        try {
-          const endDate = new Date(pill.data_fim);
-          
-          // Check if end date is valid
-          if (isNaN(endDate.getTime())) {
-            console.log(`Medicamento ${pill.titulo} com data de fim inválida: ${pill.data_fim}`);
-            return false;
-          }
-          
-          const endDateStr = endDate.toISOString().split('T')[0];
-          if (endDate < todayDate) {
-            console.log(`Medicamento ${pill.titulo} já terminou em ${endDateStr}`);
-            return false;
-          }
-        } catch (e) {
-          console.log(`Erro ao processar data de fim de ${pill.titulo}: ${e.message}`);
-          // If there's an error with the end date, we'll ignore it and continue checking
-        }
-      }
-      
-      // Check frequency
-      if (!pill.recurrence || pill.recurrence === 'daily') {
-        console.log(`Medicamento ${pill.titulo} é diário`);
-        return true;
-      }
-      
-      if (pill.recurrence === 'weekly') {
-        // If no specific days are set, default to today
-        if (!pill.days_of_week || !Array.isArray(pill.days_of_week) || pill.days_of_week.length === 0) {
-          console.log(`Medicamento ${pill.titulo} é semanal sem dias específicos, considerando válido`);
-          return true;
-        }
-        
-        // Check if today's day of week is in the selected days
-        const todayDayOfWeek = todayDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const shouldTake = pill.days_of_week.includes(todayDayOfWeek);
-        console.log(`Medicamento ${pill.titulo} é semanal, dia da semana: ${todayDayOfWeek}, deve tomar: ${shouldTake}`);
-        return shouldTake;
-      }
-      
-      if (pill.recurrence === 'monthly') {
-        // Check if today's day of month matches the start date's day
-        const shouldTake = todayDate.getDate() === startDate.getDate();
-        console.log(`Medicamento ${pill.titulo} é mensal, deve tomar: ${shouldTake}`);
-        return shouldTake;
-      }
-      
-      if (pill.recurrence === 'once') {
-        // For one-time medications, check if it's exactly the scheduled date
-        try {
-          const scheduledDate = pill.schedule_date || pill.data_inicio;
-          const scheduleDay = new Date(scheduledDate).toISOString().split('T')[0];
-          const shouldTake = scheduleDay === todayDateStr;
-          console.log(`Medicamento ${pill.titulo} é de dose única, data programada: ${scheduleDay}, deve tomar: ${shouldTake}`);
-          return shouldTake;
-        } catch (e) {
-          console.log(`Erro ao processar data de dose única de ${pill.titulo}: ${e.message}`);
-          return false;
-        }
-      }
-      
-      console.log(`Medicamento ${pill.titulo} sem regra específica, considerando válido`);
-      return true; // Default to showing the medication
-    } catch (err) {
-      console.warn(`Error checking pill schedule: ${err.message}`);
-      return false; // When in doubt, don't show the medication
+      // Contar todos os medicamentos do dia
+      const totalMedsCount = (scheduled || []).length;
+      setNotificationCount(totalMedsCount);
+    } catch (error) {
+      console.error('Error checking pending medications:', error);
     }
   };
 
@@ -1060,158 +783,6 @@ const HomeScreen = () => {
       checkPendingMedications();
     } catch (error) {
       Alert.alert('Erro', `Ocorreu um erro ao processar sua solicitação: ${error.message}`);
-    }
-  };
-
-  const checkPendingMedications = async () => {
-    try {
-      const userId = DataUser.getUserData()?.id;
-      if (!userId) return;
-
-      // Get current device date and format it
-      const deviceNow = new Date();
-      const deviceToday = deviceNow.toISOString().split('T')[0];
-      
-      console.log(`===== INICIANDO BUSCA DE MEDICAMENTOS DO DIA =====`);
-      console.log(`Data atual do dispositivo: ${deviceNow.toISOString()}`);
-      console.log(`Data formatada para consulta: ${deviceToday}`);
-      console.log(`ID do usuário: ${userId}`);
-      
-      // Busca todos os medicamentos na tabela pills_warning associados ao usuário
-      const { data: pillsData, error: pillsError } = await supabase
-        .from('pills_warning')
-        .select('*')
-        .eq('user_id', userId);
-        
-      if (pillsError) {
-        console.error('Erro ao buscar pills_warning:', pillsError);
-        return;
-      }
-      
-      // Filtrar medicamentos de teste
-      const validPillsData = pillsData?.filter(pill => {
-        // Skip test or invalid medications
-        if (!pill.titulo || 
-            pill.titulo.toLowerCase().includes('test')) {
-          console.log(`Skipping test pill: ${pill.titulo}`);
-          return false;
-        }
-        return true;
-      });
-      
-      // Extrair IDs de todos os medicamentos válidos
-      const pillIds = validPillsData.map(pill => pill.id);
-      
-      // Buscar todos os agendamentos para esses medicamentos
-      const { data: allSchedules, error: allSchedulesError } = await supabase
-        .from('medication_schedule_times')
-        .select('id, pill_id, scheduled_time, scheduled_date')
-        .eq('user_id', userId)
-        .in('pill_id', pillIds.length > 0 ? pillIds : [0]);
-        
-      if (allSchedulesError) {
-        console.error('Error fetching scheduled medications:', allSchedulesError);
-        return;
-      }
-      
-      // Filtrar apenas agendamentos para a data atual do dispositivo
-      const scheduled = allSchedules?.filter(item => item.scheduled_date === deviceToday);
-      
-      console.log(`Encontrados ${scheduled?.length || 0} medicamentos agendados para hoje (${deviceToday})`);
-      
-      // Get all confirmed medications for today
-      const { data: confirmed, error: confirmError } = await supabase
-        .from('medication_confirmations')
-        .select('pill_id, confirmation_date')
-        .eq('confirmation_date', deviceToday) // Strict match with device date
-        .eq('user_id', userId)
-        .eq('taken', true);
-      
-      if (confirmError) {
-        console.error('Error fetching medication confirmations:', confirmError);
-        return;
-      }
-      
-      // Filter out any scheduled medications where the database date doesn't match device date
-      const validScheduled = scheduled?.filter(item => {
-        // Double check that the scheduled date matches today's device date exactly
-        const isMatch = item.scheduled_date === deviceToday;
-        if (!isMatch) {
-          console.log(`Skipping medication with non-matching date: ${item.scheduled_date} vs ${deviceToday}`);
-        }
-        return isMatch;
-      });
-      
-      // Cria lista completa de medicamentos para o dia
-      const allMedsForToday = [];
-      
-      // Adiciona medicamentos do agendamento
-      for (const item of validScheduled || []) {
-        try {
-          allMedsForToday.push({
-            pill_id: item.pill_id,
-            scheduled_time: item.scheduled_time,
-            scheduled_date: item.scheduled_date,
-            isTaken: confirmed?.some(conf => 
-              conf.pill_id === item.pill_id && 
-              conf.confirmation_date === deviceToday
-            ) || false
-          });
-        } catch (err) {
-          console.log(`Erro ao processar agendamento: ${err.message}`);
-        }
-      }
-      
-      // Também verificar medicamentos que devem ser tomados hoje conforme a frequência
-      for (const pill of validPillsData || []) {
-        try {
-          const shouldTakeToday = shouldTakePillToday(pill, deviceToday);
-          if (!shouldTakeToday) continue;
-          
-          // Verificar se este medicamento já não está incluído nos agendamentos
-          const alreadyScheduled = validScheduled?.some(schedule => schedule.pill_id === pill.id);
-          if (alreadyScheduled) continue;
-          
-          // Verificar se já foi tomado hoje
-          const isTaken = confirmed?.some(conf => 
-            conf.pill_id === pill.id && 
-            conf.confirmation_date === deviceToday
-          );
-          
-          // Definir horário padrão se não existir
-          let timeKey = pill.horario_fixo ? 
-            pill.horario_fixo.split(';')[0].trim() : 
-            '08:00:00';
-            
-          try {
-            allMedsForToday.push({
-              pill_id: pill.id,
-              scheduled_time: timeKey,
-              scheduled_date: deviceToday,
-              isTaken: isTaken || false
-            });
-          } catch (timeErr) {
-            console.log(`Erro ao processar horário para ${pill.titulo}: ${timeErr.message}`);
-          }
-        } catch (pillErr) {
-          console.log(`Erro ao processar medicamento ${pill.titulo}: ${pillErr.message}`);
-        }
-      }
-      
-      // Contar todos os medicamentos do dia
-      const totalMedsCount = allMedsForToday.length;
-      
-      // Contar os medicamentos pendentes (não tomados)
-      const pendingCount = allMedsForToday.filter(med => !med.isTaken).length;
-      
-      console.log(`Total de ${totalMedsCount} medicamentos para o dia: ${deviceToday}`);
-      console.log(`- ${pendingCount} pendentes (não tomados)`);
-      console.log(`- ${totalMedsCount - pendingCount} tomados`);
-      
-      // Mostrar notificação para todos os medicamentos do dia, independente de terem sido tomados
-      setNotificationCount(totalMedsCount);
-    } catch (error) {
-      console.error('Error checking pending medications:', error);
     }
   };
 

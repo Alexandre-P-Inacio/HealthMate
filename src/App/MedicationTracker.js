@@ -56,100 +56,18 @@ const MedicationTracker = ({ navigation }) => {
   const fetchPendingMedications = async () => {
     try {
       setLoading(true);
-      
       // Obter a data de hoje
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
-      
-      // Buscar medicamentos no banco de dados
+      // Buscar medicamentos agendados pendentes
       const { data: medications, error } = await supabase
-        .from('pills_warning')
-        .select('*');
-        
+        .from('medication_schedule_times')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('scheduled_date', todayStr)
+        .eq('status', 'pending');
       if (error) throw error;
-      
-      if (medications) {
-        // Buscar eventos de confirmação já registrados hoje
-        const { data: confirmations, error: confirmError } = await supabase
-          .from('medication_confirmations')
-          .select('*')
-          .eq('confirmation_date', todayStr);
-          
-        if (confirmError) throw confirmError;
-        
-        // Filtrar medicamentos para hoje que ainda não foram confirmados
-        const pending = [];
-        
-        for (const med of medications) {
-          // Verificar se é um medicamento ativo
-          if (med.status !== 'active' && med.status !== 'calendar_added') continue;
-          
-          // Obter horários programados para hoje
-          const scheduledTimes = [];
-          
-          if (med.horario_fixo && med.horario_fixo !== 'NULL') {
-            // Para horários fixos
-            scheduledTimes.push(...med.horario_fixo.split(';').map(time => time.trim()));
-          } else if (med.data_inicio && med.intervalo_horas) {
-            // Para intervalos de horas
-            let startTime;
-            if (med.data_inicio.includes(';')) {
-              const [dateStr, timeStr] = med.data_inicio.split(';');
-              startTime = new Date(`${todayStr}T${timeStr.trim()}`);
-            } else {
-              startTime = new Date(`${todayStr}T00:00:00`);
-            }
-            
-            // Adicionar intervalos ao longo do dia
-            const intervalHours = parseInt(med.intervalo_horas);
-            if (!isNaN(intervalHours) && intervalHours > 0) {
-              let currentTime = new Date(startTime);
-              while (currentTime.getDate() === today.getDate()) {
-                scheduledTimes.push(
-                  currentTime.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
-                );
-                currentTime = new Date(currentTime.getTime() + intervalHours * 60 * 60 * 1000);
-              }
-            }
-          }
-          
-          // Para cada horário programado, verificar se já foi confirmado
-          for (const time of scheduledTimes) {
-            // Criar um objeto de data/hora para este horário
-            const [hours, minutes] = time.split(':').map(num => parseInt(num, 10));
-            const scheduledDateTime = new Date(today);
-            scheduledDateTime.setHours(hours, minutes, 0, 0);
-            
-            // Verificar se já passou do horário
-            const isPast = scheduledDateTime <= new Date();
-            
-            // Verificar se já foi confirmado
-            const isConfirmed = confirmations?.some(conf => 
-              conf.pill_id === med.id && 
-              conf.scheduled_time === time
-            );
-            
-            if (!isConfirmed) {
-              pending.push({
-                id: `${med.id}-${time}`,
-                medicationId: med.id,
-                title: med.titulo,
-                scheduledTime: time,
-                scheduledDateTime,
-                isPast,
-                dosage: med.quantidade_comprimidos_por_vez,
-              });
-            }
-          }
-        }
-        
-        // Ordenar por horário
-        pending.sort((a, b) => a.scheduledDateTime - b.scheduledDateTime);
-        setPendingMedications(pending);
-        
-        // Programar notificações para os próximos medicamentos
-        scheduleMedicationNotifications(pending);
-      }
+      setPendingMedications(medications || []);
     } catch (error) {
       console.error('Erro ao buscar medicamentos:', error);
       Alert.alert('Erro', 'Não foi possível carregar seus medicamentos.');
@@ -212,33 +130,15 @@ const MedicationTracker = ({ navigation }) => {
   // Confirmar que tomou o medicamento
   const confirmMedicationTaken = async (medication, taken) => {
     try {
-      // Obter a data de hoje
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      
-      // Registrar no banco de dados
-      const { error } = await supabase.from('medication_confirmations').insert({
-        pill_id: medication.medicationId,
-        scheduled_time: medication.scheduledTime,
-        confirmation_date: todayStr,
-        confirmation_time: new Date().toISOString(),
-        taken: taken,
+      // Atualizar status na tabela medication_schedule_times
+      const { error } = await supabase.from('medication_schedule_times').update({
+        status: taken ? 'taken' : 'missed',
+        complete_datetime: new Date().toISOString(),
         notes: taken ? 'Medicamento tomado' : 'Medicamento não tomado'
-      });
-      
+      }).eq('id', medication.id);
       if (error) throw error;
-      
-      // Atualizar a lista de medicamentos pendentes
-      setPendingMedications(prev => 
-        prev.filter(med => med.id !== medication.id)
-      );
-      
-      // Mostrar mensagem de sucesso
-      Alert.alert(
-        'Confirmado',
-        taken ? 'Medicamento marcado como tomado!' : 'Medicamento marcado como não tomado.'
-      );
-      
+      setPendingMedications(prev => prev.filter(med => med.id !== medication.id));
+      Alert.alert('Confirmado', taken ? 'Medicamento marcado como tomado!' : 'Medicamento marcado como não tomado.');
     } catch (error) {
       console.error('Erro ao confirmar medicamento:', error);
       Alert.alert('Erro', 'Não foi possível registrar sua confirmação.');

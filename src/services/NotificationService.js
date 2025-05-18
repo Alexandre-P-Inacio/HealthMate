@@ -72,7 +72,7 @@ class NotificationService {
   }
   
   // Registrar que o usuário tomou ou perdeu uma medicação
-  static async recordMedicationResponse(medicationId, taken) {
+  static async recordMedicationResponse(scheduleId, taken) {
     try {
       const userData = DataUser.getUserData();
       if (!userData?.id) {
@@ -80,21 +80,17 @@ class NotificationService {
       }
       
       const now = new Date();
-      
-      // Registrar na tabela medication_confirmations
+      // Atualizar o status na tabela medication_schedule_times
       const { error } = await supabase
-        .from('medication_confirmations')
-        .insert({
-          pill_id: medicationId,
-          user_id: userData.id,
-          taken: taken,
-          confirmation_date: now.toISOString().split('T')[0],
-          confirmation_time: now.toISOString(),
+        .from('medication_schedule_times')
+        .update({
+          status: taken ? 'taken' : 'missed',
+          complete_datetime: now.toISOString(),
           notes: taken ? 'Medication taken' : 'Medication not taken'
-        });
-      
+        })
+        .eq('id', scheduleId)
+        .eq('user_id', userData.id);
       if (error) throw error;
-      
       return true;
     } catch (error) {
       console.error('Error recording medication response:', error);

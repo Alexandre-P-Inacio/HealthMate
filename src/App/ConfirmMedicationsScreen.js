@@ -138,21 +138,22 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
         console.log('User ID not available, skipping fetch');
         return;
       }
-      
-      // Get pending confirmations
+
+      // Get pending medications from medication_schedule_times
       const { data, error } = await supabase
-        .from('medication_confirmations')
+        .from('medication_schedule_times')
         .select(`
           id,
           pill_id,
           scheduled_time,
-          taken,
+          scheduled_date,
+          status,
           notes,
-          pills_warning!inner (id, nome_medicamento, dosage)
+          pills_warning: pill_id (nome_medicamento, dosage)
         `)
         .eq('user_id', userId)
-        .is('confirmation_time', null);
-      
+        .eq('status', 'pending');
+
       if (error) throw error;
 
       if (!data) {
@@ -161,12 +162,15 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
       }
 
       // Format the data for display
-      const formattedMedications = data.map(confirmation => ({
-        id: confirmation.id,
-        pill_id: confirmation.pill_id,
-        scheduled_time: confirmation.scheduled_time,
-        nome_medicamento: confirmation.pills_warning?.nome_medicamento || 'Unknown',
-        dosage: confirmation.pills_warning?.dosage || 'Standard dose'
+      const formattedMedications = data.map(item => ({
+        id: item.id,
+        pill_id: item.pill_id,
+        scheduled_time: item.scheduled_time,
+        scheduled_date: item.scheduled_date,
+        nome_medicamento: item.pills_warning?.nome_medicamento || 'Unknown',
+        dosage: item.pills_warning?.dosage || 'Standard dose',
+        status: item.status,
+        notes: item.notes
       }));
 
       setMedications(formattedMedications);
@@ -176,49 +180,26 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
     }
   };
 
-  const handleConfirmation = async (id, taken) => {
+  const handleConfirmation = async (scheduleId, taken) => {
     try {
       if (!userId) {
         Alert.alert('Error', 'User ID not found. Please try again.');
         return;
       }
 
-      // Current timestamp for the confirmation
+      // Update the status in medication_schedule_times
       const now = new Date();
-      const confirmationDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
-      const confirmationTime = now.toISOString(); // Full ISO timestamp
-
-      // Update the confirmation record
       const { error } = await supabase
-        .from('medication_confirmations')
-        .update({ 
-          confirmation_date: confirmationDate,
-          confirmation_time: confirmationTime,
-          taken: taken,
+        .from('medication_schedule_times')
+        .update({
+          status: taken ? 'taken' : 'missed',
+          complete_datetime: now.toISOString(),
           notes: taken ? 'Medication taken' : 'Medication not taken'
         })
-        .eq('id', id);
+        .eq('id', scheduleId)
+        .eq('user_id', userId);
 
       if (error) throw error;
-
-      // Also update the status in pills_warning table if needed
-      const { data: confirmation, error: getError } = await supabase
-        .from('medication_confirmations')
-        .select('pill_id')
-        .eq('id', id)
-        .single();
-        
-      if (!getError && confirmation) {
-        await supabase
-          .from('pills_warning')
-          .update({ 
-            status: taken ? 'taken' : 'missed',
-            confirmation_date: confirmationDate,
-            confirmation_time: confirmationTime,
-            taken: taken
-          })
-          .eq('id', confirmation.pill_id);
-      }
 
       Alert.alert('Success', 'Medication status updated.');
       fetchMedications(); // Refresh the list

@@ -203,138 +203,31 @@ const MedicalDiaryScreen = ({ navigation }) => {
     }
   };
 
-  // Improved function to fetch confirmed medications from Supabase
+  // Fetch confirmed medications from medication_schedule_times
   const fetchConfirmedMedications = async (date) => {
     try {
       setLoadingMedications(true);
-      
-      // Try to get user ID if not already set
       let currentUserId = userId;
       if (!currentUserId) {
         const userData = DataUser.getUserData();
         if (userData && userData.id) {
           currentUserId = userData.id;
-          setUserId(userData.id); // Update the state for future use
+          setUserId(userData.id);
         }
       }
-      
       if (!currentUserId) {
         setLoadingMedications(false);
         return;
       }
-
-      // Format date to ISO string (YYYY-MM-DD)
       const formattedDate = date.toISOString().split('T')[0];
-      
-      
-      // Modified query to fix relationship error - separating the queries
-      const { data: confirmations, error: confirmError } = await supabase
-        .from('medication_confirmations')
+      const { data, error } = await supabase
+        .from('medication_schedule_times')
         .select('*')
-        .eq('confirmation_date', formattedDate)
         .eq('user_id', currentUserId)
-        .not('confirmation_time', 'is', null);
-      
-      if (confirmError) {
-        console.error('Error fetching from medication_confirmations:', confirmError);
-        
-        // Fallback to pills_warning table (old approach)
-        const { data: oldData, error } = await supabase
-          .from('pills_warning')
-          .select('*')
-          .eq('user_id', currentUserId)
-          .eq('status', 'in', ['taken', 'missed']);
-        
-        if (error) throw error;
-        
-        // Filter those matching the selected date - handling potential missing confirmation_date
-        const filteredData = oldData?.filter(med => {
-          try {
-            // Check if status date matches
-            if (med.data_status_update) {
-              const medDate = med.data_status_update.split('T')[0];
-              return medDate === formattedDate;
-            }
-            return false;
-          } catch (err) {
-            console.warn(`Error filtering medication date: ${err.message}`);
-            return false;
-          }
-        }) || [];
-        
-        // Map to the expected format
-        const processedOldData = filteredData.map(med => ({
-          id: med.id,
-          pill_id: med.id,
-          nome_medicamento: med.titulo || 'Unknown Medication',
-          dosage: med.quantidade_comprimidos_por_vez || 'Standard dose',
-          status: med.status,
-          confirmation_date: med.data_status_update ? med.data_status_update.split('T')[0] : formattedDate,
-          confirmation_time: med.data_status_update || null,
-          notes: med.notes || ''
-        }));
-        
-        setConfirmedMedications(processedOldData);
-      } else {
-        // We need to fetch medication details separately to avoid the relationship error
-        const processedData = [];
-        
-        if (confirmations && confirmations.length > 0) {
-          // Get all pill_ids from confirmations
-          const medIds = confirmations.map(conf => conf.pill_id);
-          
-          // Fetch medication details
-          const { data: medicationsData, error: medError } = await supabase
-            .from('pills_warning')
-            .select('id, titulo, quantidade_comprimidos_por_vez')
-            .in('id', medIds);
-          
-          if (!medError && medicationsData) {
-            // Create a map for quick lookup
-            const medMap = {};
-            medicationsData.forEach(med => {
-              medMap[med.id] = med;
-            });
-            
-            // Process confirmations with medication details
-            for (const item of confirmations) {
-              const med = medMap[item.pill_id];
-              processedData.push({
-                id: item.id,
-                pill_id: item.pill_id,
-                nome_medicamento: med?.titulo || 'Unknown Medication',
-                dosage: med?.quantidade_comprimidos_por_vez || 'Standard dose',
-                scheduled_time: item.scheduled_time,
-                confirmation_date: item.confirmation_date,
-                confirmation_time: item.confirmation_time,
-                taken: item.taken,
-                notes: item.notes,
-                // Ensure backward compatibility
-                status: item.taken ? 'taken' : 'missed'
-              });
-            }
-          } else {
-            console.error('Error fetching medication details:', medError);
-            // Still use the confirmations data without medication details
-            for (const item of confirmations) {
-              processedData.push({
-                id: item.id,
-                pill_id: item.pill_id,
-                nome_medicamento: 'Unknown Medication',
-                dosage: 'Standard dose',
-                scheduled_time: item.scheduled_time,
-                confirmation_date: item.confirmation_date,
-                confirmation_time: item.confirmation_time,
-                taken: item.taken,
-                notes: item.notes,
-                status: item.taken ? 'taken' : 'missed'
-              });
-            }
-          }
-        }
-        
-        setConfirmedMedications(processedData);
-      }
+        .eq('scheduled_date', formattedDate)
+        .not('status', 'eq', 'pending');
+      if (error) throw error;
+      setConfirmedMedications(data || []);
     } catch (error) {
       console.error('Error fetching confirmed medications:', error);
       Alert.alert('Error', 'Failed to load confirmed medications');
@@ -344,101 +237,31 @@ const MedicalDiaryScreen = ({ navigation }) => {
     }
   };
 
+  // Fetch pending medications from medication_schedule_times
   const fetchPendingMedications = async (date) => {
     try {
       setLoadingPendingMedications(true);
-      
-      // Try to get user ID if not already set
       let currentUserId = userId;
       if (!currentUserId) {
         const userData = DataUser.getUserData();
         if (userData && userData.id) {
           currentUserId = userData.id;
-          setUserId(userData.id); // Update the state for future use
+          setUserId(userData.id);
         }
       }
-      
       if (!currentUserId) {
         setLoadingPendingMedications(false);
         return;
       }
-
-      // Format date to ISO string (YYYY-MM-DD)
       const formattedDate = date.toISOString().split('T')[0];
-      
-      // Get all scheduled medications for the date, including skipped ones
-      const { data: scheduledData, error: scheduledError } = await supabase
+      const { data, error } = await supabase
         .from('medication_schedule_times')
-        .select(`
-          id,
-          pill_id,
-          scheduled_date,
-          scheduled_time,
-          dosage,
-          notes,
-          status,
-          user_id,
-          pills_warning (
-            id,
-            titulo,
-            quantidade_comprimidos,
-            quantidade_comprimidos_por_vez
-          )
-        `)
+        .select('*')
+        .eq('user_id', currentUserId)
         .eq('scheduled_date', formattedDate)
-        .eq('user_id', currentUserId);
-        
-      if (scheduledError) {
-        console.error('Error fetching scheduled medications:', scheduledError);
-        setLoadingPendingMedications(false);
-        return;
-      }
-      
-      // Process scheduled medications
-      const processedData = [];
-      
-      // Process all medications (pending, skipped, etc.)
-      if (scheduledData && scheduledData.length > 0) {
-        // Get all already processed medications (confirmed or taken)
-        const { data: allConfirmations, error: confError } = await supabase
-          .from('medication_confirmations')
-          .select('pill_id')
-          .eq('confirmation_date', formattedDate)
-          .eq('user_id', currentUserId)
-          .eq('taken', true); // Only exclude medications that are confirmed as taken
-        
-        if (confError) {
-          console.error('Error fetching all confirmations:', confError);
-        }
-        
-        // Get all pill IDs that are already taken
-        const takenPillIds = allConfirmations?.map(conf => conf.pill_id) || [];
-        
-        // Process all medications that either have status='skipped' or aren't taken yet
-        for (const item of scheduledData) {
-          // Skip medications that are already marked as taken
-          if (takenPillIds.includes(item.pill_id)) {
-            continue;
-          }
-          
-          if (item.pills_warning) {
-            processedData.push({
-              id: item.id,
-              pill_id: item.pill_id,
-              nome_medicamento: item.pills_warning?.titulo || 'Unknown Medication',
-              dosage: item.dosage || item.pills_warning?.quantidade_comprimidos_por_vez || 'Standard dose',
-              scheduled_time: item.scheduled_time,
-              scheduled_date: item.scheduled_date,
-              taken: false,
-              skipped: item.status === 'skipped',
-              status: item.status || 'pending', // Use the status from the database or default to 'pending'
-              notes: item.notes
-            });
-          }
-        }
-      }
-      
-      setPendingMedications(processedData);
+        .eq('status', 'pending');
+      if (error) throw error;
+      setPendingMedications(data || []);
     } catch (error) {
       console.error('Error fetching pending medications:', error);
       Alert.alert('Error', 'Failed to load pending medications');

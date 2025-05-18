@@ -162,7 +162,7 @@ class MedicationService {
       for (const scheduledTime of scheduledTimes) {
         // Verificar se já existe um registro
         const { data: existing, error: checkError } = await supabase
-          .from('medication_confirmations')
+          .from('medication_schedule_times')
           .select('id')
           .eq('scheduled_time', scheduledTime)
           .maybeSingle();
@@ -184,7 +184,7 @@ class MedicationService {
           };
           
           const { data, error } = await supabase
-            .from('medication_confirmations')
+            .from('medication_schedule_times')
             .insert(confirmationData)
             .select('id');
           
@@ -198,7 +198,7 @@ class MedicationService {
         }
       }
       
-      console.log(`Salvos ${results.length} registros na tabela medication_confirmations`);
+      console.log(`Salvos ${results.length} registros na tabela medication_schedule_times`);
       return { data: results };
     } catch (error) {
       console.error('Erro ao calcular e salvar horários de medicação:', error);
@@ -303,12 +303,12 @@ class MedicationService {
     try {
       // Marcar confirmações existentes como canceladas em vez de deletar
       const { error } = await supabase
-        .from('medication_confirmations')
+        .from('medication_schedule_times')
         .update({ 
           notes: 'Cancelado - medicamento atualizado',
           taken: false
         })
-        .is('confirmation_time', null);
+        .is('scheduled_time', null);
       
       if (error) {
         console.error('Erro ao cancelar horários antigos:', error);
@@ -419,48 +419,6 @@ class MedicationService {
     }
   }
 
-  // Confirmar tomada de medicamento
-  static async confirmMedication(medicationId, taken = true) {
-    try {
-      const userData = DataUser.getUserData();
-      
-      if (!userData?.id) {
-        throw new Error('User ID not found');
-      }
-
-      const now = new Date();
-      
-      const { error } = await supabase
-        .from('medication_confirmations')
-        .insert({
-          uuid_user_id: userData.id,
-          taken: taken,
-          confirmation_date: now.toISOString().split('T')[0],
-          confirmation_time: now.toISOString(),
-          notes: taken ? 'Medication taken' : 'Medication not taken'
-        });
-
-      if (error) throw error;
-      
-      // Atualizar também a tabela pills_warning para compatibilidade
-      if (taken) {
-        await supabase
-          .from('pills_warning')
-          .update({ 
-            status: 'taken',
-            last_taken: now.toISOString(),
-            uuid_user_id: userData.id
-          })
-          .eq('id', medicationId);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error confirming medication:', error);
-      throw error;
-    }
-  }
-
   // Verificar se um medicamento já foi confirmado
   static async checkMedicationConfirmation(medicationId, date) {
     try {
@@ -473,10 +431,10 @@ class MedicationService {
       const formattedDate = date || new Date().toISOString().split('T')[0];
       
       const { data, error } = await supabase
-        .from('medication_confirmations')
+        .from('medication_schedule_times')
         .select('*')
         .eq('uuid_user_id', userData.id)
-        .eq('confirmation_date', formattedDate)
+        .eq('scheduled_date', formattedDate)
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 é o erro quando não encontra resultados
@@ -508,7 +466,7 @@ class MedicationService {
       };
       
       const { data, error } = await supabase
-        .from('medication_confirmations')
+        .from('medication_schedule_times')
         .insert(newConfirmation)
         .select('id');
       
@@ -539,7 +497,7 @@ class MedicationService {
         return { error: medicationError };
       }
       
-      // Then create entry in medication_confirmations
+      // Then create entry in medication_schedule_times
       const confirmationData = {
         scheduled_time: medicationData.scheduled_time,
         user_id: medicationData.user_id,
@@ -551,7 +509,7 @@ class MedicationService {
       
       // Check if entry already exists
       const { data: existing, error: checkError } = await supabase
-        .from('medication_confirmations')
+        .from('medication_schedule_times')
         .select('id')
         .eq('scheduled_time', medicationData.scheduled_time)
         .maybeSingle();
@@ -564,7 +522,7 @@ class MedicationService {
       // If entry doesn't exist, create it
       if (!existing) {
         const { data, error } = await supabase
-          .from('medication_confirmations')
+          .from('medication_schedule_times')
           .insert(confirmationData)
           .select('id');
         
