@@ -358,9 +358,9 @@ const AccountScreen = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('AppointmentsScreen')}>
               <View style={styles.actionIcon}>
-                <FontAwesome name="calendar" size={20} color="#3498db" />
+                <FontAwesome name="info-circle" size={20} color="#3498db" />
               </View>
-              <Text style={styles.actionText}>Consultas</Text>
+              <Text style={styles.actionText}>Informação</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.actionButton}

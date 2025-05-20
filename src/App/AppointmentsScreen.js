@@ -1,142 +1,405 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
-import supabase from '../../supabase';
-import DataUser from '../../navigation/DataUser';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Modal, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 const AppointmentsScreen = () => {
-  const [role, setRole] = useState('');
-  const [appointments, setAppointments] = useState([]);
+  const navigation = useNavigation();
+  const [datasets, setDatasets] = useState([]);
+  const [selectedDataset, setSelectedDataset] = useState(null);
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newAppointment, setNewAppointment] = useState({ patientId: '', date: '', time: '', reason: '' });
+  const [error, setError] = useState(null);
+  const [showDatasetModal, setShowDatasetModal] = useState(false);
 
   useEffect(() => {
-    const fetchRoleAndAppointments = async () => {
-      setLoading(true);
-      const userId = DataUser.getUserData()?.id;
-      if (!userId) return;
-      // Fetch user role
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', userId)
-        .single();
-      if (userError) {
-        Alert.alert('Error', 'Could not fetch user role');
-        setLoading(false);
-        return;
-      }
-      setRole(userData.role);
-      if (userData.role === 'doctor') {
-        // Fetch appointments for this doctor
-        const { data: appts, error: apptError } = await supabase
-          .from('appointments')
-          .select('id, patient_id, date, time, reason, users(fullname)')
-          .eq('doctor_id', userId)
-          .order('date', { ascending: true });
-        setAppointments(appts || []);
-      } else {
-        // Fetch appointments for this patient
-        const { data: appts, error: apptError } = await supabase
-          .from('appointments')
-          .select('id, doctor_id, date, time, reason, users(fullname)')
-          .eq('patient_id', userId)
-          .order('date', { ascending: true });
-        setAppointments(appts || []);
-      }
-      setLoading(false);
-    };
-    fetchRoleAndAppointments();
+    fetchDatasets();
   }, []);
 
-  const handleAddAppointment = async () => {
-    const userId = DataUser.getUserData()?.id;
-    if (!newAppointment.patientId || !newAppointment.date || !newAppointment.time) {
-      Alert.alert('Error', 'Fill all fields');
-      return;
-    }
-    const { error } = await supabase
-      .from('appointments')
-      .insert({
-        doctor_id: userId,
-        patient_id: newAppointment.patientId,
-        date: newAppointment.date,
-        time: newAppointment.time,
-        reason: newAppointment.reason
-      });
-    if (error) {
-      Alert.alert('Error', 'Could not add appointment');
-    } else {
-      Alert.alert('Success', 'Appointment added');
-      setNewAppointment({ patientId: '', date: '', time: '', reason: '' });
+  const fetchDatasets = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('https://transparencia.sns.gov.pt/api/explore/v2.1/catalog/datasets?limit=30');
+      const data = await response.json();
+      
+      if (!data.results || data.results.length === 0) {
+        throw new Error('Nenhum dataset encontrado.');
+      }
+      
+      setDatasets(data.results);
+      if (data.results.length > 0) {
+        setSelectedDataset(data.results[0]);
+        fetchRecords(data.results[0].dataset_id);
+      }
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) return <View style={styles.center}><Text>Loading...</Text></View>;
+  const fetchRecords = async (datasetId) => {
+    try {
+      setLoading(true);
+      const url = `https://transparencia.sns.gov.pt/api/explore/v2.1/catalog/datasets/${datasetId}/records?limit=10`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (!data.results || data.results.length === 0) {
+        throw new Error('Sem registos disponíveis neste dataset.');
+      }
+
+      setRecords(data.results);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCell = (cell) => {
+    if (cell === null || cell === undefined) return '';
+    if (typeof cell === 'object') return JSON.stringify(cell);
+    return cell;
+  };
+
+  const handleDatasetSelect = (dataset) => {
+    setSelectedDataset(dataset);
+    setShowDatasetModal(false);
+    fetchRecords(dataset.dataset_id);
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Appointments</Text>
-      <FlatList
-        data={appointments}
-        keyExtractor={item => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.name}>{item.users?.fullname || 'Unknown'}</Text>
-            <Text style={styles.detail}>Date: {item.date} Time: {item.time}</Text>
-            <Text style={styles.detail}>Reason: {item.reason}</Text>
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.empty}>No appointments found.</Text>}
-      />
-      {role === 'doctor' && (
-        <View style={styles.addBox}>
-          <Text style={styles.addTitle}>Add Appointment</Text>
-          <TextInput
-            style={styles.input}
-            value={newAppointment.patientId}
-            onChangeText={t => setNewAppointment({ ...newAppointment, patientId: t })}
-            placeholder="Patient ID"
-          />
-          <TextInput
-            style={styles.input}
-            value={newAppointment.date}
-            onChangeText={t => setNewAppointment({ ...newAppointment, date: t })}
-            placeholder="Date (YYYY-MM-DD)"
-          />
-          <TextInput
-            style={styles.input}
-            value={newAppointment.time}
-            onChangeText={t => setNewAppointment({ ...newAppointment, time: t })}
-            placeholder="Time (HH:MM)"
-          />
-          <TextInput
-            style={styles.input}
-            value={newAppointment.reason}
-            onChangeText={t => setNewAppointment({ ...newAppointment, reason: t })}
-            placeholder="Reason"
-          />
-          <TouchableOpacity style={styles.addButton} onPress={handleAddAppointment}>
-            <Text style={styles.addButtonText}>Add</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Datasets Públicos do SNS</Text>
+          <TouchableOpacity 
+            style={styles.datasetButton}
+            onPress={() => setShowDatasetModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="list" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
-      )}
-    </View>
+
+        <View style={styles.content}>
+          {loading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color="#6A8DFD" />
+              <Text style={styles.loadingText}>A carregar dados...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.center}>
+              <Ionicons name="alert-circle" size={48} color="#e74c3c" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : (
+            <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+              {records.length > 0 && (
+                <View style={styles.tableCard}>
+                  <View style={styles.datasetHeader}>
+                    <Text style={styles.datasetTitle}>
+                      {selectedDataset?.metas?.default?.title || selectedDataset?.dataset_id}
+                    </Text>
+                    <Text style={styles.datasetSubtitle}>
+                      {records.length} registos encontrados
+                    </Text>
+                  </View>
+                  <View style={styles.tableWrapper}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View>
+                        <View style={styles.tableHeaderRow}>
+                          {Object.keys(records[0]).map((field, index) => (
+                            <View key={index} style={styles.headerCell}>
+                              <Text style={styles.headerCellText} numberOfLines={1} ellipsizeMode="tail">{field}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        <ScrollView style={styles.tableBody}>
+                          {records.map((row, rowIndex) => (
+                            <View key={rowIndex} style={[
+                              styles.tableRow,
+                              rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow
+                            ]}>
+                              {Object.keys(records[0]).map((field, colIndex) => (
+                                <View key={colIndex} style={styles.cell}>
+                                  <Text style={styles.cellText} numberOfLines={2} ellipsizeMode="tail">
+                                    {formatCell(row[field])}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    </ScrollView>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          )}
+        </View>
+
+        <Modal
+          visible={showDatasetModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowDatasetModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Selecionar Dataset</Text>
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => setShowDatasetModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={24} color="#6A8DFD" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.datasetList}>
+                {datasets.map((dataset, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.datasetItem,
+                      selectedDataset?.dataset_id === dataset.dataset_id && styles.selectedDataset
+                    ]}
+                    onPress={() => handleDatasetSelect(dataset)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.datasetItemText} numberOfLines={2} ellipsizeMode="tail">
+                      {dataset.metas?.default?.title || dataset.dataset_id}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
-  card: { backgroundColor: '#f0f9ff', padding: 16, borderRadius: 10, marginBottom: 12 },
-  name: { fontSize: 18, fontWeight: 'bold' },
-  detail: { fontSize: 14, color: '#555' },
-  empty: { textAlign: 'center', color: '#aaa', marginTop: 40 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  addBox: { backgroundColor: '#f8f8f8', padding: 16, borderRadius: 10, marginTop: 20 },
-  addTitle: { fontWeight: 'bold', marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#ddd', padding: 8, marginBottom: 10 },
-  addButton: { backgroundColor: '#3498db', borderRadius: 8, padding: 12, alignItems: 'center' },
-  addButtonText: { color: '#fff', fontWeight: 'bold' },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#6A8DFD',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F6FA',
+  },
+  header: {
+    backgroundColor: '#6A8DFD',
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  datasetButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  contentContainer: {
+    paddingBottom: 20,
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6A8DFD',
+    fontWeight: '600',
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#e74c3c',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  tableCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 12,
+    marginBottom: 15,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  datasetHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECF4',
+  },
+  datasetTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2D3142',
+    marginBottom: 4,
+  },
+  datasetSubtitle: {
+    fontSize: 14,
+    color: '#6A8DFD',
+  },
+  tableWrapper: {
+    maxHeight: 600,
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: '#6A8DFD',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E8ECF4',
+    minHeight: 44,
+  },
+  headerCell: {
+    minWidth: 150,
+    maxWidth: 250,
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#E8ECF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCellText: {
+    fontWeight: '700',
+    color: '#FFF',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  tableBody: {
+    maxHeight: 540,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECF4',
+    minHeight: 50,
+    alignItems: 'center',
+  },
+  evenRow: {
+    backgroundColor: '#FFF',
+  },
+  oddRow: {
+    backgroundColor: '#F5F7FF',
+  },
+  cell: {
+    minWidth: 150,
+    maxWidth: 250,
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#E8ECF4',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  cellText: {
+    color: '#2D3142',
+    fontSize: 13,
+    textAlign: 'left',
+    lineHeight: 18,
+    flexWrap: 'wrap',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    width: '90%',
+    maxHeight: '80%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECF4',
+    backgroundColor: '#F5F7FF',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D3142',
+  },
+  closeButton: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  datasetList: {
+    padding: 16,
+  },
+  datasetItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECF4',
+    borderRadius: 8,
+  },
+  selectedDataset: {
+    backgroundColor: '#F5F7FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#6A8DFD',
+  },
+  datasetItemText: {
+    fontSize: 16,
+    color: '#2D3142',
+  },
 });
 
 export default AppointmentsScreen; 

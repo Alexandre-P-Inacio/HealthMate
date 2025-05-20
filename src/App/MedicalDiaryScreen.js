@@ -226,7 +226,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
         .eq('user_id', currentUserId)
         .eq('scheduled_date', formattedDate)
         .not('status', 'eq', 'pending');
-      if (error) throw error;
+        if (error) throw error;
       setConfirmedMedications(data || []);
     } catch (error) {
       console.error('Error fetching confirmed medications:', error);
@@ -257,7 +257,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
       const { data, error } = await supabase
         .from('medication_schedule_times')
         .select('*')
-        .eq('user_id', currentUserId)
+          .eq('user_id', currentUserId)
         .eq('scheduled_date', formattedDate)
         .eq('status', 'pending');
       if (error) throw error;
