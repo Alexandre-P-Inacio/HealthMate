@@ -1011,10 +1011,42 @@ const MedicalDiaryScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#4A67E3' },
   container: { flex: 1, backgroundColor: '#F8F9FF' },
-  header: { backgroundColor: '#4A67E3', padding: 20, paddingTop: Platform.OS === 'android' ? 16 : 10, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomLeftRadius: 30, borderBottomRightRadius: 30, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#FFF', letterSpacing: 0.5, textAlign: 'center' },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center' },
-  headerRight: { width: 40 },
+  header: { 
+    backgroundColor: '#4A67E3', 
+    padding: 20, 
+    paddingTop: Platform.OS === 'android' ? 16 : 10, 
+    paddingBottom: 25, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    borderBottomLeftRadius: 30, 
+    borderBottomRightRadius: 30, 
+    elevation: 8, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 8 
+  },
+  headerTitle: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: '#FFF', 
+    letterSpacing: 0.5, 
+    textAlign: 'center',
+    flex: 1
+  },
+  backButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginRight: 10
+  },
+  headerRight: { 
+    width: 40 
+  },
   dateContainer: { marginHorizontal: 20, marginTop: 20 },
   dateSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: '#FFF', borderRadius: 20, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   todayButton: { backgroundColor: '#6A8DFD' },

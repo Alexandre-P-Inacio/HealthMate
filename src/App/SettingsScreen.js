@@ -57,10 +57,10 @@ const SettingsScreen = ({ navigation, route }) => {
         setEmail(data.email || '');
         setPhone(data.phone || '');
         setPfpimg(data.pfpimg ? `data:image/jpeg;base64,${data.pfpimg}` : defaultImage);
-        setNotificationsEnabled(data.notificationsEnabled || true);
-        setMedicationReminders(data.medicationReminders || true);
-        setGeneralUpdates(data.generalUpdates || true);
-        setPromotionalOffers(data.promotionalOffers || false);
+        setNotificationsEnabled(data.notificationsEnabled ?? true);
+        setMedicationReminders(data.medicationReminders ?? true);
+        setGeneralUpdates(data.generalUpdates ?? true);
+        setPromotionalOffers(data.promotionalOffers ?? false);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -168,23 +168,18 @@ const SettingsScreen = ({ navigation, route }) => {
       const updateData = { 
         fullname, 
         email, 
-        phone, 
-        notificationsEnabled, 
-        medicationReminders, 
-        generalUpdates, 
-        promotionalOffers 
+        phone
       };
 
       if (previewImage) {
         updateData.pfpimg = previewImage.split(',')[1];
       }
 
-      if (showPasswordFields) {
+      if (showPasswordFields && password) {
         const hashedPassword = await Crypto.digestStringAsync(
           Crypto.CryptoDigestAlgorithm.SHA256,
           password
         );
-
         updateData.password = hashedPassword;
       }
 
@@ -208,7 +203,12 @@ const SettingsScreen = ({ navigation, route }) => {
       DataUser.setUserData(updatedUserData);
 
       Alert.alert('Success', 'Profile updated successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('AccountScreen') }
+        { 
+          text: 'OK', 
+          onPress: () => {
+            navigation.goBack();
+          }
+        }
       ]);
     } catch (error) {
       console.error('Error saving:', error);
@@ -250,21 +250,15 @@ const SettingsScreen = ({ navigation, route }) => {
           <Ionicons name="arrow-back" size={28} color="#3498db" />
         </TouchableOpacity>
         <Text style={styles.header}>Settings</Text>
-        <View style={{ width: 24 }} /> {/* Empty view for balance */}
+        <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
+          <Ionicons name={editing ? "close-circle" : "create"} size={24} color="#3498db" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.profileContainer}>
           <TouchableOpacity onPress={pickImage} disabled={!editing} style={styles.imageContainer}>
             <Image source={{ uri: previewImage || pfpimg }} style={styles.profileImage} />
-            {editing && (
-              <View style={styles.editImageOverlay}>
-                <Ionicons name="camera" size={24} color="#fff" />
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
-            <Ionicons name={editing ? "close-circle" : "create"} size={24} color="#fff" />
           </TouchableOpacity>
         </View>
 
@@ -348,6 +342,23 @@ const SettingsScreen = ({ navigation, route }) => {
             </View>
           </>
         )}
+
+        {editing && (
+          <TouchableOpacity 
+            style={[styles.saveButton, uploading && styles.disabledButton]} 
+            onPress={handleSave}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <View style={styles.loadingButtonContent}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={[styles.saveButtonText, { marginLeft: 10 }]}>Saving...</Text>
+              </View>
+            ) : (
+              <Text style={styles.saveButtonText}>Save Changes</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );
@@ -374,6 +385,7 @@ const styles = StyleSheet.create({
     paddingTop: StatusBar.currentHeight + 10 || 40,
     paddingHorizontal: 20,
     paddingBottom: 10,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eaeaea',
   },
@@ -383,6 +395,7 @@ const styles = StyleSheet.create({
   header: { 
     fontSize: 24, 
     fontWeight: 'bold',
+    color: '#333',
   },
   scrollContainer: { 
     padding: 20,
@@ -403,29 +416,8 @@ const styles = StyleSheet.create({
     borderWidth: 3, 
     borderColor: '#3498db' 
   },
-  editImageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: 'rgba(52, 152, 219, 0.7)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   editButton: { 
-    position: 'absolute', 
-    bottom: 5, 
-    right: -15, 
-    backgroundColor: '#3498db', 
-    padding: 10, 
-    borderRadius: 25,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
+    padding: 5,
   },
   inputContainer: { 
     marginBottom: 20,
@@ -476,6 +468,7 @@ const styles = StyleSheet.create({
     padding: 16, 
     borderRadius: 10, 
     alignItems: 'center',
+    marginTop: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -494,70 +487,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sectionContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  menuItemText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 12,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  settingTitle: {
-    fontSize: 16,
-    color: '#333',
-  },
-  description: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#666',
-  },
-  logoutButtonContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 30,
-    borderWidth: 1,
-    borderColor: '#e74c3c',
-  },
-  logoutButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#e74c3c',
-    marginLeft: 10,
   },
 });
 

@@ -20,6 +20,7 @@ import Navbar from '../Components/Navbar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import supabase from '../../supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
 const AccountScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -49,15 +50,43 @@ const AccountScreen = ({ navigation }) => {
   const [promotionalOffers, setPromotionalOffers] = useState(false);
   const [showNotificationOptions, setShowNotificationOptions] = useState(false);
 
+  const loadUserData = async () => {
+    try {
+      const userId = DataUser.getUserData()?.id;
+      if (!userId) {
+        Alert.alert('Error', 'User data not found.');
+        navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setUserData(data);
+        DataUser.setUserData(data);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      Alert.alert('Error', 'Failed to load user data');
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadUserData();
+    }, [])
+  );
+
   useEffect(() => {
     const user = DataUser.getUserData();
-    
     if (user) {
       setUserData(user);
-      setNotificationsEnabled(user.notificationsEnabled || true);
-      setMedicationReminders(user.medicationReminders || true);
-      setGeneralUpdates(user.generalUpdates || true);
-      setPromotionalOffers(user.promotionalOffers || false);
     } else {
       Alert.alert('Error', 'User data not found.');
       navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
@@ -299,9 +328,9 @@ const AccountScreen = ({ navigation }) => {
       />
       
       <View style={styles.container}>
-        {/* Header Compacto */}
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Perfil</Text>
+          <Text style={styles.headerTitle}>Profile</Text>
           <TouchableOpacity 
             style={styles.settingsButton}
             onPress={() => setSettingsModalVisible(true)}
@@ -354,13 +383,13 @@ const AccountScreen = ({ navigation }) => {
               <View style={styles.actionIcon}>
                 <FontAwesome name="user-md" size={20} color="#3498db" />
               </View>
-              <Text style={styles.actionText}>Médicos</Text>
+              <Text style={styles.actionText}>Doctors</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('AppointmentsScreen')}>
               <View style={styles.actionIcon}>
                 <FontAwesome name="info-circle" size={20} color="#3498db" />
               </View>
-              <Text style={styles.actionText}>Informação</Text>
+              <Text style={styles.actionText}>Information</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.actionButton}
@@ -372,7 +401,7 @@ const AccountScreen = ({ navigation }) => {
               <View style={styles.actionIcon}>
                 <FontAwesome name="bar-chart" size={20} color="#3498db" />
               </View>
-              <Text style={styles.actionText}>Estatísticas</Text>
+              <Text style={styles.actionText}>Statistics</Text>
             </TouchableOpacity>
           </ScrollView>
 
@@ -383,7 +412,7 @@ const AccountScreen = ({ navigation }) => {
               onPress={() => setSettingsModalVisible(true)}
             >
               <FontAwesome name="cog" size={18} color="#fff" />
-              <Text style={styles.buttonText}>Configurações</Text>
+              <Text style={styles.buttonText}>Settings</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -391,7 +420,7 @@ const AccountScreen = ({ navigation }) => {
               onPress={handleLogout}
             >
               <FontAwesome name="sign-out" size={18} color="#e74c3c" />
-              <Text style={[styles.buttonText, styles.logoutText]}>Sair</Text>
+              <Text style={[styles.buttonText, styles.logoutText]}>Logout</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

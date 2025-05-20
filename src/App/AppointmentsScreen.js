@@ -80,7 +80,7 @@ const AppointmentsScreen = () => {
           >
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Datasets Públicos do SNS</Text>
+          <Text style={styles.headerTitle}>Public SNS Datasets</Text>
           <TouchableOpacity 
             style={styles.datasetButton}
             onPress={() => setShowDatasetModal(true)}
@@ -94,7 +94,7 @@ const AppointmentsScreen = () => {
           {loading ? (
             <View style={styles.center}>
               <ActivityIndicator size="large" color="#6A8DFD" />
-              <Text style={styles.loadingText}>A carregar dados...</Text>
+              <Text style={styles.loadingText}>Loading data...</Text>
             </View>
           ) : error ? (
             <View style={styles.center}>
@@ -110,7 +110,7 @@ const AppointmentsScreen = () => {
                       {selectedDataset?.metas?.default?.title || selectedDataset?.dataset_id}
                     </Text>
                     <Text style={styles.datasetSubtitle}>
-                      {records.length} registos encontrados
+                      {records.length} records found
                     </Text>
                   </View>
                   <View style={styles.tableWrapper}>
@@ -118,8 +118,8 @@ const AppointmentsScreen = () => {
                       <View>
                         <View style={styles.tableHeaderRow}>
                           {Object.keys(records[0]).map((field, index) => (
-                            <View key={index} style={styles.headerCell}>
-                              <Text style={styles.headerCellText} numberOfLines={1} ellipsizeMode="tail">{field}</Text>
+                            <View key={index} style={[styles.headerCell, { width: 200 }]}>
+                              <Text style={styles.headerCellText} numberOfLines={2} ellipsizeMode="tail">{field}</Text>
                             </View>
                           ))}
                         </View>
@@ -130,8 +130,8 @@ const AppointmentsScreen = () => {
                               rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow
                             ]}>
                               {Object.keys(records[0]).map((field, colIndex) => (
-                                <View key={colIndex} style={styles.cell}>
-                                  <Text style={styles.cellText} numberOfLines={2} ellipsizeMode="tail">
+                                <View key={colIndex} style={[styles.cell, { width: 200 }]}>
+                                  <Text style={styles.cellText} numberOfLines={3} ellipsizeMode="tail">
                                     {formatCell(row[field])}
                                   </Text>
                                 </View>
@@ -287,30 +287,30 @@ const styles = StyleSheet.create({
   },
   tableWrapper: {
     maxHeight: 600,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   tableHeaderRow: {
     flexDirection: 'row',
     backgroundColor: '#6A8DFD',
     borderBottomWidth: 2,
     borderBottomColor: '#E8ECF4',
-    minHeight: 44,
+    minHeight: 50,
   },
   headerCell: {
-    minWidth: 150,
-    maxWidth: 250,
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRightWidth: 1,
     borderRightColor: '#E8ECF4',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   headerCellText: {
     fontWeight: '700',
     color: '#FFF',
-    fontSize: 13,
-    textAlign: 'center',
+    fontSize: 14,
+    textAlign: 'left',
   },
   tableBody: {
     maxHeight: 540,
@@ -319,8 +319,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#E8ECF4',
-    minHeight: 50,
-    alignItems: 'center',
+    minHeight: 60,
   },
   evenRow: {
     backgroundColor: '#FFF',
@@ -329,11 +328,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F7FF',
   },
   cell: {
-    minWidth: 150,
-    maxWidth: 250,
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRightWidth: 1,
     borderRightColor: '#E8ECF4',
     justifyContent: 'center',
@@ -341,10 +337,9 @@ const styles = StyleSheet.create({
   },
   cellText: {
     color: '#2D3142',
-    fontSize: 13,
+    fontSize: 14,
     textAlign: 'left',
-    lineHeight: 18,
-    flexWrap: 'wrap',
+    lineHeight: 20,
   },
   modalContainer: {
     flex: 1,
