@@ -5,6 +5,8 @@ import supabase from '../../supabase';
 import Navbar from '../Components/Navbar';
 import DataUser from '../../navigation/DataUser';
 import { useNavigation } from '@react-navigation/native';
+import HealthQuote from '../Components/HealthQuote';
+import FunZone from '../Components/FunZone';
 
 const HomeScreen = () => {
   const [userData, setUserData] = useState({
@@ -868,7 +870,7 @@ const HomeScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-    <View style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             {userData?.profilePicture ? (
@@ -900,16 +902,11 @@ const HomeScreen = () => {
               ]}
               onPress={() => {
                 fetchTodayMedications();
-                // Add haptic feedback if available
                 if (Platform.OS === 'ios' || Platform.OS === 'android') {
-                  // This requires react-native-haptic-feedback library
-                  // For now, we'll use a small timeout to simulate a response
                   setTimeout(() => {
                     if (notificationCount > 0) {
-                      // If there are pending medications, vibrate
                       try {
                         if (Platform.OS === 'android') {
-                          // Android vibration
                           const vibrationPattern = [0, 50, 50, 50];
                           if (navigator && navigator.vibrate) {
                             navigator.vibrate(vibrationPattern);
@@ -939,406 +936,195 @@ const HomeScreen = () => {
           </Animated.View>
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.calendarContainer}>
-            <View style={styles.calendarHeader}>
-            <Text style={styles.calendarTitle}>Your Schedule</Text>
-            </View>
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollViewContent}
+        >
+          <View style={styles.content}>
+            <View style={styles.calendarContainer}>
+              <View style={styles.calendarHeader}>
+                <Text style={styles.calendarTitle}>Your Schedule</Text>
+              </View>
 
-            <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.dayScrollView}
-              contentContainerStyle={styles.dayScrollViewContent}
-              data={getNextDays(7)}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={({item: date, index}) => {
-                const isToday = date.toDateString() === new Date().toDateString();
-                const isSelected = date.toDateString() === selectedDate.toDateString();
-                
-                const hasEvents = events.filter(e => 
-                  new Date(e.startDate).toDateString() === date.toDateString()
-                ).length > 0;
-                
-                return (
-                  <TouchableOpacity 
-                    style={[
-                      styles.dayButton,
-                      isSelected && styles.selectedDayButton,
-                      isToday && styles.todayButton
-                    ]} 
-                    onPress={() => setSelectedDate(date)}
-                  >
-                    <Text style={[
-                      styles.daySubText,
-                      (isSelected || isToday) && styles.selectedDayText
-                    ]}>
-                      {date.toLocaleString('en-US', { weekday: 'short' }).toUpperCase()}
-                    </Text>
-                    <Text style={[
-                      styles.dayText,
-                      (isSelected || isToday) && styles.selectedDayText
-                    ]}>
-                      {date.getDate()}
-                    </Text>
-                    {hasEvents && isToday && (
-                      <View style={styles.dayEventIndicator} />
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
-            />
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.dayScrollView}
+                contentContainerStyle={styles.dayScrollViewContent}
+                data={getNextDays(7)}
+                keyExtractor={(item, index) => index.toString()}
+                renderItem={({item: date, index}) => {
+                  const isToday = date.toDateString() === new Date().toDateString();
+                  const isSelected = date.toDateString() === selectedDate.toDateString();
+                  
+                  const hasEvents = events.filter(e => 
+                    new Date(e.startDate).toDateString() === date.toDateString()
+                  ).length > 0;
+                  
+                  return (
+                    <TouchableOpacity 
+                      style={[
+                        styles.dayButton,
+                        isSelected && styles.selectedDayButton,
+                        isToday && styles.todayButton
+                      ]} 
+                      onPress={() => setSelectedDate(date)}
+                    >
+                      <Text style={[
+                        styles.daySubText,
+                        (isSelected || isToday) && styles.selectedDayText
+                      ]}>
+                        {date.toLocaleString('en-US', { weekday: 'short' }).toUpperCase()}
+                      </Text>
+                      <Text style={[
+                        styles.dayText,
+                        (isSelected || isToday) && styles.selectedDayText
+                      ]}>
+                        {date.getDate()}
+                      </Text>
+                      {hasEvents && isToday && (
+                        <View style={styles.dayEventIndicator} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
 
-            <View style={styles.scrollViewContainer}>
-              {isRefreshing ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#6A8DFD" />
-                </View>
-              ) : (
-                <>
-                  <FlatList
-                    ref={hourlyScrollViewRef}
-                    style={styles.hourlySchedule}
-                    showsVerticalScrollIndicator={true}
-                    contentContainerStyle={styles.hourlyScheduleContent}
-                    data={getAllHours()}
-                    keyExtractor={(hour) => hour.toString()}
-                    renderItem={({item: hour}) => {
-                      const hourEvents = events.filter(event => 
-                        new Date(event.startDate).getHours() === hour &&
-                        new Date(event.startDate).toDateString() === selectedDate.toDateString()
-                      );
-                      
-                      const isCurrentHour = hour === currentHour;
-                      const hasEvents = hourEvents.length > 0;
-                      
-                      if (!hasEvents && !isCurrentHour) {
+              <View style={styles.scrollViewContainer}>
+                {isRefreshing ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#6A8DFD" />
+                  </View>
+                ) : (
+                  <>
+                    <FlatList
+                      ref={hourlyScrollViewRef}
+                      style={styles.hourlySchedule}
+                      showsVerticalScrollIndicator={true}
+                      contentContainerStyle={styles.hourlyScheduleContent}
+                      data={getAllHours()}
+                      keyExtractor={(hour) => hour.toString()}
+                      renderItem={({item: hour}) => {
+                        const hourEvents = events.filter(event => 
+                          new Date(event.startDate).getHours() === hour &&
+                          new Date(event.startDate).toDateString() === selectedDate.toDateString()
+                        );
+                        
+                        const isCurrentHour = hour === currentHour;
+                        const hasEvents = hourEvents.length > 0;
+                        
+                        if (!hasEvents && !isCurrentHour) {
+                          return (
+                            <View style={styles.hourRowCompact}>
+                              <Text style={styles.hourText}>
+                                {hour.toString().padStart(2, '0')}:00
+                              </Text>
+                              <View style={styles.hourLine} />
+                            </View>
+                          );
+                        }
+                        
                         return (
-                          <View style={styles.hourRowCompact}>
-                            <Text style={styles.hourText}>
+                          <View 
+                            style={[
+                              styles.hourRow,
+                              isCurrentHour && styles.currentHourRow
+                            ]}
+                          >
+                            <Text style={[
+                              styles.hourText,
+                              isCurrentHour && styles.currentHourText
+                            ]}>
                               {hour.toString().padStart(2, '0')}:00
                             </Text>
-                            <View style={styles.hourLine} />
+                            <View style={styles.timelineContainer}>
+                              {hourEvents.map((event, idx) => {
+                                const now = new Date();
+                                const scheduledTime = new Date(event.startDate);
+                                const canTake = scheduledTime <= now;
+
+                                return (
+                                  <View key={idx} style={[
+                                    styles.eventCard,
+                                    event.isTaken && styles.eventCardTaken,
+                                    !canTake && !event.isTaken && styles.eventCardFuture
+                                  ]}>
+                                    <View style={styles.eventCardHeader}>
+                                      <Text style={styles.eventTitle}>{event.title}</Text>
+                                      <Text style={styles.eventTime}>
+                                        {event.scheduledTime?.substring(0, 5) || '00:00'}
+                                      </Text>
+                                    </View>
+                                    {event.notes && (
+                                      <Text style={styles.eventNotes}>{event.notes}</Text>
+                                    )}
+                                    <Text style={styles.scheduledInfo}>
+                                      Agendado para: {event.scheduledDate} às {event.scheduledTime?.substring(0, 5) || '00:00'}
+                                    </Text>
+                                    {!event.isTaken && canTake && (
+                                      <TouchableOpacity 
+                                        style={styles.takePillButton}
+                                        onPress={() => takeMedication(event)}
+                                      >
+                                        <Text style={styles.takePillButtonText}>Tomar</Text>
+                                        <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                                      </TouchableOpacity>
+                                    )}
+                                    {!event.isTaken && !canTake && (
+                                      <View style={styles.futureIndicator}>
+                                        <Text style={styles.futureText}>Aguardando horário</Text>
+                                        <Ionicons name="time-outline" size={16} color="#f39c12" />
+                                      </View>
+                                    )}
+                                    {event.isTaken && (
+                                      <View style={styles.takenPillIndicator}>
+                                        <Text style={styles.takenPillText}>Medicamento tomado</Text>
+                                        <Ionicons name="checkmark-circle" size={16} color="#2ECC71" />
+                                      </View>
+                                    )}
+                                  </View>
+                                );
+                              })}
+                            </View>
                           </View>
                         );
-                      }
-                      
-                      return (
-                        <View 
-                          style={[
-                            styles.hourRow,
-                            isCurrentHour && styles.currentHourRow
-                          ]}
-                        >
-                          <Text style={[
-                            styles.hourText,
-                            isCurrentHour && styles.currentHourText
-                          ]}>
-                            {hour.toString().padStart(2, '0')}:00
-                          </Text>
-                          <View style={styles.timelineContainer}>
-                            {hourEvents.map((event, idx) => {
-                              const now = new Date();
-                              const scheduledTime = new Date(event.startDate);
-                              const canTake = scheduledTime <= now;
-
-                              return (
-                                <View key={idx} style={[
-                                  styles.eventCard,
-                                  event.isTaken && styles.eventCardTaken,
-                                  !canTake && !event.isTaken && styles.eventCardFuture
-                                ]}>
-                                  <View style={styles.eventCardHeader}>
-                                    <Text style={styles.eventTitle}>{event.title}</Text>
-                                    <Text style={styles.eventTime}>
-                                      {event.scheduledTime?.substring(0, 5) || '00:00'}
-                                    </Text>
-                                  </View>
-                                  {event.notes && (
-                                    <Text style={styles.eventNotes}>{event.notes}</Text>
-                                  )}
-                                  <Text style={styles.scheduledInfo}>
-                                    Agendado para: {event.scheduledDate} às {event.scheduledTime?.substring(0, 5) || '00:00'}
-                                  </Text>
-                                  {!event.isTaken && canTake && (
-                                    <TouchableOpacity 
-                                      style={styles.takePillButton}
-                                      onPress={() => takeMedication(event)}
-                                    >
-                                      <Text style={styles.takePillButtonText}>Tomar</Text>
-                                      <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                                    </TouchableOpacity>
-                                  )}
-                                  {!event.isTaken && !canTake && (
-                                    <View style={styles.futureIndicator}>
-                                      <Text style={styles.futureText}>Aguardando horário</Text>
-                                      <Ionicons name="time-outline" size={16} color="#f39c12" />
-                                    </View>
-                                  )}
-                                  {event.isTaken && (
-                                    <View style={styles.takenPillIndicator}>
-                                      <Text style={styles.takenPillText}>Medicamento tomado</Text>
-                                      <Ionicons name="checkmark-circle" size={16} color="#2ECC71" />
-                                    </View>
-                                  )}
-                                </View>
-                              );
-                            })}
-                          </View>
-                        </View>
-                      );
-                    }}
-                    getItemLayout={(data, index) => (
-                      {length: 70, offset: 70 * index, index}
-                    )}
-                    initialScrollIndex={Math.max(0, currentHour - 2)}
-                    onScrollToIndexFailed={() => {
-                      // Simple fallback - just scroll to offset
-                      const hourHeight = 70;
-                      hourlyScrollViewRef.current?.scrollToOffset({
-                        offset: currentHour * hourHeight,
-                        animated: true
-                      });
-                    }}
-                    maxToRenderPerBatch={24}
-                    windowSize={10}
-                    scrollEventThrottle={16}
-                    removeClippedSubviews={false}
-                    scrollEnabled={true}
-                    maintainVisibleContentPosition={{
-                      minIndexForVisible: 0,
-                      autoscrollToTopThreshold: 10
-                    }}
-                    bounces={false}
-                    overScrollMode="never"
-                  />
-                  <TouchableOpacity 
-                    style={styles.currentTimeFloatingButton}
-                    onPress={goToCurrentHourAndDay}
-                  >
-                    <Ionicons name="time-outline" size={20} color="#fff" />
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={showMedicationModal}
-          onRequestClose={() => setShowMedicationModal(false)}
-          statusBarTranslucent={true}
-          hardwareAccelerated={true}
-        >
-          <View style={[
-            styles.modalContainer,
-            Platform.OS === 'web' && styles.modalContainerWeb
-          ]}>
-            <View style={[
-              styles.modalContent, 
-              { width: Platform.OS === 'web' ? '80%' : '95%', maxHeight: '85%' },
-              Platform.OS === 'web' && styles.modalContentWeb
-            ]}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  Medication Reminder
-                </Text>
-                <TouchableOpacity 
-                  style={styles.closeButton} 
-                  onPress={() => setShowMedicationModal(false)}
-                >
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              
-              <Text style={styles.modalText}>
-                Did you take your medication: {missedMedication?.nome}?
-              </Text>
-              
-              <Text style={styles.medicationInfo}>
-                Scheduled for: {missedMedication ? new Date(missedMedication.data_inicio).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : ''}
-              </Text>
-              
-              <View style={styles.modalButtons}>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.noButton]} 
-                  onPress={() => handleMedicationResponse(false)}
-                >
-                  <Text style={styles.buttonText}>No</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.yesButton]} 
-                  onPress={() => handleMedicationResponse(true)}
-                >
-                  <Text style={styles.buttonText}>Yes</Text>
-                </TouchableOpacity>
+                      }}
+                      getItemLayout={(data, index) => (
+                        {length: 70, offset: 70 * index, index}
+                      )}
+                      initialScrollIndex={Math.max(0, currentHour - 2)}
+                      onScrollToIndexFailed={onScrollToIndexFailed}
+                      maxToRenderPerBatch={24}
+                      windowSize={10}
+                      scrollEventThrottle={16}
+                      removeClippedSubviews={false}
+                      scrollEnabled={true}
+                      maintainVisibleContentPosition={{
+                        minIndexForVisible: 0,
+                        autoscrollToTopThreshold: 10
+                      }}
+                      bounces={false}
+                      overScrollMode="never"
+                    />
+                    <TouchableOpacity 
+                      style={styles.currentTimeFloatingButton}
+                      onPress={goToCurrentHourAndDay}
+                    >
+                      <Ionicons name="time-outline" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
-          </View>
-        </Modal>
 
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={todayMedicationsModal}
-          onRequestClose={() => setTodayMedicationsModal(false)}
-          statusBarTranslucent={true}
-          hardwareAccelerated={true}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  Todos os Medicamentos de Hoje ({new Date().toLocaleDateString()})
-                </Text>
-                <TouchableOpacity 
-                  style={styles.closeButton} 
-                  onPress={() => setTodayMedicationsModal(false)}
-                >
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.currentTimeIndicator}>
-                <Ionicons name="time-outline" size={18} color="#6A8DFD" />
-                <Text style={styles.currentTimeText}>
-                  Horário atual: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </Text>
-              </View>
-              
-              {todayMedications.length === 0 ? (
-                <View style={styles.emptyMedsContainer}>
-                  <Ionicons name="calendar-outline" size={64} color="#bdc3c7" />
-                  <Text style={styles.emptyMedsText}>Não há medicamentos agendados para hoje</Text>
-                </View>
-              ) : (
-                <ScrollView style={styles.medicationListScroll}>
-                  {todayMedications.map((timeGroup, idx) => (
-                    <View key={`time-${idx}`} style={styles.timeGroupContainer}>
-                      <View style={styles.timeHeaderWrapper}>
-                        <Text style={styles.timeHeader}>
-                          {timeGroup.time.substring(0, 5)}
-                        </Text>
-                      </View>
-                      
-                      {timeGroup.medications.map((med, medIdx) => (
-                        <View 
-                          key={`med-${med.id || medIdx}`} 
-                          style={[
-                            styles.medicationCard,
-                            med.isTaken ? styles.medicationCardTaken : 
-                            !med.canTake ? styles.medicationCardFuture : null
-                          ]}
-                        >
-                          <View style={styles.medicationInfo}>
-                            <Text style={styles.medicationTitle}>{med.title}</Text>
-                            <Text style={styles.medicationDosage}>
-                              Dose: {med.dosage || med.dosePorVez || '1'} comprimido(s)
-                            </Text>
-                            
-                            {med.isTaken && (
-                              <View style={styles.statusContainer}>
-                                <Ionicons name="checkmark-circle" size={16} color="#2ecc71" />
-                                <Text style={styles.statusTextTaken}>
-                                  Tomado {med.confirmationTime ? `às ${med.confirmationTime.substring(0, 5)}` : ''}
-                                </Text>
-                              </View>
-                            )}
-                            
-                            {!med.isTaken && !med.canTake && (
-                              <View style={styles.statusContainer}>
-                                <Ionicons name="time-outline" size={16} color="#f39c12" />
-                                <Text style={styles.statusTextPending}>
-                                  Horário não atingido
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          
-                          <View style={styles.medicationActions}>
-                            {!med.isTaken && med.canTake && (
-                              <View style={styles.actionButtonsRow}>
-                                <TouchableOpacity
-                                  style={styles.takeButton}
-                                  onPress={() => {
-                                    setTodayMedicationsModal(false);
-                                    setTimeout(() => takeMedication({
-                                      id: med.id,
-                                      pill_id: med.pillId,
-                                      title: med.title,
-                                      startDate: `${med.scheduledDate}T${med.scheduledTime}`,
-                                      scheduledDate: med.scheduledDate,
-                                      scheduledTime: med.scheduledTime
-                                    }), 300);
-                                  }}
-                                >
-                                  <Text style={styles.takeButtonText}>Tomar</Text>
-                                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                                </TouchableOpacity>
-                                
-                                <TouchableOpacity
-                                  style={styles.skipButton}
-                                  onPress={() => {
-                                    Alert.alert(
-                                      "Pular medicamento",
-                                      `Deseja realmente pular ${med.title}?`,
-                                      [
-                                        { text: "Cancelar", style: "cancel" },
-                                        { 
-                                          text: "Sim, pular",
-                                          onPress: () => {
-                                            setTodayMedicationsModal(false);
-                                            setTimeout(() => skipMedication(med), 300);
-                                          }
-                                        }
-                                      ]
-                                    );
-                                  }}
-                                >
-                                  <Text style={styles.skipButtonText}>Pular</Text>
-                                  <Ionicons name="close-circle" size={18} color="#fff" />
-                                </TouchableOpacity>
-                              </View>
-                            )}
-                            
-                            {!med.isTaken && !med.canTake && (
-                              <View style={styles.waitingIcon}>
-                                <Ionicons name="time-outline" size={24} color="#f39c12" />
-                              </View>
-                            )}
-                            
-                            {med.isTaken && (
-                              <View style={styles.takenIcon}>
-                                <Ionicons name="checkmark-done-circle" size={24} color="#2ecc71" />
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  ))}
-                  
-                  <TouchableOpacity 
-                    style={styles.refreshButton}
-                    onPress={() => {
-                      setTodayMedicationsModal(false);
-                      setTimeout(() => fetchTodayMedications(), 300);
-                    }}
-                  >
-                    <Ionicons name="refresh" size={18} color="#fff" />
-                    <Text style={styles.refreshButtonText}>Atualizar lista</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              )}
-            </View>
+            <HealthQuote />
+            <FunZone />
           </View>
-        </Modal>
+        </ScrollView>
+      </View>
 
       <Navbar />
-    </View>
     </SafeAreaView>
   );
 };
@@ -1418,6 +1204,13 @@ const styles = StyleSheet.create({
   },
   notificationButtonAll: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   content: {
     padding: 15,

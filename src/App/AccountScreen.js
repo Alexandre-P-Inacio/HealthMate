@@ -356,7 +356,7 @@ const AccountScreen = ({ navigation }) => {
                 <View style={styles.badgeContainer}>
                   <View style={styles.badge}>
                     <FontAwesome name="star" size={12} color="#FFD700" />
-                    <Text style={styles.badgeText}>Premium</Text>
+                    <Text style={styles.badgeText}>Premium Plus</Text>
                   </View>
                 </View>
               </View>
