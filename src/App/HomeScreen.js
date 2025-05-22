@@ -270,10 +270,11 @@ const HomeScreen = () => {
             medTime.getHours() < now.getHours()) {
             
           const { data } = await supabase
-            .from('medication_confirmations')
+            .from('medication_schedule_times')
             .select('*')
             .eq('pill_id', med.id)
-            .eq('confirmation_date', now.toISOString().split('T')[0])
+            .eq('scheduled_date', now.toISOString().split('T')[0])
+            .eq('status', 'pending')
             .single();
             
           if (!data) {
@@ -289,17 +290,22 @@ const HomeScreen = () => {
   const handleMedicationResponse = async (taken) => {
     if (missedMedication) {
       try {
-        await supabase.from('medication_confirmations').insert({
+        const now = new Date();
+        await supabase.from('medication_schedule_times').insert({
           pill_id: missedMedication.id,
-          taken: taken,
-          confirmation_date: new Date().toISOString().split('T')[0],
-          confirmation_time: new Date().toISOString()
+          scheduled_date: now.toISOString().split('T')[0],
+          scheduled_time: now.toTimeString().split(' ')[0],
+          status: taken ? 'taken' : 'missed',
+          complete_datetime: now.toISOString(),
+          user_id: DataUser.getUserData()?.id,
+          notes: taken ? 'Medication taken' : 'Medication missed',
+          created_at: now.toISOString()
         });
         
         if (taken) {
           await supabase
             .from('pills_warning')
-            .update({ last_taken: new Date().toISOString() })
+            .update({ last_taken: now.toISOString() })
             .eq('id', missedMedication.id);
         }
         
@@ -309,6 +315,7 @@ const HomeScreen = () => {
         );
         
       } catch (error) {
+        console.error('Error handling medication response:', error);
       }
     }
     
@@ -336,103 +343,34 @@ const HomeScreen = () => {
 
   const calculateAndSaveMedicationSchedule = async (medicationData, userId) => {
     try {
-      if (!medicationData.id || !userId) {
-        return { error: 'Dados incompletos' };
-      }
-
+      const now = new Date();
+      const startDate = medicationData.start_date ? new Date(medicationData.start_date) : now;
+      const endDate = medicationData.end_date ? new Date(medicationData.end_date) : null;
+      
       const scheduledTimes = [];
       
-      const now = new Date();
-      let startDate = medicationData.data_inicio ? new Date(medicationData.data_inicio) : now;
-      
-      if (startDate < now) {
-        startDate = now;
-      }
-      
-      const endDate = medicationData.data_fim ? new Date(medicationData.data_fim) : null;
-      
-      if (medicationData.recurrence === 'daily' || !medicationData.recurrence) {
-        const daysToCalculate = endDate ? 
-          Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) : 
-          30;
+      if (medicationData.recurrence === 'daily') {
+        let currentDate = new Date(startDate);
+        const end = endDate || new Date(currentDate.getFullYear() + 1, currentDate.getMonth(), currentDate.getDate());
         
-        for (let day = 0; day < daysToCalculate; day++) {
-          const currentDate = new Date(startDate);
-          currentDate.setDate(currentDate.getDate() + day);
+        while (currentDate <= end) {
+          const datetime = new Date(currentDate);
           
-          if (medicationData.horario_fixo) {
-            const hours = medicationData.horario_fixo.split(';');
-            for (const hourStr of hours) {
-              const [hour, minute] = hourStr.trim().split(':').map(Number);
-              const datetime = new Date(currentDate);
-              datetime.setHours(hour, minute, 0, 0);
-              
-              if (datetime > now) {
-                scheduledTimes.push(datetime.toISOString());
-              }
-            }
-          } 
-          else if (medicationData.intervalo_horas) {
-            const intervalo = parseInt(medicationData.intervalo_horas);
-            const startHour = medicationData.hora_inicio || 8;
-            
-            for (let hour = startHour; hour < 24; hour += intervalo) {
-              const datetime = new Date(currentDate);
-              datetime.setHours(hour, 0, 0, 0);
-              
-              if (datetime > now) {
-                scheduledTimes.push(datetime.toISOString());
-              }
-            }
-          }
-          else {
-            const datetime = new Date(currentDate);
+          if (medicationData.schedule_time) {
+            const [hour, minute] = medicationData.schedule_time.split(':').map(Number);
+            datetime.setHours(hour, minute, 0, 0);
+          } else {
             datetime.setHours(8, 0, 0, 0);
-            
-            if (datetime > now) {
-              scheduledTimes.push(datetime.toISOString());
-            }
           }
-        }
-      } 
-      else if (medicationData.recurrence === 'weekly') {
-        const weeksToCalculate = endDate ? 
-          Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24 * 7)) : 
-          4;
-        
-        const selectedDays = medicationData.days_of_week || [1, 3, 5];
-        
-        for (let week = 0; week < weeksToCalculate; week++) {
-          const weekStart = new Date(startDate);
-          weekStart.setDate(weekStart.getDate() + (week * 7));
           
-          for (const dayOfWeek of selectedDays) {
-            const currentDate = new Date(weekStart);
-            const currentDayOfWeek = currentDate.getDay();
-            const daysToAdd = (dayOfWeek - currentDayOfWeek + 7) % 7;
-            
-            currentDate.setDate(currentDate.getDate() + daysToAdd);
-            
-            if (medicationData.horario_fixo) {
-              const hours = medicationData.horario_fixo.split(';');
-              for (const hourStr of hours) {
-                const [hour, minute] = hourStr.trim().split(':').map(Number);
-                const datetime = new Date(currentDate);
-                datetime.setHours(hour, minute, 0, 0);
-                
-                if (datetime > now) {
-                  scheduledTimes.push(datetime.toISOString());
-                }
-              }
-            } else {
-              const datetime = new Date(currentDate);
-              datetime.setHours(8, 0, 0, 0);
-              
-              if (datetime > now) {
-                scheduledTimes.push(datetime.toISOString());
-              }
-            }
+          if (datetime > now) {
+            scheduledTimes.push({
+              date: datetime.toISOString().split('T')[0],
+              time: datetime.toTimeString().split(' ')[0]
+            });
           }
+          
+          currentDate.setDate(currentDate.getDate() + 1);
         }
       }
       else if (medicationData.recurrence === 'once') {
@@ -446,17 +384,21 @@ const HomeScreen = () => {
         }
         
         if (datetime > now) {
-          scheduledTimes.push(datetime.toISOString());
+          scheduledTimes.push({
+            date: datetime.toISOString().split('T')[0],
+            time: datetime.toTimeString().split(' ')[0]
+          });
         }
       }
       
       const results = [];
       for (const scheduledTime of scheduledTimes) {
         const { data: existing, error: checkError } = await supabase
-          .from('medication_confirmations')
+          .from('medication_schedule_times')
           .select('id')
           .eq('pill_id', medicationData.id)
-          .eq('scheduled_time', scheduledTime)
+          .eq('scheduled_date', scheduledTime.date)
+          .eq('scheduled_time', scheduledTime.time)
           .maybeSingle();
         
         if (checkError) {
@@ -464,21 +406,24 @@ const HomeScreen = () => {
         }
         
         if (!existing) {
-          const confirmationData = {
+          const scheduleData = {
             pill_id: medicationData.id,
-            scheduled_time: scheduledTime,
+            scheduled_date: scheduledTime.date,
+            scheduled_time: scheduledTime.time,
             user_id: userId,
-            taken: null,
-            notes: 'Agendado automaticamente',
-            created_at: new Date().toISOString()
+            status: 'pending',
+            notes: 'Scheduled automatically',
+            created_at: new Date().toISOString(),
+            complete_datetime: new Date().toISOString()
           };
           
           const { data, error } = await supabase
-            .from('medication_confirmations')
-            .insert(confirmationData)
+            .from('medication_schedule_times')
+            .insert(scheduleData)
             .select('id');
           
           if (error) {
+            console.error('Error creating schedule:', error);
           } else {
             results.push(data[0]);
           }
@@ -489,6 +434,7 @@ const HomeScreen = () => {
       
       return { data: results };
     } catch (error) {
+      console.error('Error calculating schedule:', error);
       return { error };
     }
   };
@@ -591,13 +537,7 @@ const HomeScreen = () => {
       }));
       todayMeds.sort((a, b) => (a.time < b.time ? -1 : 1));
       setTodayMedications(todayMeds);
-      setTimeout(() => {
-        if (todayMeds.length > 0) {
-          setTodayMedicationsModal(true);
-        } else {
-          Alert.alert('Informação', 'Não há medicamentos agendados para hoje.');
-        }
-      }, 300);
+      setTodayMedicationsModal(true);
     } catch (error) {
       console.log('Erro não tratado ao buscar medicamentos:', error);
       Alert.alert('Erro', `Não foi possível carregar os medicamentos para hoje: ${error.message}`);
@@ -641,31 +581,27 @@ const HomeScreen = () => {
       if (!userId) return;
       
       const now = new Date();
-      const currentTime = now.toTimeString().split(' ')[0];
       
-      const { error: insertError } = await supabase
-        .from('medication_confirmations')
-        .insert({
-          pill_id: pillId,
-          user_id: userId,
-          scheduled_time: now.toISOString(),
-          confirmation_date: now.toISOString().split('T')[0],
-          confirmation_time: currentTime,
-          taken: true,
-          notes: 'Medicamento tomado',
-          created_at: now.toISOString()
-        });
+      const { error: updateError } = await supabase
+        .from('medication_schedule_times')
+        .update({
+          status: 'taken',
+          complete_datetime: now.toISOString(),
+          notes: 'Medication taken'
+        })
+        .eq('id', scheduleId)
+        .eq('user_id', userId);
         
-      if (insertError) {
-        Alert.alert('Erro', 'Não foi possível registrar a confirmação do medicamento.');
+      if (updateError) {
+        Alert.alert('Error', 'Could not mark medication as taken.');
         return;
       }
       
       await fetchTodayMedications();
       
-      Alert.alert('Sucesso', 'Medicamento marcado como tomado!');
+      Alert.alert('Success', 'Medication marked as taken!');
     } catch (error) {
-      Alert.alert('Erro', 'Ocorreu um erro ao processar sua solicitação.');
+      Alert.alert('Error', 'An error occurred while processing your request.');
     }
   };
 
@@ -678,31 +614,22 @@ const HomeScreen = () => {
       
       const { data, error } = await supabase
         .from('medication_schedule_times')
-        .select('id, pill_id')
+        .select('id, status')
         .eq('scheduled_date', today)
         .eq('user_id', userId);
         
       if (error) {
-        return;
-      }
-      
-      const { data: confirmations, error: confirmError } = await supabase
-        .from('medication_confirmations')
-        .select('pill_id')
-        .eq('confirmation_date', today)
-        .eq('user_id', userId)
-        .eq('taken', true);
-      
-      if (confirmError) {
+        console.error('Error fetching medication stats:', error);
         return;
       }
       
       const total = data?.length || 0;
-      const completed = confirmations?.length || 0;
+      const completed = data?.filter(med => med.status === 'taken')?.length || 0;
       
       setTodayStats({ total, completed });
       
     } catch (error) {
+      console.error('Error getting medication stats:', error);
     }
   };
 
@@ -710,7 +637,7 @@ const HomeScreen = () => {
     try {
       const userId = DataUser.getUserData()?.id;
       if (!userId) {
-        Alert.alert('Erro', 'Usuário não identificado');
+        Alert.alert('Error', 'User not identified');
         return;
       }
 
@@ -725,8 +652,8 @@ const HomeScreen = () => {
           const nowTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           
           Alert.alert(
-            'Horário não atingido',
-            `Ainda não é hora de tomar este medicamento.\nHorário agendado: ${scheduledTimeStr}\nHorário atual: ${nowTimeStr}`,
+            'Time not reached',
+            `It's not time to take this medication yet.\nScheduled time: ${scheduledTimeStr}\nCurrent time: ${nowTimeStr}`,
             [{ text: "OK", style: "cancel" }]
           );
           return;
@@ -736,60 +663,40 @@ const HomeScreen = () => {
       const pillId = event.pill_id;
       
       if (!pillId) {
-        Alert.alert('Erro', 'Não foi possível identificar o medicamento neste evento');
+        Alert.alert('Error', 'Could not identify the medication in this event');
         return;
       }
       
       const isoTimestamp = now.toISOString();
       const currentDate = isoTimestamp.split('T')[0];
       
-      const confirmationData = {
+      const scheduleData = {
         pill_id: pillId,
         user_id: userId,
-        scheduled_time: isoTimestamp,
-        confirmation_date: currentDate,
-        taken: true,
-        notes: `Medicamento tomado via aplicativo: ${event.title}`,
-        created_at: isoTimestamp
+        scheduled_date: currentDate,
+        scheduled_time: now.toTimeString().split(' ')[0],
+        status: 'taken',
+        notes: `Medication taken via app: ${event.title}`,
+        created_at: isoTimestamp,
+        complete_datetime: isoTimestamp
       };
       
       const { error: insertError } = await supabase
-        .from('medication_confirmations')
-        .insert(confirmationData);
+        .from('medication_schedule_times')
+        .insert(scheduleData);
         
       if (insertError) {
-        Alert.alert('Erro', `Não foi possível registrar a confirmação do medicamento: ${insertError.message}`);
+        Alert.alert('Error', `Could not record medication confirmation: ${insertError.message}`);
         return;
       }
       
-      // If it was taken from the calendar view and has an ID, update the schedule
-      if (event.id && !event.id.toString().startsWith('pill-')) {
-        try {
-          const { error: updateError } = await supabase
-            .from('medication_schedule_times')
-            .update({
-              status: 'taken',
-              complete_datetime: isoTimestamp
-            })
-            .eq('id', event.id);
-            
-          if (updateError) {
-            console.error('Error updating schedule status:', updateError);
-          }
-        } catch (updateError) {
-          console.error('Exception updating schedule status:', updateError);
-        }
-      }
-      
+      Alert.alert('Success', 'Medication recorded as taken!');
       fetchEvents();
       getTodayMedicationStats();
       
-      Alert.alert('Sucesso', `${event.title} marcado como tomado!`);
-
-      // Update notification count after taking a medication
-      checkPendingMedications();
     } catch (error) {
-      Alert.alert('Erro', `Ocorreu um erro ao processar sua solicitação: ${error.message}`);
+      console.error('Error taking medication:', error);
+      Alert.alert('Error', 'An error occurred while processing your request.');
     }
   };
 
@@ -797,7 +704,7 @@ const HomeScreen = () => {
     try {
       const userId = DataUser.getUserData()?.id;
       if (!userId) {
-        Alert.alert('Erro', 'Usuário não identificado');
+        Alert.alert('Error', 'User not identified');
         return;
       }
 
@@ -805,25 +712,24 @@ const HomeScreen = () => {
       const isoTimestamp = now.toISOString();
       const currentDate = isoTimestamp.split('T')[0];
       
-      const confirmationData = {
+      const scheduleData = {
         pill_id: medication.pillId,
         user_id: userId,
-        scheduled_time: `${medication.scheduledDate}T${medication.scheduledTime}`,
-        confirmation_date: currentDate,
-        confirmation_time: now.toTimeString().split(' ')[0],
-        taken: false,
-        status: 'skipped',
-        notes: `Medicamento pulado pelo usuário: ${medication.title}`,
-        created_at: isoTimestamp
+        scheduled_date: currentDate,
+        scheduled_time: medication.scheduledTime,
+        status: 'missed',
+        notes: `Medication skipped by user: ${medication.title}`,
+        created_at: isoTimestamp,
+        complete_datetime: isoTimestamp
       };
       
       const { error: insertError } = await supabase
-        .from('medication_confirmations')
-        .insert(confirmationData);
+        .from('medication_schedule_times')
+        .insert(scheduleData);
         
       if (insertError) {
-        console.error('Erro ao registrar medicamento pulado:', insertError);
-        Alert.alert('Erro', `Não foi possível registrar o medicamento como pulado: ${insertError.message}`);
+        console.error('Error recording skipped medication:', insertError);
+        Alert.alert('Error', `Could not record medication as skipped: ${insertError.message}`);
         return;
       }
       
@@ -833,7 +739,7 @@ const HomeScreen = () => {
           const { error: updateError } = await supabase
             .from('medication_schedule_times')
             .update({
-              status: 'skipped',
+              status: 'missed',
               complete_datetime: isoTimestamp
             })
             .eq('id', medication.id);
@@ -850,13 +756,80 @@ const HomeScreen = () => {
       getTodayMedicationStats();
       fetchTodayMedications();
       
-      Alert.alert('Marcado como pulado', `${medication.title} foi registrado como pulado.`);
-
-      // Update notification count after skipping a medication
-      checkPendingMedications();
     } catch (error) {
-      console.error('Erro ao pular medicamento:', error);
-      Alert.alert('Erro', `Ocorreu um erro ao processar sua solicitação: ${error.message}`);
+      console.error('Error skipping medication:', error);
+      Alert.alert('Error', 'An error occurred while processing your request.');
+    }
+  };
+
+  const deleteMedication = async (medication) => {
+    try {
+      const userId = DataUser.getUserData()?.id;
+      if (!userId) {
+        Alert.alert('Error', 'User not identified');
+        return;
+      }
+
+      // First delete all schedules for this pill
+      const { error: scheduleError } = await supabase
+        .from('medication_schedule_times')
+        .delete()
+        .match({
+          pill_id: medication.pillId,
+          user_id: userId
+        });
+
+      if (scheduleError) {
+        console.error('Schedule delete error:', scheduleError);
+        Alert.alert('Error', 'Could not delete medication schedule');
+        return;
+      }
+
+      // Also delete confirmations for this pill
+      const { error: confirmationError } = await supabase
+        .from('medication_confirmations')
+        .delete()
+        .match({
+          pill_id: medication.pillId,
+          user_id: userId
+        });
+
+      if (confirmationError) {
+        console.error('Confirmation delete error:', confirmationError);
+        Alert.alert('Error', 'Could not delete medication confirmations');
+        return;
+      }
+
+      // Then delete the pill itself
+      const { error: pillError } = await supabase
+        .from('pills_warning')
+        .delete()
+        .match({
+          id: medication.pillId,
+          user_id: userId
+        });
+
+      if (pillError) {
+        console.error('Pill delete error:', pillError);
+        Alert.alert('Error', 'Could not delete medication');
+        return;
+      }
+
+      // Close the modal
+      setTodayMedicationsModal(false);
+
+      // Refresh all data
+      await Promise.all([
+        fetchTodayMedications(),
+        fetchEvents(),
+        getTodayMedicationStats(),
+        checkPendingMedications()
+      ]);
+
+      Alert.alert('Success', 'Medication and all its schedules have been deleted');
+    } catch (error) {
+      console.error('Error deleting medication:', error);
+      Alert.alert('Error', 'An error occurred while deleting the medication');
     }
   };
 
@@ -936,11 +909,7 @@ const HomeScreen = () => {
           </Animated.View>
         </View>
 
-        <ScrollView 
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollViewContent}
-        >
+        <View style={styles.container}>
           <View style={styles.content}>
             <View style={styles.calendarContainer}>
               <View style={styles.calendarHeader}>
@@ -1118,13 +1087,134 @@ const HomeScreen = () => {
               </View>
             </View>
 
-            <HealthQuote />
-            <FunZone />
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollViewContent}
+            >
+              <HealthQuote />
+            </ScrollView>
           </View>
-        </ScrollView>
+        </View>
       </View>
 
       <Navbar />
+
+      <Modal
+        visible={todayMedicationsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setTodayMedicationsModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Today's Medications</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setTodayMedicationsModal(false)}
+              >
+                <Ionicons name="close" size={24} color="#2D3142" />
+              </TouchableOpacity>
+            </View>
+
+            {todayMedications.length > 0 ? (
+              <ScrollView style={styles.medicationListScroll}>
+                {todayMedications.map((timeGroup, index) => (
+                  <View key={index} style={styles.timeGroupContainer}>
+                    <View style={styles.timeHeaderWrapper}>
+                      <Text style={styles.timeHeader}>
+                        {new Date(`2000-01-01T${timeGroup.time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                    {timeGroup.medications.map((medication, medIndex) => (
+                      <View
+                        key={medIndex}
+                        style={[
+                          styles.medicationCard,
+                          medication.isTaken && styles.medicationCardTaken,
+                          !medication.canTake && !medication.isTaken && styles.medicationCardFuture
+                        ]}
+                      >
+                        <View style={styles.medicationInfo}>
+                          <Text style={styles.medicationTitle}>{medication.title}</Text>
+                          <Text style={styles.medicationDosage}>
+                            Dose: {medication.dosage || medication.dosePorVez || 1} comprimido(s)
+                          </Text>
+                          {medication.notes && (
+                            <Text style={styles.medicationNotes}>{medication.notes}</Text>
+                          )}
+                          <View style={styles.statusContainer}>
+                            {medication.isTaken ? (
+                              <>
+                                <Ionicons name="checkmark-circle" size={16} color="#2ecc71" />
+                                <Text style={styles.statusTextTaken}>Taken</Text>
+                              </>
+                            ) : !medication.canTake ? (
+                              <>
+                                <Ionicons name="time-outline" size={16} color="#f39c12" />
+                                <Text style={styles.statusTextPending}>Waiting for time</Text>
+                              </>
+                            ) : null}
+                          </View>
+                        </View>
+                        <View style={styles.medicationActions}>
+                          {!medication.isTaken && medication.canTake && (
+                            <View style={styles.actionButtonsRow}>
+                              <TouchableOpacity
+                                style={styles.takeButton}
+                                onPress={() => markMedicationAsTaken(medication.id, medication.pillId)}
+                              >
+                                <Text style={styles.takeButtonText}>Take</Text>
+                                <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.skipButton}
+                                onPress={() => skipMedication(medication)}
+                              >
+                                <Text style={styles.skipButtonText}>Skip</Text>
+                                <Ionicons name="close-circle" size={16} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                          <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => {
+                              Alert.alert(
+                                'Delete Medication',
+                                'Are you sure you want to delete this medication?',
+                                [
+                                  {
+                                    text: 'Cancel',
+                                    style: 'cancel'
+                                  },
+                                  {
+                                    text: 'Delete',
+                                    style: 'destructive',
+                                    onPress: () => deleteMedication(medication)
+                                  }
+                                ]
+                              );
+                            }}
+                          >
+                            <Ionicons name="trash-outline" size={20} color="#e74c3c" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyMedsContainer}>
+                <Ionicons name="calendar-outline" size={48} color="#9BA3B7" />
+                <Text style={styles.emptyMedsText}>
+                  No medications scheduled for today
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1339,7 +1429,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContainer: {
     position: 'relative',
-    height: 280,
+    height: 270,
     borderWidth: 1,
     borderColor: '#F0F0F5',
     borderRadius: 12,
@@ -1347,7 +1437,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   hourlySchedule: {
-    height: 280,
+    height: 200,
   },
   hourlyScheduleContent: {
     paddingBottom: 10,
@@ -1975,6 +2065,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
     fontSize: 15,
+  },
+  deleteButton: {
+    padding: 4,
   },
 });
 

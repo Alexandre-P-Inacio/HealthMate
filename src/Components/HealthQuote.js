@@ -57,7 +57,7 @@ const HealthQuote = () => {
       onPress={getRandomQuote}
     >
       <View style={styles.quoteContainer}>
-        <Ionicons name="quote" size={24} color="#6A8DFD" style={styles.quoteIcon} />
+        <Ionicons name="open-outline" size={24} color="#6A8DFD" style={styles.quoteIcon} />
         <Text style={styles.quoteText}>{currentQuote.quote}</Text>
         <Text style={styles.authorText}>- {currentQuote.author}</Text>
       </View>

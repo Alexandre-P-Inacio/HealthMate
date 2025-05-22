@@ -130,18 +130,19 @@ const MedicationTracker = ({ navigation }) => {
   // Confirmar que tomou o medicamento
   const confirmMedicationTaken = async (medication, taken) => {
     try {
-      // Atualizar status na tabela medication_schedule_times
+      // Update the status in medication_schedule_times
+      const now = new Date();
       const { error } = await supabase.from('medication_schedule_times').update({
         status: taken ? 'taken' : 'missed',
-        complete_datetime: new Date().toISOString(),
-        notes: taken ? 'Medicamento tomado' : 'Medicamento não tomado'
+        complete_datetime: now.toISOString(),
+        notes: taken ? 'Medication taken' : 'Medication not taken'
       }).eq('id', medication.id);
       if (error) throw error;
       setPendingMedications(prev => prev.filter(med => med.id !== medication.id));
-      Alert.alert('Confirmado', taken ? 'Medicamento marcado como tomado!' : 'Medicamento marcado como não tomado.');
+      Alert.alert('Confirmed', taken ? 'Medication marked as taken!' : 'Medication marked as not taken.');
     } catch (error) {
-      console.error('Erro ao confirmar medicamento:', error);
-      Alert.alert('Erro', 'Não foi possível registrar sua confirmação.');
+      console.error('Error confirming medication:', error);
+      Alert.alert('Error', 'Could not record your confirmation.');
     } finally {
       setConfirmModal(false);
       setSelectedMedication(null);

@@ -600,14 +600,14 @@ const MedicalDiaryScreen = ({ navigation }) => {
     let backgroundColor, statusText, statusColor, statusIcon;
     
     // Determine styling based on status
-    if (item.status === 'taken' || item.taken === true) {
+    if (item.status === 'taken') {
       backgroundColor = '#e8f7f0';
       statusText = 'Taken';
       statusColor = '#2ecc71';
       statusIcon = 'checkmark-circle';
-    } else if (item.status === 'skipped') {
+    } else if (item.status === 'missed') {
       backgroundColor = '#fcf3e7';
-      statusText = 'Skipped';
+      statusText = 'Missed';
       statusColor = '#e67e22';
       statusIcon = 'close-circle';
     } else {
@@ -617,11 +617,9 @@ const MedicalDiaryScreen = ({ navigation }) => {
       statusIcon = 'time-outline';
     }
     
-    const timeString = item.confirmation_time 
-      ? new Date(`2000-01-01T${item.confirmation_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : item.scheduled_time
-        ? new Date(`2000-01-01T${item.scheduled_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : '';
+    const timeString = item.scheduled_time 
+      ? new Date(`2000-01-01T${item.scheduled_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '';
         
     return (
       <TouchableOpacity 

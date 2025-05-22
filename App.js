@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import SplashScreen from './src/App/SplashScreen';
 import WelcomeScreen from './src/Autentication/WelcomeScreen';
 import LoginScreen from './src/Autentication/LoginScreen';
 import RegisterOne from './src/Autentication/RegisterOne';
@@ -20,6 +21,7 @@ import HelpScreen from './src/App/HelpScreen';
 import EditProfileScreen from './src/App/EditProfileScreen';
 import DoctorsScreen from './src/App/DoctorsScreen';
 import AppointmentsScreen from './src/App/AppointmentsScreen';
+import DoctorDetailsScreen from './src/App/DoctorDetailsScreen';
 
 
 const Stack = createStackNavigator();
@@ -28,11 +30,12 @@ const App = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Welcome"
+        initialRouteName="Splash"
         screenOptions={{
           headerShown: false, // Esconde o cabeçalho em todas as telas
         }}
       >
+        <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         
@@ -55,6 +58,7 @@ const App = () => {
         <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
         <Stack.Screen name="DoctorsScreen" component={DoctorsScreen} />
         <Stack.Screen name="AppointmentsScreen" component={AppointmentsScreen} />
+        <Stack.Screen name="DoctorDetailsScreen" component={DoctorDetailsScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

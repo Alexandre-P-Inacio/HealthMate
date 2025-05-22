@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import supabase from '../../supabase';
 
 const RegisterOne = ({ navigation }) => {
@@ -45,6 +46,13 @@ const RegisterOne = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity 
+        style={styles.backButton} 
+        onPress={() => navigation.navigate('Welcome')}
+      >
+        <Ionicons name="arrow-back" size={24} color="#0d6efd" />
+      </TouchableOpacity>
+
       <Text style={styles.title}>Step 1: Enter Your Details</Text>
 
       <TextInput
@@ -73,6 +81,12 @@ const RegisterOne = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, justifyContent: 'center', backgroundColor: '#fff' },
+  backButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 1,
+  },
   title: { fontSize: 28, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 10 },
   button: { backgroundColor: '#0d6efd', padding: 15, borderRadius: 8, alignItems: 'center' },

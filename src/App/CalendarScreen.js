@@ -123,6 +123,18 @@ const CalendarScreen = ({ navigation }) => {
               // Always delete schedule times before deleting the medication
               await deleteMedicationScheduleTimes(medicationId);
               
+              // Also delete confirmations for this pill
+              const { error: confirmationError } = await supabase
+                .from('medication_confirmations')
+                .delete()
+                .eq('pill_id', medicationId);
+
+              if (confirmationError) {
+                console.error('Confirmation delete error:', confirmationError);
+                Alert.alert('Error', 'Could not delete medication confirmations');
+                return;
+              }
+              
               // Then delete the medication
               const { error } = await supabase
                 .from('pills_warning')

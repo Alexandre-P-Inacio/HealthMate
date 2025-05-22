@@ -88,37 +88,39 @@ const ConfirmMedicationsScreen = ({ navigation }) => {
           continue;
         }
         
-        // Check if a confirmation record already exists
-        const { data: existingConfirmations, error: checkError } = await supabase
-          .from('medication_confirmations')
+        // Check if a schedule record already exists
+        const { data: existingSchedules, error: checkError } = await supabase
+          .from('medication_schedule_times')
           .select('id')
           .eq('pill_id', medication.id)
           .eq('scheduled_time', medication.scheduled_time);
         
         if (checkError) {
-          console.error('Error checking existing confirmation:', checkError);
+          console.error('Error checking existing schedule:', checkError);
           continue;
         }
         
-        // Create a new confirmation record if none exists
-        if (!existingConfirmations || existingConfirmations.length === 0) {
-          console.log(`Creating confirmation record for medication ID ${medication.id}`);
+        // Create a new schedule record if none exists
+        if (!existingSchedules || existingSchedules.length === 0) {
+          console.log(`Creating schedule record for medication ID ${medication.id}`);
           
-          const newConfirmation = {
+          const newSchedule = {
             pill_id: medication.id,
             scheduled_time: medication.scheduled_time,
+            scheduled_date: new Date().toISOString().split('T')[0],
             user_id: userId,
-            taken: null, // Initially null until confirmed
+            status: 'pending',
             notes: 'Scheduled automatically',
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            complete_datetime: new Date().toISOString()
           };
           
           const { error: insertError } = await supabase
-            .from('medication_confirmations')
-            .insert(newConfirmation);
+            .from('medication_schedule_times')
+            .insert(newSchedule);
           
           if (insertError) {
-            console.error('Error creating confirmation record:', insertError);
+            console.error('Error creating schedule record:', insertError);
           }
         }
       }
