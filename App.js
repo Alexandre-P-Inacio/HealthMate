@@ -19,9 +19,11 @@ import PrivacyPolicyScreen from './src/App/PrivacyPolicyScreen';
 import TermsScreen from './src/App/TermsScreen';
 import HelpScreen from './src/App/HelpScreen';
 import EditProfileScreen from './src/App/EditProfileScreen';
-import DoctorsScreen from './src/App/DoctorsScreen';
-import AppointmentsScreen from './src/App/AppointmentsScreen';
-import DoctorDetailsScreen from './src/App/DoctorDetailsScreen';
+import DoctorsScreen from './src/App/Medic/DoctorsScreen';
+import AppointmentsScreen from './src/App/Medic/AppointmentsScreen';
+import DoctorDetailsScreen from './src/App/Medic/DoctorDetailsScreen';
+import DoctorDashboardScreen from './src/App/Medic/DoctorDashboardScreen';
+import DoctorRegistrationScreen from './src/App/Medic/DoctorRegistrationScreen';
 
 
 const Stack = createStackNavigator();
@@ -59,6 +61,8 @@ const App = () => {
         <Stack.Screen name="DoctorsScreen" component={DoctorsScreen} />
         <Stack.Screen name="AppointmentsScreen" component={AppointmentsScreen} />
         <Stack.Screen name="DoctorDetailsScreen" component={DoctorDetailsScreen} />
+        <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />
+        <Stack.Screen name="DoctorRegistration" component={DoctorRegistrationScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

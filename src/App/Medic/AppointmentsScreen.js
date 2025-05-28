@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Alert, SafeAreaView, Platform, StatusBar, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DoctorAppointmentService from '../services/DoctorAppointmentService';
-import DataUser from '../../navigation/DataUser';
-import Navbar from '../Components/Navbar';
+import DoctorAppointmentService from '../../services/DoctorAppointmentService';
+import DataUser from '../../../navigation/DataUser';
+import Navbar from '../../Components/Navbar';
 
 const AppointmentsScreen = ({ navigation }) => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
+  const [isMedic, setIsMedic] = useState(false);
 
   useEffect(() => {
     const currentUser = DataUser.getUserData();
     if (currentUser && currentUser.id) {
       setUserId(currentUser.id);
+      setIsMedic(currentUser.role === 'medic');
     } else {
       Alert.alert('Error', 'User not logged in.');
       setLoading(false);
@@ -68,19 +70,34 @@ const AppointmentsScreen = ({ navigation }) => {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity 
-            style={styles.backButton}
+            style={styles.backButton} 
             onPress={() => navigation.goBack()}
           >
             <Ionicons name="arrow-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Your Appointments</Text>
-          <View style={styles.headerRight} />
+          {isMedic && (
+            <TouchableOpacity 
+              style={styles.manageButton}
+              onPress={() => navigation.navigate('DoctorDashboard')}
+            >
+              <Ionicons name="settings-outline" size={24} color="#FFF" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {appointments.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="calendar-outline" size={64} color="#bdc3c7" />
             <Text style={styles.noDataText}>No appointments scheduled.</Text>
+            {isMedic && (
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={() => navigation.navigate('DoctorDashboard')}
+              >
+                <Text style={styles.addButtonText}>Manage Schedule</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <FlatList
@@ -194,6 +211,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 5,
     color: '#2ecc71',
+  },
+  manageButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+  },
+  addButton: {
+    backgroundColor: '#6A8DFD',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  addButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

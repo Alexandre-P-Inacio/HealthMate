@@ -15,10 +15,10 @@ import {
   Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import supabase from '../../supabase';
-import DataUser from '../../navigation/DataUser';
-import DoctorAppointmentService from '../services/DoctorAppointmentService';
-import Navbar from '../Components/Navbar';
+import supabase from '../../../supabase';
+import DataUser from '../../../navigation/DataUser';
+import DoctorAppointmentService from '../../services/DoctorAppointmentService';
+import Navbar from '../../Components/Navbar';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const DoctorsScreen = ({ navigation }) => {
@@ -111,7 +111,7 @@ const DoctorsScreen = ({ navigation }) => {
 
         setMedics(medicsWithDetails);
         console.log('Fetched medics with doctor details:', medicsWithDetails);
-      }
+        }
 
       setLoading(false);
     };
@@ -305,14 +305,14 @@ const DoctorsScreen = ({ navigation }) => {
         </View>
 
         {role === 'doctor' ? (
-          <FlatList
-            data={list}
-            keyExtractor={item => item.id.toString()}
-            renderItem={renderDoctorCard}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="people-outline" size={70} color="#6A8DFD" />
+        <FlatList
+          data={list}
+          keyExtractor={item => item.id.toString()}
+          renderItem={renderDoctorCard}
+          contentContainerStyle={styles.listContainer}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="people-outline" size={70} color="#6A8DFD" />
                 <Text style={styles.emptyText}>No patients found.</Text>
               </View>
             }
@@ -327,9 +327,9 @@ const DoctorsScreen = ({ navigation }) => {
               <View style={styles.emptyContainer}>
                 <Ionicons name="people-outline" size={64} color="#bdc3c7" />
                 <Text style={styles.noDataText}>No medics available</Text>
-              </View>
-            }
-          />
+            </View>
+          }
+        />
         )}
 
         {role === 'doctor' && selectedPatient && (

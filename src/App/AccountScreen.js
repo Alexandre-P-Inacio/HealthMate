@@ -30,6 +30,7 @@ const AccountScreen = ({ navigation }) => {
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [statsView, setStatsView] = useState('weekly'); // 'weekly' or 'monthly'
   const [isPremiumPlus, setIsPremiumPlus] = useState(false);
+  const [isMedic, setIsMedic] = useState(false);
   const [medicationStats, setMedicationStats] = useState({
     totalScheduled: 0,
     taken: 0,
@@ -74,6 +75,8 @@ const AccountScreen = ({ navigation }) => {
         DataUser.setUserData(data);
         // Check if user is premium plus (ID 16)
         setIsPremiumPlus(data.id === 16);
+        // Check if user is a medic
+        setIsMedic(data.role === 'medic');
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -377,18 +380,52 @@ const AccountScreen = ({ navigation }) => {
 
           {/* Quick Actions */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsScroll} contentContainerStyle={styles.quickActions}>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('DoctorsScreen')}>
-              <View style={styles.actionIcon}>
-                <FontAwesome name="user-md" size={20} color="#3498db" />
-              </View>
-              <Text style={styles.actionText}>Doctors</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('AppointmentsScreen')}>
-              <View style={styles.actionIcon}>
-                <FontAwesome name="info-circle" size={20} color="#3498db" />
-              </View>
-              <Text style={styles.actionText}>Information</Text>
-            </TouchableOpacity>
+            {isMedic ? (
+              <>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={() => navigation.navigate('DoctorDashboard')}
+                >
+                  <View style={styles.actionIcon}>
+                    <FontAwesome name="stethoscope" size={20} color="#3498db" />
+                  </View>
+                  <Text style={styles.actionText}>Dashboard</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={() => navigation.navigate('AppointmentsScreen')}
+                >
+                  <View style={styles.actionIcon}>
+                    <FontAwesome name="calendar" size={20} color="#3498db" />
+                  </View>
+                  <Text style={styles.actionText}>Appointments</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={() => navigation.navigate('DoctorDetailsScreen')}
+                >
+                  <View style={styles.actionIcon}>
+                    <FontAwesome name="user-md" size={20} color="#3498db" />
+                  </View>
+                  <Text style={styles.actionText}>Profile</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('DoctorsScreen')}>
+                  <View style={styles.actionIcon}>
+                    <FontAwesome name="user-md" size={20} color="#3498db" />
+                  </View>
+                  <Text style={styles.actionText}>Doctors</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('AppointmentsScreen')}>
+                  <View style={styles.actionIcon}>
+                    <FontAwesome name="info-circle" size={20} color="#3498db" />
+                  </View>
+                  <Text style={styles.actionText}>Information</Text>
+                </TouchableOpacity>
+              </>
+            )}
             <TouchableOpacity 
               style={styles.actionButton}
               onPress={() => {
@@ -590,66 +627,79 @@ const AccountScreen = ({ navigation }) => {
                       </View>
                     </View>
                     {/* Status Distribution Chart */}
-                    {Array.isArray(medicationStats.statusDistribution) && medicationStats.statusDistribution.some(s => s.count > 0) && (
-                      <View style={styles.chartContainer}>
-                        <Text style={styles.chartTitle}>Status Distribution</Text>
-                        <PieChart
-                          data={medicationStats.statusDistribution.map(s => ({
-                            ...s,
-                            count: Number.isFinite(s.count) ? s.count : 0
-                          }))}
-                          width={Dimensions.get('window').width - 40}
-                          height={220}
-                          chartConfig={{
-                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                          }}
-                          accessor="count"
-                          backgroundColor="transparent"
-                          paddingLeft="15"
-                          absolute
-                        />
-                      </View>
-                    )}
+                    <View style={styles.chartContainer}>
+                      <Text style={styles.chartTitle}>Status Distribution</Text>
+                      <PieChart
+                        data={
+                          Array.isArray(medicationStats.statusDistribution) && medicationStats.statusDistribution.length > 0
+                            ? medicationStats.statusDistribution.map(s => ({
+                                ...s,
+                                count: Number.isFinite(s.count) ? s.count : 0
+                              }))
+                            : [
+                                { name: 'Taken', count: 0, color: '#2ecc71', legendFontColor: '#7F7F7F', legendFontSize: 12 },
+                                { name: 'Missed', count: 0, color: '#e74c3c', legendFontColor: '#7F7F7F', legendFontSize: 12 },
+                                { name: 'Pending', count: 0, color: '#f1c40f', legendFontColor: '#7F7F7F', legendFontSize: 12 },
+                              ]
+                        }
+                        width={Dimensions.get('window').width - 40}
+                        height={220}
+                        chartConfig={{
+                          color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                        }}
+                        accessor="count"
+                        backgroundColor="transparent"
+                        paddingLeft="15"
+                        absolute
+                      />
+                    </View>
                     {/* Weekly Trend Chart */}
-                    {Array.isArray(medicationStats.weeklyData) && medicationStats.weeklyData.length > 0 && (
-                      <View style={styles.chartContainer}>
-                        <Text style={styles.chartTitle}>Weekly Trend</Text>
-                        <LineChart
-                          data={{
-                            labels: medicationStats.weeklyData.map(d => d.date.split('-')[2]),
-                            datasets: [
-                              {
-                                data: medicationStats.weeklyData.map(d => Number.isFinite(d.taken) ? d.taken : 0),
-                                color: (opacity = 1) => `rgba(46, 204, 113, ${opacity})`,
-                                strokeWidth: 2
-                              },
-                              {
-                                data: medicationStats.weeklyData.map(d => Number.isFinite(d.missed) ? d.missed : 0),
-                                color: (opacity = 1) => `rgba(231, 76, 60, ${opacity})`,
-                                strokeWidth: 2
-                              }
-                            ]
-                          }}
-                          width={Dimensions.get('window').width - 40}
-                          height={220}
-                          chartConfig={{
-                            backgroundColor: '#ffffff',
-                            backgroundGradientFrom: '#ffffff',
-                            backgroundGradientTo: '#ffffff',
-                            decimalPlaces: 0,
-                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                            style: {
-                              borderRadius: 16
+                    <View style={styles.chartContainer}>
+                      <Text style={styles.chartTitle}>Weekly Trend</Text>
+                      <LineChart
+                        data={{
+                          labels:
+                            Array.isArray(medicationStats.weeklyData) && medicationStats.weeklyData.length > 0
+                              ? medicationStats.weeklyData.map(d => d.date.split('-')[2])
+                              : ['1', '2', '3', '4', '5', '6', '7'],
+                          datasets: [
+                            {
+                              data:
+                                Array.isArray(medicationStats.weeklyData) && medicationStats.weeklyData.length > 0
+                                  ? medicationStats.weeklyData.map(d => Number.isFinite(d.taken) ? d.taken : 0)
+                                  : [0, 0, 0, 0, 0, 0, 0],
+                              color: (opacity = 1) => `rgba(46, 204, 113, ${opacity})`,
+                              strokeWidth: 2
+                            },
+                            {
+                              data:
+                                Array.isArray(medicationStats.weeklyData) && medicationStats.weeklyData.length > 0
+                                  ? medicationStats.weeklyData.map(d => Number.isFinite(d.missed) ? d.missed : 0)
+                                  : [0, 0, 0, 0, 0, 0, 0],
+                              color: (opacity = 1) => `rgba(231, 76, 60, ${opacity})`,
+                              strokeWidth: 2
                             }
-                          }}
-                          bezier
-                          style={{
-                            marginVertical: 8,
+                          ]
+                        }}
+                        width={Dimensions.get('window').width - 40}
+                        height={220}
+                        chartConfig={{
+                          backgroundColor: '#ffffff',
+                          backgroundGradientFrom: '#ffffff',
+                          backgroundGradientTo: '#ffffff',
+                          decimalPlaces: 0,
+                          color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                          style: {
                             borderRadius: 16
-                          }}
-                        />
-                      </View>
-                    )}
+                          }
+                        }}
+                        bezier
+                        style={{
+                          marginVertical: 8,
+                          borderRadius: 16
+                        }}
+                      />
+                    </View>
                   </>
                 )}
                 {/* MONTHLY VIEW */}
@@ -670,12 +720,11 @@ const AccountScreen = ({ navigation }) => {
                       </View>
                     </View>
                     {/* Monthly Status Distribution Pie Chart */}
-                    {Array.isArray(medicationStats.monthlyData) && medicationStats.monthlyData.length > 0 && (
-                      <View style={styles.chartContainer}>
-                        <Text style={styles.chartTitle}>Status Distribution (30d)</Text>
-                        <PieChart
-                          data={(() => {
-                            // Calculate monthly status distribution
+                    <View style={styles.chartContainer}>
+                      <Text style={styles.chartTitle}>Status Distribution (30d)</Text>
+                      <PieChart
+                        data={(() => {
+                          if (Array.isArray(medicationStats.monthlyData) && medicationStats.monthlyData.length > 0) {
                             const taken = medicationStats.monthlyData.reduce((acc, d) => acc + (Number.isFinite(d.taken) ? d.taken : 0), 0);
                             const missed = medicationStats.monthlyData.reduce((acc, d) => acc + (Number.isFinite(d.missed) ? d.missed : 0), 0);
                             const pending = medicationStats.monthlyData.reduce((acc, d) => acc + (Number.isFinite(d.pending) ? d.pending : 0), 0);
@@ -684,57 +733,70 @@ const AccountScreen = ({ navigation }) => {
                               { name: 'Missed', count: missed, color: '#e74c3c', legendFontColor: '#7F7F7F', legendFontSize: 12 },
                               { name: 'Pending', count: pending, color: '#f1c40f', legendFontColor: '#7F7F7F', legendFontSize: 12 },
                             ];
-                          })()}
-                          width={Dimensions.get('window').width - 40}
-                          height={220}
-                          chartConfig={{
-                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                          }}
-                          accessor="count"
-                          backgroundColor="transparent"
-                          paddingLeft="15"
-                          absolute
-                        />
-                      </View>
-                    )}
+                          } else {
+                            return [
+                              { name: 'Taken', count: 0, color: '#2ecc71', legendFontColor: '#7F7F7F', legendFontSize: 12 },
+                              { name: 'Missed', count: 0, color: '#e74c3c', legendFontColor: '#7F7F7F', legendFontSize: 12 },
+                              { name: 'Pending', count: 0, color: '#f1c40f', legendFontColor: '#7F7F7F', legendFontSize: 12 },
+                            ];
+                          }
+                        })()}
+                        width={Dimensions.get('window').width - 40}
+                        height={220}
+                        chartConfig={{
+                          color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                        }}
+                        accessor="count"
+                        backgroundColor="transparent"
+                        paddingLeft="15"
+                        absolute
+                      />
+                    </View>
                     {/* Monthly Trend Chart */}
-                    {Array.isArray(medicationStats.monthlyData) && medicationStats.monthlyData.length > 0 && (
-                      <View style={styles.chartContainer}>
-                        <Text style={styles.chartTitle}>Monthly Trend (Taken/Missed)</Text>
-                        <BarChart
-                          data={{
-                            labels: medicationStats.monthlyData.map(d => d.date.split('-')[2]),
-                            datasets: [
-                              {
-                                data: medicationStats.monthlyData.map(d => Number.isFinite(d.taken) ? d.taken : 0),
-                                color: (opacity = 1) => `rgba(46, 204, 113, ${opacity})`,
-                              },
-                              {
-                                data: medicationStats.monthlyData.map(d => Number.isFinite(d.missed) ? d.missed : 0),
-                                color: (opacity = 1) => `rgba(231, 76, 60, ${opacity})`,
-                              }
-                            ]
-                          }}
-                          width={Dimensions.get('window').width - 40}
-                          height={220}
-                          yAxisLabel=""
-                          chartConfig={{
-                            backgroundColor: '#fff',
-                            backgroundGradientFrom: '#fff',
-                            backgroundGradientTo: '#fff',
-                            decimalPlaces: 0,
-                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                            style: {
-                              borderRadius: 16
+                    <View style={styles.chartContainer}>
+                      <Text style={styles.chartTitle}>Monthly Trend (Taken/Missed)</Text>
+                      <BarChart
+                        data={{
+                          labels:
+                            Array.isArray(medicationStats.monthlyData) && medicationStats.monthlyData.length > 0
+                              ? medicationStats.monthlyData.map(d => d.date.split('-')[2])
+                              : ['1', '2', '3', '4', '5', '6', '7'],
+                          datasets: [
+                            {
+                              data:
+                                Array.isArray(medicationStats.monthlyData) && medicationStats.monthlyData.length > 0
+                                  ? medicationStats.monthlyData.map(d => Number.isFinite(d.taken) ? d.taken : 0)
+                                  : [0, 0, 0, 0, 0, 0, 0],
+                              color: (opacity = 1) => `rgba(46, 204, 113, ${opacity})`,
+                            },
+                            {
+                              data:
+                                Array.isArray(medicationStats.monthlyData) && medicationStats.monthlyData.length > 0
+                                  ? medicationStats.monthlyData.map(d => Number.isFinite(d.missed) ? d.missed : 0)
+                                  : [0, 0, 0, 0, 0, 0, 0],
+                              color: (opacity = 1) => `rgba(231, 76, 60, ${opacity})`,
                             }
-                          }}
-                          style={{
-                            marginVertical: 8,
+                          ]
+                        }}
+                        width={Dimensions.get('window').width - 40}
+                        height={220}
+                        yAxisLabel=""
+                        chartConfig={{
+                          backgroundColor: '#fff',
+                          backgroundGradientFrom: '#fff',
+                          backgroundGradientTo: '#fff',
+                          decimalPlaces: 0,
+                          color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                          style: {
                             borderRadius: 16
-                          }}
-                        />
-                      </View>
-                    )}
+                          }
+                        }}
+                        style={{
+                          marginVertical: 8,
+                          borderRadius: 16
+                        }}
+                      />
+                    </View>
                   </>
                 )}
               </ScrollView>

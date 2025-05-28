@@ -1,14 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, TouchableOpacity, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Navbar from '../Components/Navbar';
+import Navbar from '../../Components/Navbar';
+import DataUser from '../../../navigation/DataUser';
 
 const DoctorDetailsScreen = ({ route, navigation }) => {
-  const { doctor } = route.params; // Get doctor data from navigation params
+  const { doctor } = route.params;
+  const [isMedic, setIsMedic] = useState(false);
+
+  useEffect(() => {
+    const currentUser = DataUser.getUserData();
+    if (currentUser) {
+      setIsMedic(currentUser.role === 'medic' && currentUser.id === doctor.id);
+    }
+  }, []);
 
   const profileImage = doctor.pfpimg
     ? { uri: `data:image/png;base64,${doctor.pfpimg}` }
-    : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' }; // Use the same placeholder as DoctorsScreen
+    : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -22,61 +31,94 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
             <Ionicons name="arrow-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Doctor Info</Text>
-          {/* Placeholder for right icon if needed */}
-          <View style={{ width: 24 }} />
+          {isMedic && (
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => navigation.navigate('DoctorRegistration')}
+            >
+              <Ionicons name="create-outline" size={24} color="#FFF" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Doctor Summary Card */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
-              <Image source={profileImage} style={styles.profileImage} />
+              <View style={styles.profileImageContainer}>
+                <Image source={profileImage} style={styles.profileImage} />
+                {isMedic && (
+                  <TouchableOpacity 
+                    style={styles.editImageButton}
+                    onPress={() => {/* Add image upload functionality */}}
+                  >
+                    <Ionicons name="camera" size={20} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+              </View>
               <View style={styles.summaryInfo}>
-                 <View style={styles.badge}>
-                    <Ionicons name="star" size={16} color="#FFF" />
-                    <Text style={styles.badgeText}>4.9</Text>{/* Placeholder for Rating */}
-                 </View>
-                <Text style={styles.yearsExperience}>{doctor.years_experience !== 'Nao encontrado' ? `${doctor.years_experience} years experience` : ''}</Text>
-                {/* Placeholder for Focus Areas */}
-                 <View style={styles.focusAreaBox}>
-                   <Text style={styles.focusAreaText}>Focus On: Conditions such as heart failure, arrhythmia, coronary artery disease, and hypertension.</Text>{/* Placeholder */}
-                 </View>
+                <View style={styles.badge}>
+                  <Ionicons name="star" size={16} color="#FFF" />
+                  <Text style={styles.badgeText}>4.9</Text>
+                </View>
+                <Text style={styles.yearsExperience}>
+                  {doctor.years_experience !== 'Nao encontrado' ? `${doctor.years_experience} years experience` : ''}
+                </Text>
+                <View style={styles.focusAreaBox}>
+                  <Text style={styles.focusAreaText}>
+                    Focus On: Conditions such as heart failure, arrhythmia, coronary artery disease, and hypertension.
+                  </Text>
+                </View>
               </View>
             </View>
             <Text style={styles.doctorName}>{doctor.fullname}</Text>
-            <Text style={styles.doctorSpecialization}>{doctor.specialization !== 'Nao encontrado' ? doctor.specialization : 'Specialization not found'}</Text>
+            <Text style={styles.doctorSpecialization}>
+              {doctor.specialization !== 'Nao encontrado' ? doctor.specialization : 'Specialization not found'}
+            </Text>
 
             <View style={styles.scheduleInfo}>
-                <View style={styles.scheduleItem}>
-                    <Ionicons name="star-outline" size={20} color="#6A8DFD" />
-                    <Text style={styles.scheduleText}>5</Text>{/* Placeholder */}
-                </View>
-                 <View style={styles.scheduleItem}>
-                    <Ionicons name="time-outline" size={20} color="#6A8DFD" />
-                    <Text style={styles.scheduleText}>40 min</Text>{/* Placeholder */}
-                </View>
-                 <View style={styles.scheduleItem}>
-                    <Ionicons name="calendar-outline" size={20} color="#6A8DFD" />
-                    <Text style={styles.scheduleText}>Mon-Sat / 9:00 - 18:00</Text>{/* Placeholder */}
-                </View>
+              <View style={styles.scheduleItem}>
+                <Ionicons name="star-outline" size={20} color="#6A8DFD" />
+                <Text style={styles.scheduleText}>5</Text>
+              </View>
+              <View style={styles.scheduleItem}>
+                <Ionicons name="time-outline" size={20} color="#6A8DFD" />
+                <Text style={styles.scheduleText}>40 min</Text>
+              </View>
+              <View style={styles.scheduleItem}>
+                <Ionicons name="calendar-outline" size={20} color="#6A8DFD" />
+                <Text style={styles.scheduleText}>Mon-Sat / 9:00 - 18:00</Text>
+              </View>
             </View>
 
             <View style={styles.actionButtons}>
-                <TouchableOpacity style={[styles.actionButton, styles.scheduleButton]}>
-                    <Ionicons name="calendar-outline" size={20} color="#FFF" />
-                    <Text style={styles.actionButtonText}>Schedule</Text>
-                </TouchableOpacity>
-                 <TouchableOpacity style={[styles.actionButton, styles.infoButton]}>
-                    <Ionicons name="information-circle-outline" size={20} color="#6A8DFD" />
-                 </TouchableOpacity>
-                 <TouchableOpacity style={[styles.actionButton, styles.infoButton]}>
-                    <Ionicons name="star-outline" size={20} color="#6A8DFD" />
-                 </TouchableOpacity>
-                 <TouchableOpacity style={[styles.actionButton, styles.infoButton]}>
-                    <Ionicons name="heart-outline" size={20} color="#6A8DFD" />
-                 </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.scheduleButton]}
+                onPress={() => navigation.navigate('Appointments')}
+              >
+                <Ionicons name="calendar-outline" size={20} color="#FFF" />
+                <Text style={styles.actionButtonText}>Schedule</Text>
+              </TouchableOpacity>
+              {isMedic && (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.infoButton]}
+                    onPress={() => navigation.navigate('DoctorRegistration')}
+                  >
+                    <Ionicons name="create-outline" size={20} color="#6A8DFD" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.infoButton]}
+                    onPress={() => navigation.navigate('DoctorDashboard')}
+                  >
+                    <Ionicons name="stats-chart-outline" size={20} color="#6A8DFD" />
+                  </TouchableOpacity>
+                </>
+              )}
+              <TouchableOpacity style={[styles.actionButton, styles.infoButton]}>
+                <Ionicons name="heart-outline" size={20} color="#6A8DFD" />
+              </TouchableOpacity>
             </View>
-
           </View>
 
           {/* Profile Section */}
@@ -153,6 +195,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     width: '100%',
+  },
+  profileImageContainer: {
+    position: 'relative',
   },
   profileImage: {
     width: 100,
@@ -269,6 +314,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  editButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+  },
+  editImageButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#6A8DFD',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
 });
 
