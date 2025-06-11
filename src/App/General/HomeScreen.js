@@ -562,9 +562,12 @@ const HomeScreen = () => {
         console.error('Erro ao buscar agendamentos:', scheduleError);
         return;
       }
-      // Contar apenas os medicamentos que podem ser tomados agora
+      // Count only medications that:
+      // - Haven't been taken
+      // - Haven't been skipped
+      // - Time has passed
       const count = (scheduled || []).filter(item => {
-        if (item.status === 'taken') return false;
+        if (item.status === 'taken' || item.status === 'missed') return false;
         // scheduled_time is in format 'HH:MM:SS' or 'HH:MM'
         const scheduledDateTime = new Date(`${item.scheduled_date}T${item.scheduled_time}`);
         return scheduledDateTime <= deviceNow;
@@ -586,8 +589,7 @@ const HomeScreen = () => {
         .from('medication_schedule_times')
         .update({
           status: 'taken',
-          complete_datetime: now.toISOString(),
-          notes: 'Medication taken'
+          complete_datetime: now.toISOString()
         })
         .eq('id', scheduleId)
         .eq('user_id', userId);
@@ -598,6 +600,9 @@ const HomeScreen = () => {
       }
       
       await fetchTodayMedications();
+      await fetchEvents();
+      await getTodayMedicationStats();
+      await checkPendingMedications();
       
       Alert.alert('Success', 'Medication marked as taken!');
     } catch (error) {
@@ -708,56 +713,49 @@ const HomeScreen = () => {
         return;
       }
 
-      const now = new Date();
-      const isoTimestamp = now.toISOString();
-      const currentDate = isoTimestamp.split('T')[0];
-      
-      const scheduleData = {
-        pill_id: medication.pillId,
-        user_id: userId,
-        scheduled_date: currentDate,
-        scheduled_time: medication.scheduledTime,
-        status: 'missed',
-        notes: `Medication skipped by user: ${medication.title}`,
-        created_at: isoTimestamp,
-        complete_datetime: isoTimestamp
-      };
-      
-      const { error: insertError } = await supabase
-        .from('medication_schedule_times')
-        .insert(scheduleData);
-        
-      if (insertError) {
-        console.error('Error recording skipped medication:', insertError);
-        Alert.alert('Error', `Could not record medication as skipped: ${insertError.message}`);
-        return;
-      }
-      
-      // If it's a scheduled medication and has an ID, update the schedule
-      if (medication.id && !medication.id.toString().startsWith('pill-')) {
-        try {
-          const { error: updateError } = await supabase
-            .from('medication_schedule_times')
-            .update({
-              status: 'missed',
-              complete_datetime: isoTimestamp
-            })
-            .eq('id', medication.id);
-            
-          if (updateError) {
-            console.error('Error updating schedule status:', updateError);
+      // Show confirmation dialog
+      Alert.alert(
+        'Skip Medication',
+        'Are you sure you want to skip this medication? This action cannot be undone.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Skip',
+            style: 'destructive',
+            onPress: async () => {
+              const now = new Date();
+              
+              // Update to skipped status
+              const { error: updateError } = await supabase
+                .from('medication_schedule_times')
+                .update({
+                  status: 'missed',
+                  complete_datetime: now.toISOString(),
+                  is_permanent_skip: true
+                })
+                .eq('id', medication.id)
+                .eq('user_id', userId);
+                
+              if (updateError) {
+                Alert.alert('Error', 'Could not mark medication as skipped.');
+                return;
+              }
+              
+              // Refresh everything
+              await fetchTodayMedications();
+              await fetchEvents();
+              await getTodayMedicationStats();
+              await checkPendingMedications();
+              
+              Alert.alert('Success', 'Medication has been permanently skipped');
+            }
           }
-        } catch (updateError) {
-          console.error('Exception updating schedule status:', updateError);
-        }
-      }
-      
-      fetchEvents();
-      getTodayMedicationStats();
-      fetchTodayMedications();
-      
+        ]
+      );
     } catch (error) {
-      console.error('Error skipping medication:', error);
       Alert.alert('Error', 'An error occurred while processing your request.');
     }
   };
@@ -770,53 +768,20 @@ const HomeScreen = () => {
         return;
       }
 
-      // First delete all schedules for this pill
+      // Only delete this specific scheduled time
       const { error: scheduleError } = await supabase
         .from('medication_schedule_times')
         .delete()
         .match({
-          pill_id: medication.pillId,
+          id: medication.id,
           user_id: userId
         });
 
       if (scheduleError) {
         console.error('Schedule delete error:', scheduleError);
-        Alert.alert('Error', 'Could not delete medication schedule');
+        Alert.alert('Error', 'Could not delete this scheduled medication time');
         return;
       }
-
-      // Also delete confirmations for this pill
-      const { error: confirmationError } = await supabase
-        .from('medication_confirmations')
-        .delete()
-        .match({
-          pill_id: medication.pillId,
-          user_id: userId
-        });
-
-      if (confirmationError) {
-        console.error('Confirmation delete error:', confirmationError);
-        Alert.alert('Error', 'Could not delete medication confirmations');
-        return;
-      }
-
-      // Then delete the pill itself
-      const { error: pillError } = await supabase
-        .from('pills_warning')
-        .delete()
-        .match({
-          id: medication.pillId,
-          user_id: userId
-        });
-
-      if (pillError) {
-        console.error('Pill delete error:', pillError);
-        Alert.alert('Error', 'Could not delete medication');
-        return;
-      }
-
-      // Close the modal
-      setTodayMedicationsModal(false);
 
       // Refresh all data
       await Promise.all([
@@ -826,10 +791,10 @@ const HomeScreen = () => {
         checkPendingMedications()
       ]);
 
-      Alert.alert('Success', 'Medication and all its schedules have been deleted');
+      Alert.alert('Success', 'This medication time has been deleted');
     } catch (error) {
-      console.error('Error deleting medication:', error);
-      Alert.alert('Error', 'An error occurred while deleting the medication');
+      console.error('Error deleting medication time:', error);
+      Alert.alert('Error', 'An error occurred while deleting the medication time');
     }
   };
 
@@ -1016,8 +981,8 @@ const HomeScreen = () => {
                                 return (
                                   <View key={idx} style={[
                                     styles.eventCard,
-                                    event.isTaken && styles.eventCardTaken,
-                                    !canTake && !event.isTaken && styles.eventCardFuture
+                                    event.status === 'taken' && styles.eventCardTaken,
+                                    event.status === 'missed' && styles.eventCardSkipped
                                   ]}>
                                     <View style={styles.eventCardHeader}>
                                       <Text style={styles.eventTitle}>{event.title}</Text>
@@ -1031,25 +996,16 @@ const HomeScreen = () => {
                                     <Text style={styles.scheduledInfo}>
                                       Agendado para: {event.scheduledDate} às {event.scheduledTime?.substring(0, 5) || '00:00'}
                                     </Text>
-                                    {!event.isTaken && canTake && (
-                                      <TouchableOpacity 
-                                        style={styles.takePillButton}
-                                        onPress={() => takeMedication(event)}
-                                      >
-                                        <Text style={styles.takePillButtonText}>Tomar</Text>
-                                        <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                                      </TouchableOpacity>
-                                    )}
-                                    {!event.isTaken && !canTake && (
-                                      <View style={styles.futureIndicator}>
-                                        <Text style={styles.futureText}>Aguardando horário</Text>
-                                        <Ionicons name="time-outline" size={16} color="#f39c12" />
-                                      </View>
-                                    )}
-                                    {event.isTaken && (
+                                    {event.status === 'taken' && (
                                       <View style={styles.takenPillIndicator}>
                                         <Text style={styles.takenPillText}>Medicamento tomado</Text>
                                         <Ionicons name="checkmark-circle" size={16} color="#2ECC71" />
+                                      </View>
+                                    )}
+                                    {event.status === 'missed' && (
+                                      <View style={styles.skippedIndicator}>
+                                        <Text style={styles.skippedText}>Medicamento ignorado</Text>
+                                        <Ionicons name="close-circle" size={16} color="#e74c3c" />
                                       </View>
                                     )}
                                   </View>
@@ -1131,8 +1087,8 @@ const HomeScreen = () => {
                         key={medIndex}
                         style={[
                           styles.medicationCard,
-                          medication.isTaken && styles.medicationCardTaken,
-                          !medication.canTake && !medication.isTaken && styles.medicationCardFuture
+                          medication.status === 'taken' && styles.medicationCardTaken,
+                          medication.status === 'missed' && styles.medicationCardSkipped
                         ]}
                       >
                         <View style={styles.medicationInfo}>
@@ -1144,29 +1100,23 @@ const HomeScreen = () => {
                             <Text style={styles.medicationNotes}>{medication.notes}</Text>
                           )}
                           <View style={styles.statusContainer}>
-                            {medication.isTaken ? (
+                            {medication.status === 'taken' && (
                               <>
                                 <Ionicons name="checkmark-circle" size={16} color="#2ecc71" />
                                 <Text style={styles.statusTextTaken}>Taken</Text>
                               </>
-                            ) : !medication.canTake ? (
+                            )}
+                            {medication.status === 'missed' && (
                               <>
-                                <Ionicons name="time-outline" size={16} color="#f39c12" />
-                                <Text style={styles.statusTextPending}>Waiting for time</Text>
+                                <Ionicons name="close-circle" size={16} color="#e74c3c" />
+                                <Text style={styles.statusTextSkipped}>Skipped</Text>
                               </>
-                            ) : null}
+                            )}
                           </View>
                         </View>
                         <View style={styles.medicationActions}>
-                          {!medication.isTaken && medication.canTake && (
+                          {!medication.isTaken && medication.status !== 'missed' && medication.canTake && (
                             <View style={styles.actionButtonsRow}>
-                              <TouchableOpacity
-                                style={styles.takeButton}
-                                onPress={() => markMedicationAsTaken(medication.id, medication.pillId)}
-                              >
-                                <Text style={styles.takeButtonText}>Take</Text>
-                                <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                              </TouchableOpacity>
                               <TouchableOpacity
                                 style={styles.skipButton}
                                 onPress={() => skipMedication(medication)}
@@ -1176,28 +1126,6 @@ const HomeScreen = () => {
                               </TouchableOpacity>
                             </View>
                           )}
-                          <TouchableOpacity
-                            style={styles.deleteButton}
-                            onPress={() => {
-                              Alert.alert(
-                                'Delete Medication',
-                                'Are you sure you want to delete this medication?',
-                                [
-                                  {
-                                    text: 'Cancel',
-                                    style: 'cancel'
-                                  },
-                                  {
-                                    text: 'Delete',
-                                    style: 'destructive',
-                                    onPress: () => deleteMedication(medication)
-                                  }
-                                ]
-                              );
-                            }}
-                          >
-                            <Ionicons name="trash-outline" size={20} color="#e74c3c" />
-                          </TouchableOpacity>
                         </View>
                       </View>
                     ))}
@@ -1506,9 +1434,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FFF4',
     borderLeftColor: '#2ECC71',
   },
-  eventCardFuture: {
-    backgroundColor: '#f5f5f5',
-    borderLeftColor: '#f39c12',
+  eventCardSkipped: {
+    backgroundColor: '#FFF5F5',
+    borderLeftColor: '#E74C3C',
   },
   eventCardHeader: {
     flexDirection: 'row',
@@ -1704,9 +1632,9 @@ const styles = StyleSheet.create({
     borderLeftColor: '#2ecc71',
     backgroundColor: '#f0fff4',
   },
-  medicationCardFuture: {
-    borderLeftColor: '#f39c12',
-    backgroundColor: '#fffbf0',
+  medicationCardSkipped: {
+    borderLeftColor: '#e74c3c',
+    backgroundColor: '#fff5f5',
   },
   medicationInfo: {
     flex: 1,
@@ -1734,9 +1662,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '500',
   },
-  statusTextPending: {
+  statusTextSkipped: {
     fontSize: 12,
-    color: '#f39c12',
+    color: '#e74c3c',
     marginLeft: 4,
     fontWeight: '500',
   },
@@ -1746,22 +1674,6 @@ const styles = StyleSheet.create({
   },
   actionButtonsRow: {
     flexDirection: 'row',
-  },
-  takeButton: {
-    backgroundColor: '#2ecc71',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 6,
-  },
-  takeButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginRight: 4,
-    fontSize: 14,
   },
   skipButton: {
     backgroundColor: '#e74c3c',
@@ -1968,9 +1880,9 @@ const styles = StyleSheet.create({
     borderLeftColor: '#2ecc71',
     backgroundColor: '#f0fff4',
   },
-  medicationCardFuture: {
-    borderLeftColor: '#f39c12',
-    backgroundColor: '#fffbf0',
+  medicationCardSkipped: {
+    borderLeftColor: '#e74c3c',
+    backgroundColor: '#fff5f5',
   },
   medicationInfo: {
     flex: 1,
@@ -1998,9 +1910,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '500',
   },
-  statusTextPending: {
+  statusTextSkipped: {
     fontSize: 12,
-    color: '#f39c12',
+    color: '#e74c3c',
     marginLeft: 4,
     fontWeight: '500',
   },
@@ -2010,22 +1922,6 @@ const styles = StyleSheet.create({
   },
   actionButtonsRow: {
     flexDirection: 'row',
-  },
-  takeButton: {
-    backgroundColor: '#2ecc71',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 6,
-  },
-  takeButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginRight: 4,
-    fontSize: 14,
   },
   skipButton: {
     backgroundColor: '#e74c3c',
@@ -2068,6 +1964,21 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: 4,
+  },
+  skippedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 6,
+    marginTop: 8,
+    backgroundColor: '#fff5f5',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  skippedText: {
+    fontSize: 12,
+    color: '#e74c3c',
+    fontWeight: '500',
+    marginRight: 4,
   },
 });
 
