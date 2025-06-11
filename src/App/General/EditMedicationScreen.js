@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import supabase from '../../supabase';
-import DataUser from '../../navigation/DataUser';
+import supabase from '../../../supabase';
+import DataUser from '../../../navigation/DataUser';
 
 const EditMedicationScreen = ({ navigation, route }) => {
   const { medicationId } = route.params;

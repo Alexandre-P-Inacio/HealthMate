@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
-import supabase from '../../supabase';
-import DataUser from '../../navigation/DataUser';
+import supabase from '../../../supabase';
+import DataUser from '../../../navigation/DataUser';
 
 const ConfirmMedicationsScreen = ({ navigation }) => {
   const [medications, setMedications] = useState([]);

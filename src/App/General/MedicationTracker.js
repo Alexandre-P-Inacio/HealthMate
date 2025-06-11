@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import supabase from '../../supabase';
+import supabase from '../../../supabase';
 import * as Notifications from 'expo-notifications';
 
 // Configurar notificações para exibir quando o app estiver em primeiro plano

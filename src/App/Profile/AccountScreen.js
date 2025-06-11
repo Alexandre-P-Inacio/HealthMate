@@ -15,11 +15,11 @@ import {
   Dimensions
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
-import DataUser from '../../navigation/DataUser';
-import Navbar from '../Components/Navbar';
+import DataUser from '../../../navigation/DataUser';
+import Navbar from '../../Components/Navbar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
-import supabase from '../../supabase';
+import supabase from '../../../supabase';
 import { useFocusEffect } from '@react-navigation/native';
 
 const AccountScreen = ({ navigation }) => {

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import MedicationService from '../services/MedicationService';
+import MedicationService from '../../services/MedicationService';
 
 const AddMedicationScreen = ({ navigation, route }) => {
   const editingMedication = route.params?.medication;

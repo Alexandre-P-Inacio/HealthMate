@@ -17,8 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import DataUser from '../../navigation/DataUser';
-import supabase from '../../supabase'; // Import supabase client
+import supabase from '../../../supabase';
+import DataUser from '../../../navigation/DataUser';
 
 // Chave para armazenar as entradas e medicamentos no AsyncStorage
 const STORAGE_KEY = 'medicalDiaryEntries';

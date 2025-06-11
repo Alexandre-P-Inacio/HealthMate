@@ -89,6 +89,59 @@ const WelcomeScreen = ({ navigation }) => {
     }
   };
 
+  const autoLogin2 = async () => {
+    try {
+      const phone = '915000063';
+      const password = 'Bunda2005#';
+      const hashedPassword = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        password
+      );
+
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone', phone)
+        .eq('password', hashedPassword);
+
+      if (error) {
+        console.error('Login error:', error);
+        return;
+      }
+
+      if (!users || users.length === 0) {
+        console.error('User not found');
+        return;
+      }
+
+      const user = users[0];
+      DataUser.setUserData(user);
+
+      if (user.role === 'medic') {
+        const { data: doctorData, error: doctorError } = await supabase
+          .from('doctors')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (doctorError && doctorError.code !== 'PGRST116') {
+          console.error('Error checking doctor status:', doctorError);
+          return;
+        }
+
+        if (doctorData) {
+          navigation.navigate('DoctorDashboard');
+        } else {
+          navigation.navigate('DoctorRegistration');
+        }
+      } else {
+        navigation.navigate('HomeScreen', { userId: user.id });
+      }
+    } catch (error) {
+      console.error('Auto login error:', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Animated.View 
@@ -132,7 +185,15 @@ const WelcomeScreen = ({ navigation }) => {
             onPress={autoLogin}
           >
             <Ionicons name="flash-outline" size={24} color="#1a237e" style={styles.buttonIcon} />
-            <Text style={styles.tertiaryButtonText}>Quick Login</Text>
+            <Text style={styles.tertiaryButtonText}>Quick Login 1</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.tertiaryButton}
+            onPress={autoLogin2}
+          >
+            <Ionicons name="flash-outline" size={24} color="#1a237e" style={styles.buttonIcon} />
+            <Text style={styles.tertiaryButtonText}>Quick Login 2</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>

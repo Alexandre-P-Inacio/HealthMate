@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import supabase from '../../supabase';
-import DataUser from '../../navigation/DataUser';
-import Navbar from '../Components/Navbar';
+import supabase from '../../../supabase';
+import DataUser from '../../../navigation/DataUser';
+import Navbar from '../../Components/Navbar';
 import * as Calendar from 'expo-calendar';
 import Constants from 'expo-constants';
 

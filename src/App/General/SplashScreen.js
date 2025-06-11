@@ -7,7 +7,7 @@ import { Video } from 'expo-av';
 
 // Assume the video file is named 'splash_video.mp4' in the assets folder
 // **NOTE: Please replace 'require("../../assets/splash_video.mp4")' with the correct path and filename of your video.**
-const splashVideo = require("../../assets/splashvideo.mp4");
+const splashVideo = require("../../../assets/splashvideo.mp4");
 
 const { width, height } = Dimensions.get('window'); // Get screen dimensions
 

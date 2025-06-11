@@ -1,316 +1,331 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import supabase from '../../../supabase';
+import { supabase } from '../../../supabase';
 import DataUser from '../../../navigation/DataUser';
 
-const DoctorRegistrationScreen = ({ navigation }) => {
-  const [loading, setLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+const DoctorRegistrationScreen = ({ navigation, route }) => {
+  const isEditing = route.params?.doctorId;
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    fullname: '',
-    birth_date: new Date(),
-    years_of_experience: '',
+    name: '',
     specialization: '',
-    license_number: '',
-    hospital: '',
-    address: '',
-    phone: '',
-    email: '',
+    age: '',
+    years_experience: '',
+    description: '',
   });
 
-  const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setFormData(prev => ({ ...prev, birth_date: selectedDate }));
-    }
-  };
+  useEffect(() => {
+    loadInitialData();
+  }, []);
 
-  const calculateAge = (birthDate) => {
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
+  const loadInitialData = async () => {
+    try {
+      setIsLoading(true);
+      const userData = DataUser.getUserData();
+      
+      if (!userData) {
+        throw new Error('No user data found');
+      }
+
+      // First try to get existing doctor data if editing
+      if (isEditing) {
+        const { data: doctorData, error: doctorError } = await supabase
+          .from('doctors')
+          .select('*')
+          .eq('id', route.params.doctorId)
+          .single();
+
+        if (doctorError && doctorError.code !== 'PGRST116') throw doctorError;
+
+        if (doctorData) {
+          setFormData({
+            name: doctorData.name || userData.name || '',
+            specialization: doctorData.specialization || '',
+            age: doctorData.age ? doctorData.age.toString() : '',
+            years_experience: doctorData.years_experience ? doctorData.years_experience.toString() : '',
+            description: doctorData.description || '',
+          });
+        } else {
+          // If no doctor data but we have user data, pre-fill with user data
+          setFormData({
+            name: userData.name || '',
+            specialization: '',
+            age: '',
+            years_experience: '',
+            description: '',
+          });
+        }
+      } else {
+        // For new registration, pre-fill with user data
+        setFormData({
+          name: userData.name || '',
+          specialization: '',
+          age: '',
+          years_experience: '',
+          description: '',
+        });
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Error', 'Failed to load user information');
+    } finally {
+      setIsLoading(false);
     }
-    
-    return age;
   };
 
   const validateForm = () => {
-    const age = calculateAge(formData.birth_date);
-    const yearsExp = parseInt(formData.years_of_experience);
-
-    if (yearsExp < 0) {
-      Alert.alert('Error', 'Years of experience cannot be negative');
+    if (!formData.name.trim()) {
+      Alert.alert('Error', 'Name is required');
       return false;
     }
-
-    if (yearsExp > (age - 18)) {
-      Alert.alert('Error', 'Years of experience cannot exceed your age minus 18');
-      return false;
-    }
-
     return true;
   };
 
   const handleSubmit = async () => {
+    if (!validateForm()) return;
+
+    setIsLoading(true);
     try {
-      if (!validateForm()) return;
-
-      setLoading(true);
       const userData = DataUser.getUserData();
+      if (!userData) throw new Error('No user data found');
 
-      const { error } = await supabase
-        .from('doctors')
-        .insert([
-          {
-            id: userData.id,
-            fullname: formData.fullname,
-            birth_date: formData.birth_date.toISOString(),
-            years_of_experience: parseInt(formData.years_of_experience),
-            specialization: formData.specialization,
-            license_number: formData.license_number,
-            hospital: formData.hospital,
-            address: formData.address,
-            phone: formData.phone,
-            email: formData.email,
-          },
-        ]);
+      const doctorData = {
+        id: userData.id, // Use the user's ID
+        name: formData.name.trim(),
+        specialization: formData.specialization.trim() || null,
+        age: formData.age ? parseInt(formData.age) : null,
+        years_experience: formData.years_experience ? parseInt(formData.years_experience) : null,
+        description: formData.description.trim() || null,
+      };
+
+      let error;
+      if (isEditing) {
+        const { error: updateError } = await supabase
+          .from('doctors')
+          .update(doctorData)
+          .eq('id', route.params.doctorId);
+        error = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('doctors')
+          .insert([doctorData]);
+        error = insertError;
+      }
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Doctor profile created successfully!');
-      navigation.navigate('DoctorDashboard');
+      Alert.alert(
+        'Success',
+        `Doctor ${isEditing ? 'updated' : 'registered'} successfully!`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     } catch (error) {
-      console.error('Error creating doctor profile:', error);
-      Alert.alert('Error', 'Failed to create doctor profile. Please try again.');
+      console.error('Error saving doctor:', error);
+      Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'register'} doctor`);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1a237e" />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Doctor Registration</Text>
-      </View>
-
-      <View style={styles.formContainer}>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.fullname}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, fullname: text }))}
-            placeholder="Enter your full name"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Date of Birth</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#fff"
+      />
+      <View style={styles.container}>
+        <View style={styles.header}>
           <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-            disabled={loading}
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
           >
-            <Text style={styles.dateButtonText}>
-              {formData.birth_date.toLocaleDateString()}
-            </Text>
+            <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={formData.birth_date}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-            />
-          )}
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Years of Experience</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.years_of_experience}
-            onChangeText={(text) => {
-              if (/^\d*$/.test(text)) {
-                setFormData(prev => ({ ...prev, years_of_experience: text }));
-              }
-            }}
-            placeholder="Enter years of experience"
-            keyboardType="numeric"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Specialization</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.specialization}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, specialization: text }))}
-            placeholder="Enter your specialization"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>License Number</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.license_number}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, license_number: text }))}
-            placeholder="Enter your license number"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Hospital</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.hospital}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, hospital: text }))}
-            placeholder="Enter your hospital name"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Address</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.address}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
-            placeholder="Enter your address"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Phone</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.phone}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
-            placeholder="Enter your phone number"
-            keyboardType="phone-pad"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.email}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={!loading}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          <Text style={styles.submitButtonText}>
-            {loading ? 'Creating Profile...' : 'Create Profile'}
+          <Text style={styles.headerTitle}>
+            {isEditing ? 'Edit Doctor' : 'Register Doctor'}
           </Text>
-        </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.form}>
+            {/* Name Input - Required */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Name *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.name}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+                placeholder="Enter doctor's name"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            {/* Specialization Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Specialization</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.specialization}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, specialization: text }))}
+                placeholder="Enter specialization"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            {/* Age Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Age</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.age}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, age: text }))}
+                placeholder="Enter age"
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            {/* Years of Experience Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Years of Experience</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.years_experience}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, years_experience: text }))}
+                placeholder="Enter years of experience"
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            {/* Description Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Description</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={formData.description}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                placeholder="Enter description"
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isLoading}
+            >
+              <Text style={styles.submitButtonText}>
+                {isLoading ? 'Saving...' : isEditing ? 'Update Doctor' : 'Register Doctor'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
   header: {
-    backgroundColor: '#1a237e',
-    padding: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   backButton: {
-    marginRight: 15,
+    padding: 8,
   },
-  title: {
+  headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
+    marginLeft: 16,
+    color: '#333',
   },
-  formContainer: {
-    padding: 20,
+  scrollView: {
+    flex: 1,
+  },
+  form: {
+    padding: 16,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
     color: '#333',
+    marginBottom: 8,
+    fontWeight: '500',
   },
   input: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
-  },
-  dateButton: {
-    backgroundColor: '#fff',
     borderRadius: 8,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  dateButtonText: {
     fontSize: 16,
     color: '#333',
   },
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
   submitButton: {
     backgroundColor: '#1a237e',
+    padding: 16,
     borderRadius: 8,
-    padding: 15,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 24,
   },
   submitButtonDisabled: {
     opacity: 0.7,
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

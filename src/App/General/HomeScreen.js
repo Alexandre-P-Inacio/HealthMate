@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal, FlatList, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import supabase from '../../supabase';
-import Navbar from '../Components/Navbar';
-import DataUser from '../../navigation/DataUser';
+import supabase from '../../../supabase';
+import DataUser from '../../../navigation/DataUser';
+import Navbar from '../../Components/Navbar';
 import { useNavigation } from '@react-navigation/native';
-import HealthQuote from '../Components/HealthQuote';
-import FunZone from '../Components/FunZone';
+import HealthQuote from '../../Components/HealthQuote';
+import FunZone from '../../Components/FunZone';
 
 const HomeScreen = () => {
   const [userData, setUserData] = useState({

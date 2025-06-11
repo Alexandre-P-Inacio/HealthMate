@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator, StatusBar, Switch } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons'; // Ícones do Expo
-import supabase from '../../supabase';
-import DataUser from '../../navigation/DataUser';
+import supabase from '../../../supabase';
+import DataUser from '../../../navigation/DataUser';
 import * as Crypto from 'expo-crypto'; // Biblioteca para hash da senha
 
 const SettingsScreen = ({ navigation, route }) => {
