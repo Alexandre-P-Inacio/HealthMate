@@ -418,7 +418,7 @@ const AccountScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.actionText}>Doctors</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('AppointmentsScreen')}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('InformationScreen')}>
                   <View style={styles.actionIcon}>
                     <FontAwesome name="info-circle" size={20} color="#3498db" />
                   </View>
