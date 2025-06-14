@@ -273,6 +273,9 @@ const MedicalDiaryScreen = ({ navigation }) => {
 
   const handleDateChange = (event, date) => {
     setShowDatePicker(false);
+    if (event?.type === 'dismissed') {
+      return;
+    }
     if (date) {
       setSelectedDate(date);
     }

@@ -13,7 +13,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../../supabase';
+import supabase from '../../../supabase';
 import DataUser from '../../../navigation/DataUser';
 
 const DoctorRegistrationScreen = ({ navigation, route }) => {
@@ -35,43 +35,28 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
     try {
       setIsLoading(true);
       const userData = DataUser.getUserData();
-      
       if (!userData) {
         throw new Error('No user data found');
       }
-
-      // First try to get existing doctor data if editing
+      // Always use fullname if available
+      const fullName = userData.fullname || userData.name || '';
       if (isEditing) {
         const { data: doctorData, error: doctorError } = await supabase
           .from('doctors')
           .select('*')
           .eq('id', route.params.doctorId)
           .single();
-
         if (doctorError && doctorError.code !== 'PGRST116') throw doctorError;
-
-        if (doctorData) {
-          setFormData({
-            name: doctorData.name || userData.name || '',
-            specialization: doctorData.specialization || '',
-            age: doctorData.age ? doctorData.age.toString() : '',
-            years_experience: doctorData.years_experience ? doctorData.years_experience.toString() : '',
-            description: doctorData.description || '',
-          });
-        } else {
-          // If no doctor data but we have user data, pre-fill with user data
-          setFormData({
-            name: userData.name || '',
-            specialization: '',
-            age: '',
-            years_experience: '',
-            description: '',
-          });
-        }
-      } else {
-        // For new registration, pre-fill with user data
         setFormData({
-          name: userData.name || '',
+          name: fullName,
+          specialization: doctorData?.specialization || '',
+          age: doctorData?.age ? doctorData.age.toString() : '',
+          years_experience: doctorData?.years_experience ? doctorData.years_experience.toString() : '',
+          description: doctorData?.description || '',
+        });
+      } else {
+        setFormData({
+          name: fullName,
           specialization: '',
           age: '',
           years_experience: '',
@@ -91,26 +76,48 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
       Alert.alert('Error', 'Name is required');
       return false;
     }
+    const age = parseInt(formData.age);
+    const yearsExp = parseInt(formData.years_experience);
+    if (isNaN(age) || age < 25) {
+      Alert.alert('Error', 'Doctor must be at least 25 years old.');
+      return false;
+    }
+    if (isNaN(yearsExp) || yearsExp < 0) {
+      Alert.alert('Error', 'Years of experience cannot be negative.');
+      return false;
+    }
+    if (yearsExp > (age - 18)) {
+      Alert.alert('Error', `Years of experience cannot exceed age minus 18 (max: ${age - 18}).`);
+      return false;
+    }
     return true;
   };
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
-
     setIsLoading(true);
     try {
       const userData = DataUser.getUserData();
       if (!userData) throw new Error('No user data found');
-
+      if (!supabase || typeof supabase.from !== 'function') {
+        throw new Error('Supabase client is not initialized correctly.');
+      }
+      // Always fetch the latest fullname and pfpimg from users table
+      const { data: userProfile, error: userProfileError } = await supabase
+        .from('users')
+        .select('fullname, pfpimg')
+        .eq('id', userData.id)
+        .single();
+      if (userProfileError) throw userProfileError;
       const doctorData = {
         id: userData.id, // Use the user's ID
-        name: formData.name.trim(),
+        name: userProfile?.fullname || '',
         specialization: formData.specialization.trim() || null,
         age: formData.age ? parseInt(formData.age) : null,
         years_experience: formData.years_experience ? parseInt(formData.years_experience) : null,
         description: formData.description.trim() || null,
+        pfpimg: userProfile?.pfpimg || null, // Set the doctor's profile picture from the user
       };
-
       let error;
       if (isEditing) {
         const { error: updateError } = await supabase
@@ -124,9 +131,7 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
           .insert([doctorData]);
         error = insertError;
       }
-
       if (error) throw error;
-
       Alert.alert(
         'Success',
         `Doctor ${isEditing ? 'updated' : 'registered'} successfully!`,
@@ -134,7 +139,7 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
       );
     } catch (error) {
       console.error('Error saving doctor:', error);
-      Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'register'} doctor`);
+      Alert.alert('Error', error.message || `Failed to ${isEditing ? 'update' : 'register'} doctor`);
     } finally {
       setIsLoading(false);
     }

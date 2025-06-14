@@ -154,6 +154,9 @@ const MedicationScheduleScreen = ({ navigation }) => {
   
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
+    if (event?.type === 'dismissed') {
+      return;
+    }
     if (selectedDate) {
       setMedicationData({...medicationData, date: selectedDate});
     }
@@ -161,6 +164,9 @@ const MedicationScheduleScreen = ({ navigation }) => {
   
   const handleTimeChange = (event, selectedTime) => {
     setShowTimePicker(false);
+    if (event?.type === 'dismissed') {
+      return;
+    }
     if (selectedTime) {
       setMedicationData({...medicationData, time: selectedTime});
     }

@@ -173,12 +173,11 @@ const CalendarScreen = ({ navigation }) => {
   };
 
   const handleDateChange = (event, selectedDate) => {
-    if (event.type === 'dismissed') {
-      setShowDatePicker(false);
-      setShowTimePicker(false);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    if (event?.type === 'dismissed') {
       return;
     }
-
     if (selectedDate) {
       const updatedMedication = { ...newMedication };
       const timeString = selectedDate.toLocaleTimeString('en-US', { 
@@ -186,7 +185,6 @@ const CalendarScreen = ({ navigation }) => {
         hour: '2-digit',
         minute: '2-digit'
       });
-
       switch (dateType) {
         case 'start':
           updatedMedication.data_inicio = selectedDate.toISOString().split('T')[0];
@@ -205,11 +203,8 @@ const CalendarScreen = ({ navigation }) => {
           updatedMedication.data_fim = selectedDate.toISOString().split('T')[0];
           break;
       }
-      
       setNewMedication(updatedMedication);
     }
-    setShowDatePicker(false);
-    setShowTimePicker(false);
   };
 
   const removeTime = (timeToRemove) => {

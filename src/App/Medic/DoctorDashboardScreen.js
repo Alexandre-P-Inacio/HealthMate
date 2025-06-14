@@ -126,15 +126,25 @@ const DoctorDashboardScreen = ({ navigation }) => {
   };
 
   const getProfileImage = () => {
-    // First try doctor's photo_url
+    // Prioridade: doctorData.pfpimg > userData.pfpimg > doctorData.photo_url > avatar padrão
+    if (doctorData?.pfpimg) {
+      // Se for base64, prefixa corretamente
+      if (doctorData.pfpimg.startsWith('data:image')) {
+        return { uri: doctorData.pfpimg };
+      } else {
+        return { uri: `data:image/png;base64,${doctorData.pfpimg}` };
+      }
+    }
+    if (userData?.pfpimg) {
+      if (userData.pfpimg.startsWith('data:image')) {
+        return { uri: userData.pfpimg };
+      } else {
+        return { uri: `data:image/png;base64,${userData.pfpimg}` };
+      }
+    }
     if (doctorData?.photo_url) {
       return { uri: doctorData.photo_url };
     }
-    // Then try user's pfpimg
-    if (userData?.pfpimg) {
-      return { uri: userData.pfpimg };
-    }
-    // Finally, use default avatar
     return { uri: 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y' };
   };
 
@@ -147,140 +157,99 @@ const DoctorDashboardScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#fff"
-      />
-      
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Doctor Dashboard</Text>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={() => navigation.navigate('DoctorRegistration')}
-          >
-            <Ionicons name="create-outline" size={24} color="#333" />
-          </TouchableOpacity>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f7fafd' }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f7fafd" />
+      <View style={{ flex: 1 }}>
+        {/* Minimal Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, backgroundColor: '#f7fafd' }}>
+          <Text style={{ fontSize: 22, fontWeight: '700', color: '#222' }}>Painel do Doutor</Text>
         </View>
-
-        <ScrollView 
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          bounces={Platform.OS === 'ios'}
-        >
-          {/* Profile Section */}
-          <View style={styles.profileSection}>
-            <View style={styles.profileHeader}>
-              <View style={styles.profileImageContainer}>
-                <Image 
-                  source={getProfileImage()}
-                  style={styles.profileImage} 
-                />
-                <TouchableOpacity 
-                  style={styles.editImageButton}
-                  onPress={() => {/* Add image upload functionality */}}
-                >
-                  <Ionicons name="camera" size={20} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{doctorData.name}</Text>
-                <Text style={styles.specialization}>{doctorData.specialization}</Text>
-                <View style={styles.statsRow}>
-                  <Text style={styles.statText}>{doctorData.years_experience} years experience</Text>
-                  <Text style={styles.statText}>{doctorData.age} years old</Text>
-                </View>
-              </View>
-            </View>
-            <Text style={styles.description}>{doctorData.description}</Text>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 0 }} showsVerticalScrollIndicator={false}>
+          {/* Profile Card */}
+          <View style={{ backgroundColor: '#fff', borderRadius: 18, marginHorizontal: 20, marginTop: 10, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 }}>
+            <Image
+              source={userData?.pfpimg ? { uri: `data:image/png;base64,${userData.pfpimg}` } : { uri: 'https://i.pravatar.cc/150?img=3' }}
+              style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 12 }}
+            />
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222', marginBottom: 2 }}>{doctorData.name}</Text>
+            <Text style={{ fontSize: 15, color: '#6a7a8c', marginBottom: 6 }}>{doctorData.specialization}</Text>
+            <Text style={{ fontSize: 13, color: '#8a99a8', marginBottom: 2 }}>{doctorData.years_experience} anos de experiência • {doctorData.age} anos</Text>
+            {doctorData.description ? (
+              <Text style={{ fontSize: 14, color: '#444', marginTop: 8, textAlign: 'center' }}>{doctorData.description}</Text>
+            ) : null}
           </View>
-
-          {/* Quick Actions Section */}
-          <View style={styles.quickActionsSection}>
-            <TouchableOpacity 
-              style={styles.quickActionButton}
-              onPress={() => navigation.navigate('Appointments')}
-            >
-              <Ionicons name="calendar" size={24} color="#1a237e" />
-              <Text style={styles.quickActionText}>View Appointments</Text>
+          {/* Action Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18, marginBottom: 10, gap: 24 }}>
+            <TouchableOpacity onPress={() => navigation.navigate('AppointmentsScreen')} style={{ alignItems: 'center' }}>
+              <Ionicons name="calendar-outline" size={28} color="#4a67e3" />
+              <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Consultas</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.quickActionButton}
-              onPress={() => navigation.navigate('DoctorRegistration')}
-            >
-              <Ionicons name="settings" size={24} color="#1a237e" />
-              <Text style={styles.quickActionText}>Edit Profile</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('DoctorRegistration')} style={{ alignItems: 'center' }}>
+              <Ionicons name="person-circle-outline" size={28} color="#4a67e3" />
+              <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Editar Perfil</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Appointments Section */}
-          <View style={styles.appointmentsSection}>
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tab, selectedTab === 'upcoming' && styles.activeTab]}
-                onPress={() => setSelectedTab('upcoming')}
-              >
-                <Text style={[styles.tabText, selectedTab === 'upcoming' && styles.activeTabText]}>
-                  Upcoming
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, selectedTab === 'past' && styles.activeTab]}
-                onPress={() => setSelectedTab('past')}
-              >
-                <Text style={[styles.tabText, selectedTab === 'past' && styles.activeTabText]}>
-                  Past
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Appointments List */}
-            <View style={styles.appointmentsList}>
-              {(selectedTab === 'upcoming' ? appointments.upcoming : appointments.past).map((appointment) => (
-                <View key={appointment.id} style={styles.appointmentCard}>
-                  <View style={styles.appointmentHeader}>
-                    <Text style={styles.patientName}>{appointment.users.fullname}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) }]}>
-                      <Text style={styles.statusText}>{appointment.status}</Text>
-                    </View>
+          {/* Appointments List */}
+          <View style={{ marginHorizontal: 20, marginTop: 10 }}>
+            <Text style={{ fontSize: 17, fontWeight: '600', color: '#222', marginBottom: 10 }}>Consultas</Text>
+            {(!appointments.upcoming?.length && !appointments.past?.length) ? (
+              <Text style={{ color: '#aaa', fontSize: 15, textAlign: 'center', marginTop: 30 }}>Nenhuma consulta encontrada.</Text>
+            ) : (
+              <>
+                {appointments.upcoming?.length > 0 && (
+                  <View style={{ marginBottom: 18 }}>
+                    <Text style={{ fontSize: 15, color: '#4a67e3', fontWeight: '500', marginBottom: 6 }}>Próximas</Text>
+                    {appointments.upcoming.map((appointment) => (
+                      <View key={appointment.id} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 16, fontWeight: '600', color: '#222' }}>{appointment.users?.fullname || 'Paciente'}</Text>
+                          <Text style={{ fontSize: 13, color: '#6a7a8c', marginTop: 2 }}>{formatDateTime(appointment.appointment_datetime)}</Text>
+                          <Text style={{ fontSize: 13, color: '#8a99a8', marginTop: 2 }}>{appointment.location}</Text>
+                          {appointment.notes ? <Text style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{appointment.notes}</Text> : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
+                          <View style={{ backgroundColor: getStatusColor(appointment.status), borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 6 }}>
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{appointment.status}</Text>
+                          </View>
+                          {appointment.status === 'scheduled' && (
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              <TouchableOpacity onPress={() => updateAppointmentStatus(appointment.id, 'confirmed')} style={{ backgroundColor: '#2ecc71', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2 }}>
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>Confirmar</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => updateAppointmentStatus(appointment.id, 'cancelled')} style={{ backgroundColor: '#e74c3c', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2 }}>
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>Cancelar</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    ))}
                   </View>
-                  <Text style={styles.appointmentDateTime}>
-                    {formatDateTime(appointment.appointment_datetime)}
-                  </Text>
-                  <Text style={styles.location}>{appointment.location}</Text>
-                  {appointment.notes && (
-                    <Text style={styles.notes}>{appointment.notes}</Text>
-                  )}
-                  {selectedTab === 'upcoming' && appointment.status === 'scheduled' && (
-                    <View style={styles.actionButtons}>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.confirmButton]}
-                        onPress={() => updateAppointmentStatus(appointment.id, 'confirmed')}
-                      >
-                        <Text style={styles.actionButtonText}>Confirm</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.cancelButton]}
-                        onPress={() => updateAppointmentStatus(appointment.id, 'cancelled')}
-                      >
-                        <Text style={styles.actionButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
+                )}
+                {appointments.past?.length > 0 && (
+                  <View style={{ marginBottom: 18 }}>
+                    <Text style={{ fontSize: 15, color: '#aaa', fontWeight: '500', marginBottom: 6 }}>Passadas</Text>
+                    {appointments.past.map((appointment) => (
+                      <View key={appointment.id} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 16, fontWeight: '600', color: '#222' }}>{appointment.users?.fullname || 'Paciente'}</Text>
+                          <Text style={{ fontSize: 13, color: '#6a7a8c', marginTop: 2 }}>{formatDateTime(appointment.appointment_datetime)}</Text>
+                          <Text style={{ fontSize: 13, color: '#8a99a8', marginTop: 2 }}>{appointment.location}</Text>
+                          {appointment.notes ? <Text style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{appointment.notes}</Text> : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
+                          <View style={{ backgroundColor: getStatusColor(appointment.status), borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 6 }}>
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{appointment.status}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
           </View>
         </ScrollView>
-
         <Navbar />
       </View>
     </SafeAreaView>
@@ -347,8 +316,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    borderWidth: 3,
-    borderColor: '#3498db',
   },
   profileInfo: {
     flex: 1,
@@ -511,19 +478,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
     borderRadius: 20,
-  },
-  editImageButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#1a237e',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
   },
   quickActionsSection: {
     flexDirection: 'row',

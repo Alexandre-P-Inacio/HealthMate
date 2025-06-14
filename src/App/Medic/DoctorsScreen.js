@@ -251,6 +251,9 @@ const DoctorsScreen = ({ navigation }) => {
               <Text style={styles.email}>Exp: {item.years_experience}</Text>
             </View>
           )}
+          <TouchableOpacity onPress={() => navigation.navigate('AppointmentsScreen', { userId: item.id })} style={{marginLeft: 8}}>
+            <Ionicons name="calendar-outline" size={24} color="#3498db" />
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -275,6 +278,9 @@ const DoctorsScreen = ({ navigation }) => {
             <Text style={styles.assignButtonText}>Assign Me</Text>
          </TouchableOpacity>
       )}
+      <TouchableOpacity onPress={() => navigation.navigate('AppointmentsScreen', { userId: item.id })} style={{marginLeft: 8}}>
+        <Ionicons name="calendar-outline" size={24} color="#3498db" />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 
@@ -291,17 +297,16 @@ const DoctorsScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
+        <View style={{flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#3498db'}}>
+          <TouchableOpacity onPress={() => navigation.navigate('AccountScreen')} style={{marginRight: 16}}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {role === 'doctor' ? 'My Patients' : 'Available Medics'}
-          </Text>
-          <View style={styles.headerRight} />
+          <Text style={{color: '#fff', fontSize: 20, fontWeight: 'bold', flex: 1}}>Doctors & Patients</Text>
+          {role === 'doctor' && (
+            <TouchableOpacity onPress={() => navigation.navigate('DoctorAppointmentRequest')} style={{marginLeft: 8}}>
+              <Ionicons name="add-circle" size={28} color="#fff" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {role === 'doctor' ? (

@@ -350,9 +350,6 @@ const AccountScreen = ({ navigation }) => {
             <View style={styles.profileHeader}>
               <View style={styles.profileImageContainer}>
                 <Image source={profileImage} style={styles.profileImage} />
-                <TouchableOpacity style={styles.editImageButton}>
-                  <FontAwesome name="camera" size={14} color="#fff" />
-                </TouchableOpacity>
               </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>{userData.fullname || 'User'}</Text>
@@ -952,21 +949,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    borderWidth: 3,
-    borderColor: '#3498db',
-  },
-  editImageButton: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    backgroundColor: '#3498db',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
   },
   profileInfo: {
     marginLeft: 15,

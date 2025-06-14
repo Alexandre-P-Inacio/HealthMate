@@ -124,8 +124,27 @@ const EditMedicationScreen = ({ navigation, route }) => {
     }
   };
   
-  // Outras funções auxiliares (addTime, removeTime, etc.) permanecem as mesmas
-
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (event?.type === 'dismissed') {
+      return;
+    }
+    if (selectedDate) {
+      setMedication({ ...medication, schedule_date: selectedDate });
+    }
+  };
+  
+  const handleTimeChange = (event, selectedTime) => {
+    setShowTimePicker(false);
+    if (event?.type === 'dismissed') {
+      return;
+    }
+    if (selectedTime) {
+      // Update the correct time in the times array or state
+      // (Assume you have logic for which time to update)
+    }
+  };
+  
   const saveMedication = async () => {
     try {
       if (!medication.name.trim()) {

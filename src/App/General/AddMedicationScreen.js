@@ -95,6 +95,9 @@ const AddMedicationScreen = ({ navigation, route }) => {
 
   const handleTimeChange = (event, selectedTime) => {
     setShowTimePicker(false);
+    if (event?.type === 'dismissed') {
+      return;
+    }
     if (selectedTime) {
       setMedication({
         ...medication,
@@ -105,6 +108,9 @@ const AddMedicationScreen = ({ navigation, route }) => {
 
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
+    if (event?.type === 'dismissed') {
+      return;
+    }
     if (selectedDate) {
       setMedication({
         ...medication,
