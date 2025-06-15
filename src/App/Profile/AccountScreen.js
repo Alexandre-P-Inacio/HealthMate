@@ -376,75 +376,61 @@ const AccountScreen = ({ navigation }) => {
           </View>
 
           {/* Quick Actions */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsScroll} contentContainerStyle={styles.quickActions}>
+          <View style={styles.gridActionsContainer}>
             {isMedic ? (
               <>
                 <TouchableOpacity 
-                  style={styles.actionButton} 
+                  style={[styles.gridActionButton, styles.gridDashboard]}
                   onPress={() => navigation.navigate('DoctorDashboard')}
                 >
-                  <View style={styles.actionIcon}>
-                    <FontAwesome name="stethoscope" size={20} color="#3498db" />
-                  </View>
-                  <Text style={styles.actionText}>Dashboard</Text>
+                  <FontAwesome name="stethoscope" size={36} color="#fff" style={styles.gridActionIcon} />
+                  <Text style={styles.gridActionText}>Dashboard</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.actionButton} 
+                  style={styles.gridActionButton}
                   onPress={() => navigation.navigate('AppointmentsScreen')}
                 >
-                  <View style={styles.actionIcon}>
-                    <FontAwesome name="calendar" size={20} color="#3498db" />
-                  </View>
-                  <Text style={styles.actionText}>Appointments</Text>
+                  <FontAwesome name="calendar" size={30} color="#3498db" style={styles.gridActionIcon} />
+                  <Text style={styles.gridActionText}>Appointments</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.actionButton} 
+                  style={styles.gridActionButton}
                   onPress={() => navigation.navigate('DoctorDetailsScreen')}
                 >
-                  <View style={styles.actionIcon}>
-                    <FontAwesome name="user-md" size={20} color="#3498db" />
-                  </View>
-                  <Text style={styles.actionText}>Profile</Text>
+                  <FontAwesome name="user-md" size={30} color="#3498db" style={styles.gridActionIcon} />
+                  <Text style={styles.gridActionText}>Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.gridActionButton}
+                  onPress={() => {
+                    fetchMedicationStats();
+                    setStatsModalVisible(true);
+                  }}
+                >
+                  <FontAwesome name="bar-chart" size={30} color="#3498db" style={styles.gridActionIcon} />
+                  <Text style={styles.gridActionText}>Statistics</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('DoctorsScreen')}>
-                  <View style={styles.actionIcon}>
-                    <FontAwesome name="user-md" size={20} color="#3498db" />
-                  </View>
-                  <Text style={styles.actionText}>Doctors</Text>
+                <TouchableOpacity style={styles.gridActionButton} onPress={() => navigation.navigate('DoctorsScreen')}>
+                  <FontAwesome name="user-md" size={30} color="#3498db" style={styles.gridActionIcon} />
+                  <Text style={styles.gridActionText}>Doctors</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('InformationScreen')}>
-                  <View style={styles.actionIcon}>
-                    <FontAwesome name="info-circle" size={20} color="#3498db" />
-                  </View>
-                  <Text style={styles.actionText}>Information</Text>
+                <TouchableOpacity style={styles.gridActionButton} onPress={() => navigation.navigate('InformationScreen')}>
+                  <FontAwesome name="info-circle" size={30} color="#3498db" style={styles.gridActionIcon} />
+                  <Text style={styles.gridActionText}>Information</Text>
                 </TouchableOpacity>
               </>
             )}
             <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => {
-                fetchMedicationStats();
-                setStatsModalVisible(true);
-              }}
-            >
-              <View style={styles.actionIcon}>
-                <FontAwesome name="bar-chart" size={20} color="#3498db" />
-              </View>
-              <Text style={styles.actionText}>Statistics</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
+              style={styles.gridActionButton}
               onPress={() => setPremiumModalVisible(true)}
             >
-              <View style={styles.actionIcon}>
-                <FontAwesome name="star" size={20} color={isPremiumPlus ? "#FFD700" : "#3498db"} />
-              </View>
-              <Text style={styles.actionText}>{isPremiumPlus ? "Premium Plus" : "Premium"}</Text>
+              <FontAwesome name="star" size={30} color={isPremiumPlus ? "#FFD700" : "#3498db"} style={styles.gridActionIcon} />
+              <Text style={styles.gridActionText}>{isPremiumPlus ? "Premium Plus" : "Premium"}</Text>
             </TouchableOpacity>
-          </ScrollView>
+          </View>
 
           {/* Account Actions */}
           <View style={styles.accountActions}>
@@ -993,33 +979,40 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#34495e',
   },
-  quickActionsScroll: {
-    marginTop: 25,
-    maxHeight: 90,
-  },
-  quickActions: {
+  gridActionsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    marginTop: 30,
+    marginHorizontal: 20,
+    gap: 16,
   },
-  actionButton: {
+  gridActionButton: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
     alignItems: 'center',
-    marginRight: 20,
-    width: 80,
-  },
-  actionIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#f0f9ff',
     justifyContent: 'center',
-    alignItems: 'center',
+    width: '47%',
+    marginBottom: 16,
+    paddingVertical: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  gridDashboard: {
+    backgroundColor: '#3498db',
+  },
+  gridActionIcon: {
     marginBottom: 8,
   },
-  actionText: {
-    fontSize: 13,
-    color: '#2c3e50',
-    fontWeight: '500',
+  gridActionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#3498db',
+    textAlign: 'center',
   },
   accountActions: {
     padding: 20,

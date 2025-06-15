@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, TouchableOpacity, Platform, StatusBar, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../Components/Navbar';
 import DataUser from '../../../navigation/DataUser';
@@ -11,12 +11,13 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
   useEffect(() => {
     const currentUser = DataUser.getUserData();
     if (currentUser) {
-      setIsMedic(currentUser.role === 'medic' && currentUser.id === doctor.id);
+      // Verifica se o ID do usuário logado corresponde ao ID do médico (assumindo que doctor.id é o user.id)
+      setIsMedic(currentUser.role === 'doctor' && currentUser.id === doctor.id);
     }
-  }, []);
+  }, [doctor]); // Adicione doctor como dependência
 
-  const profileImage = doctor.pfpimg
-    ? { uri: `data:image/png;base64,${doctor.pfpimg}` }
+  const profileImageSource = doctor.user?.pfpimg
+    ? { uri: `data:image/png;base64,${doctor.user.pfpimg}` }
     : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' };
 
   return (
@@ -34,7 +35,7 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
           {isMedic && (
             <TouchableOpacity 
               style={styles.editButton}
-              onPress={() => navigation.navigate('DoctorRegistration')}
+              onPress={() => navigation.navigate('DoctorRegistration', { doctorId: doctor.id })}
             >
               <Ionicons name="create-outline" size={24} color="#FFF" />
             </TouchableOpacity>
@@ -46,7 +47,7 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
           <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <View style={styles.profileImageContainer}>
-                <Image source={profileImage} style={styles.profileImage} />
+                <Image source={profileImageSource} style={styles.profileImage} />
                 {isMedic && (
                   <TouchableOpacity 
                     style={styles.editImageButton}
@@ -71,7 +72,7 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
                 </View>
               </View>
             </View>
-            <Text style={styles.doctorName}>{doctor.fullname}</Text>
+            <Text style={styles.doctorName}>{doctor.user?.fullname}</Text>
             <Text style={styles.doctorSpecialization}>
               {doctor.specialization !== 'Nao encontrado' ? doctor.specialization : 'Specialization not found'}
             </Text>
@@ -94,16 +95,16 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
             <View style={styles.actionButtons}>
               <TouchableOpacity 
                 style={[styles.actionButton, styles.scheduleButton]}
-                onPress={() => navigation.navigate('Appointments')}
+                onPress={() => navigation.navigate('RequestAppointmentScreen', { doctor: doctor })}
               >
                 <Ionicons name="calendar-outline" size={20} color="#FFF" />
-                <Text style={styles.actionButtonText}>Schedule</Text>
+                <Text style={styles.actionButtonText}>Solicitar Consulta</Text>
               </TouchableOpacity>
               {isMedic && (
                 <>
                   <TouchableOpacity 
                     style={[styles.actionButton, styles.infoButton]}
-                    onPress={() => navigation.navigate('DoctorRegistration')}
+                    onPress={() => navigation.navigate('DoctorRegistration', { doctorId: doctor.id })}
                   >
                     <Ionicons name="create-outline" size={20} color="#6A8DFD" />
                   </TouchableOpacity>

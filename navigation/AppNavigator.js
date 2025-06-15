@@ -10,6 +10,10 @@ import ProfileScreen from '../src/App/ProfileScreen';
 import HelpSupportScreen from '../src/App/HelpSupportScreen';
 import PrivacyPolicyScreen from '../src/App/PrivacyPolicyScreen';
 import TermsOfServiceScreen from '../src/App/TermsOfServiceScreen';
+import DoctorDetailsScreen from '../src/App/Medic/DoctorDetailsScreen';
+import DoctorAvailableTimesScreen from '../src/App/Medic/DoctorAvailableTimesScreen';
+import AppointmentsScreen from '../src/App/Medic/AppointmentsScreen';
+import DoctorSelectTimeScreen from '../src/App/Medic/DoctorSelectTimeScreen';
 
 const Stack = createStackNavigator();
 
@@ -30,6 +34,10 @@ const AppNavigator = () => {
         <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
         <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
+        <Stack.Screen name="DoctorDetailsScreen" component={DoctorDetailsScreen} />
+        <Stack.Screen name="DoctorAvailableTimesScreen" component={DoctorAvailableTimesScreen} />
+        <Stack.Screen name="AppointmentsScreen" component={AppointmentsScreen} />
+        <Stack.Screen name="DoctorSelectTimeScreen" component={DoctorSelectTimeScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

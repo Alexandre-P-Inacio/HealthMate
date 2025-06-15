@@ -93,17 +93,50 @@ export class AppointmentService {
 
   static async updateAppointmentStatus(appointmentId, newStatus, requestedById) {
     try {
+      // Primeiro, buscar os dados atuais da consulta para obter o user_id do paciente e o doctor_id
+      const { data: currentAppointment, error: fetchError } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          users!appointments_user_id_fkey (user_id:id),
+          doctors!appointments_doctor_id_fkey (user_id)
+        `)
+        .eq('id', appointmentId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!currentAppointment) throw new Error('Consulta não encontrada.');
+
       const { data, error } = await supabase
         .from('appointments')
         .update({
           status: newStatus,
-          requested_by: parseInt(requestedById)
+          requested_by: parseInt(requestedById),
+          updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId)
         .select()
         .single();
 
       if (error) throw error;
+
+      // Enviar notificação para o paciente
+      if (currentAppointment.users?.user_id) {
+        await NotificationService.sendAppointmentStatusNotification(
+          currentAppointment.users.user_id,
+          newStatus,
+          data
+        );
+      }
+
+      // Enviar notificação para o médico
+      if (currentAppointment.doctors?.user_id) {
+        await NotificationService.sendAppointmentStatusNotification(
+          currentAppointment.doctors.user_id,
+          newStatus,
+          data
+        );
+      }
 
       return {
         success: true,
@@ -122,7 +155,7 @@ export class AppointmentService {
     try {
       let query = supabase
         .from('appointments')
-        .select('*, users:users(fullname), doctors:doctors(name), requested_by, requested_date_change')
+        .select('*, users:users(fullname), doctors:doctors(name), requested_by, requested_date_change, updated_at')
         .eq('doctor_id', doctorId)
         .order('appointment_datetime', { ascending: true });
 
@@ -142,6 +175,37 @@ export class AppointmentService {
 
       const { data, error } = await query;
       if (error) throw error;
+
+      // Lógica de cancelamento automático
+      const now = new Date();
+      for (const appointment of data) {
+        if (appointment.status !== 'cancelled' && appointment.status !== 'completed') {
+          const appointmentDate = new Date(appointment.appointment_datetime);
+          const updatedAt = appointment.updated_at ? new Date(appointment.updated_at) : null;
+          const hasUpdate = !!appointment.requested_date_change || !!updatedAt;
+          const diffMs = appointmentDate - now;
+          const diffHours = diffMs / (1000 * 60 * 60);
+
+          if (!hasUpdate && diffHours <= 24) {
+            // Faltando 1 dia ou já passou e sem update
+            await supabase
+              .from('appointments')
+              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.' })
+              .eq('id', appointment.id);
+            appointment.status = 'cancelled';
+            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.';
+          } else if (hasUpdate && diffHours <= 12) {
+            // Houve update, cancela se faltar 12h ou já passou
+            await supabase
+              .from('appointments')
+              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.' })
+              .eq('id', appointment.id);
+            appointment.status = 'cancelled';
+            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.';
+          }
+        }
+      }
+
       return {
         success: true,
         data
@@ -159,7 +223,7 @@ export class AppointmentService {
     try {
       let query = supabase
         .from('appointments')
-        .select('*, users:users(fullname), doctors:doctors(name), requested_by, requested_date_change')
+        .select('*, users:users(fullname), doctors:doctors(name), requested_by, requested_date_change, updated_at')
         .eq('user_id', userId)
         .order('appointment_datetime', { ascending: true });
 
@@ -169,6 +233,37 @@ export class AppointmentService {
 
       const { data, error } = await query;
       if (error) throw error;
+
+      // Lógica de cancelamento automático
+      const now = new Date();
+      for (const appointment of data) {
+        if (appointment.status !== 'cancelled' && appointment.status !== 'completed') {
+          const appointmentDate = new Date(appointment.appointment_datetime);
+          const updatedAt = appointment.updated_at ? new Date(appointment.updated_at) : null;
+          const hasUpdate = !!appointment.requested_date_change || !!updatedAt;
+          const diffMs = appointmentDate - now;
+          const diffHours = diffMs / (1000 * 60 * 60);
+
+          if (!hasUpdate && diffHours <= 24) {
+            // Faltando 1 dia ou já passou e sem update
+            await supabase
+              .from('appointments')
+              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.' })
+              .eq('id', appointment.id);
+            appointment.status = 'cancelled';
+            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.';
+          } else if (hasUpdate && diffHours <= 12) {
+            // Houve update, cancela se faltar 12h ou já passou
+            await supabase
+              .from('appointments')
+              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.' })
+              .eq('id', appointment.id);
+            appointment.status = 'cancelled';
+            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.';
+          }
+        }
+      }
+
       return {
         success: true,
         data
@@ -235,18 +330,45 @@ export class AppointmentService {
     }
   }
 
-  static async requestDateChange(appointmentId, newDate, requestedById) {
+  static async requestDateChange(appointmentId, newDate, requestedById, newNotes = null) {
     try {
+      // Buscar a consulta atual para obter o doctor_id e user_id
+      const { data: currentAppointment, error: fetchError } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          doctors!appointments_doctor_id_fkey (user_id)
+        `)
+        .eq('id', appointmentId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!currentAppointment) throw new Error('Consulta não encontrada.');
+
       const { data, error } = await supabase
         .from('appointments')
         .update({
+          status: 'reschedule_requested', // Novo status para solicitação de alteração
           requested_date_change: newDate,
-          requested_by: parseInt(requestedById)
+          requested_by: parseInt(requestedById),
+          notes: newNotes, // Adicionar as novas notas à consulta
+          updated_at: new Date().toISOString() // Atualizar o timestamp de modificação
         })
         .eq('id', appointmentId)
         .select()
         .single();
+
       if (error) throw error;
+
+      // Enviar notificação para o médico
+      if (currentAppointment.doctors?.user_id) {
+        await NotificationService.sendAppointmentStatusNotification(
+          currentAppointment.doctors.user_id,
+          'reschedule_requested',
+          data
+        );
+      }
+
       return { success: true, data };
     } catch (error) {
       console.error('Error requesting date change:', error);

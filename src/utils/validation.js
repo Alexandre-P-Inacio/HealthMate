@@ -1,3 +1,5 @@
+import { DoctorAvailabilityService } from '../services/DoctorAvailabilityService';
+
 export const validateAppointmentRequest = (data) => {
   const errors = {};
 
@@ -11,9 +13,9 @@ export const validateAppointmentRequest = (data) => {
     const selectedDate = new Date(data.appointmentDateTime);
     const now = new Date();
 
-    // Appointment must be at least 1 hour in the future
-    if (selectedDate < new Date(now.getTime() + 60 * 60 * 1000)) {
-      errors.date = 'A consulta deve ser agendada com pelo menos 1 hora de antecedência';
+    // Appointment must be at least 24 hours in the future
+    if (selectedDate < new Date(now.getTime() + 24 * 60 * 60 * 1000)) {
+      errors.date = 'A consulta deve ser agendada com pelo menos 24 horas de antecedência';
     }
 
     // Check if it's within business hours (8am - 6pm)
@@ -45,31 +47,98 @@ export const validateAppointmentRequest = (data) => {
 
 export const validateDoctorAvailability = async (doctorId, appointmentDateTime, supabase) => {
   try {
-    // Check if doctor has any appointments within 30 minutes before or after
-    const startTime = new Date(appointmentDateTime);
-    const endTime = new Date(appointmentDateTime);
-    startTime.setMinutes(startTime.getMinutes() - 30);
-    endTime.setMinutes(endTime.getMinutes() + 30);
+    const appointmentDate = new Date(appointmentDateTime);
+    const appointmentTime = appointmentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const appointmentDayOfWeek = appointmentDate.getDay(); // 0 = Sunday, 6 = Saturday
+    const appointmentDateString = appointmentDate.toISOString().split('T')[0];
 
-    const { data, error } = await supabase
+    // 1. Verificar a disponibilidade configurada pelo médico
+    const availabilitiesResult = await DoctorAvailabilityService.getAvailabilityByDoctorId(doctorId);
+    if (!availabilitiesResult.success) {
+      console.error('Error fetching doctor availability:', availabilitiesResult.error);
+      return {
+        isAvailable: false,
+        message: 'Erro ao verificar disponibilidade do médico.'
+      };
+    }
+
+    const doctorAvailabilities = availabilitiesResult.data;
+    let isDoctorAvailableInSlot = false;
+
+    // Priorizar exceções de um dia
+    const exceptionForToday = doctorAvailabilities.find(item => 
+      !item.is_recurring && new Date(item.exception_date).toDateString() === appointmentDate.toDateString()
+    );
+
+    let relevantAvailabilities = [];
+    if (exceptionForToday) {
+      if (!exceptionForToday.is_available) {
+        // Se há uma exceção para hoje e o médico está indisponível, não há slots.
+        return { isAvailable: false, message: 'O médico está indisponível nesta data.' };
+      }
+      relevantAvailabilities.push(exceptionForToday);
+    } else {
+      // Caso contrário, verificar horários recorrentes
+      relevantAvailabilities = doctorAvailabilities.filter(item => 
+        item.is_recurring && item.day_of_week === appointmentDayOfWeek
+      );
+    }
+
+    if (relevantAvailabilities.length === 0) {
+      return { isAvailable: false, message: 'O médico não tem horários definidos para este dia.' };
+    }
+
+    // Verificar se o horário da consulta cai em algum slot de disponibilidade
+    for (const slot of relevantAvailabilities) {
+      const slotStartTime = slot.start_time.substring(0, 8); // hh:mm:ss
+      const slotEndTime = slot.end_time.substring(0, 8);   // hh:mm:ss
+
+      if (appointmentTime >= slotStartTime && appointmentTime < slotEndTime) {
+        isDoctorAvailableInSlot = true;
+        break;
+      }
+    }
+
+    if (!isDoctorAvailableInSlot) {
+      return { isAvailable: false, message: 'Horário fora da disponibilidade do médico para este dia.' };
+    }
+
+    // 2. Verificar conflitos com outras consultas já agendadas
+    // Onde a nova consulta terminaria (assumindo 30 minutos de duração)
+    const appointmentEndTime = new Date(appointmentDate.getTime() + 30 * 60 * 1000);
+
+    const { data: conflictingAppointments, error } = await supabase
       .from('appointments')
-      .select('id')
+      .select('id, appointment_datetime')
       .eq('doctor_id', doctorId)
-      .eq('status', 'approved')
-      .gte('appointment_datetime', startTime.toISOString())
-      .lte('appointment_datetime', endTime.toISOString());
+      .in('status', ['pending', 'approved'])
+      .lt('appointment_datetime', appointmentEndTime.toISOString()) // Conflita se começa antes do fim da nova consulta
+      .gt('appointment_datetime', new Date(appointmentDate.getTime() - 30 * 60 * 1000).toISOString()); // Conflita se começa depois do início da nova consulta menos 30 min
 
     if (error) throw error;
 
+    // Loop pelos agendamentos existentes para checar sobreposição precisa
+    for (const existingApp of conflictingAppointments) {
+      const existingAppStart = new Date(existingApp.appointment_datetime);
+      const existingAppEnd = new Date(existingAppStart.getTime() + 30 * 60 * 1000); // Assumindo duração de 30 min
+
+      // Se houver qualquer sobreposição, há um conflito
+      if (
+        (appointmentDate < existingAppEnd && appointmentEndTime > existingAppStart) 
+      ) {
+        return { isAvailable: false, message: 'O médico já possui uma consulta neste horário ou muito próximo.' };
+      }
+    }
+
     return {
-      isAvailable: data.length === 0,
-      message: data.length > 0 ? 'O médico já possui uma consulta próxima a este horário' : null
+      isAvailable: true,
+      message: null
     };
   } catch (error) {
     console.error('Error checking doctor availability:', error);
     return {
       isAvailable: false,
-      message: 'Erro ao verificar disponibilidade do médico'
+      message: 'Erro ao verificar disponibilidade do médico.'
     };
   }
 };

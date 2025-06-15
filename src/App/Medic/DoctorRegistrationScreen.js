@@ -168,7 +168,7 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {isEditing ? 'Edit Doctor' : 'Register Doctor'}
+            {isEditing ? 'Editar Perfil Médico' : 'Registrar Médico'}
           </Text>
         </View>
 

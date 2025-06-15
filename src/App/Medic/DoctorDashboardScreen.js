@@ -92,12 +92,14 @@ const DoctorDashboardScreen = ({ navigation }) => {
       if (error) throw error;
 
       const now = new Date();
-      const upcoming = data.filter(apt => new Date(apt.appointment_datetime) > now);
-      const past = data.filter(apt => new Date(apt.appointment_datetime) <= now);
+      const upcoming = data.filter(apt => new Date(apt.appointment_datetime) > now && apt.status !== 'cancelled');
+      const past = data.filter(apt => new Date(apt.appointment_datetime) <= now && apt.status !== 'cancelled');
+      const cancelled = data.filter(apt => apt.status === 'cancelled');
 
       setAppointments({
         upcoming,
-        past
+        past,
+        cancelled
       });
     } catch (error) {
       console.error('Error loading appointments:', error);
@@ -184,7 +186,11 @@ const DoctorDashboardScreen = ({ navigation }) => {
               <Ionicons name="calendar-outline" size={28} color="#4a67e3" />
               <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Consultas</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('DoctorRegistration')} style={{ alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => navigation.navigate('DoctorAvailabilityScreen')} style={{ alignItems: 'center' }}>
+              <Ionicons name="time-outline" size={28} color="#4a67e3" />
+              <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Disponibilidade</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('DoctorRegistration', { doctorId: doctorData.id })} style={{ alignItems: 'center' }}>
               <Ionicons name="person-circle-outline" size={28} color="#4a67e3" />
               <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Editar Perfil</Text>
             </TouchableOpacity>
@@ -192,7 +198,7 @@ const DoctorDashboardScreen = ({ navigation }) => {
           {/* Appointments List */}
           <View style={{ marginHorizontal: 20, marginTop: 10 }}>
             <Text style={{ fontSize: 17, fontWeight: '600', color: '#222', marginBottom: 10 }}>Consultas</Text>
-            {(!appointments.upcoming?.length && !appointments.past?.length) ? (
+            {(!appointments.upcoming?.length && !appointments.past?.length && !appointments.cancelled?.length) ? (
               <Text style={{ color: '#aaa', fontSize: 15, textAlign: 'center', marginTop: 30 }}>Nenhuma consulta encontrada.</Text>
             ) : (
               <>
@@ -230,6 +236,26 @@ const DoctorDashboardScreen = ({ navigation }) => {
                   <View style={{ marginBottom: 18 }}>
                     <Text style={{ fontSize: 15, color: '#aaa', fontWeight: '500', marginBottom: 6 }}>Passadas</Text>
                     {appointments.past.map((appointment) => (
+                      <View key={appointment.id} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 16, fontWeight: '600', color: '#222' }}>{appointment.users?.fullname || 'Paciente'}</Text>
+                          <Text style={{ fontSize: 13, color: '#6a7a8c', marginTop: 2 }}>{formatDateTime(appointment.appointment_datetime)}</Text>
+                          <Text style={{ fontSize: 13, color: '#8a99a8', marginTop: 2 }}>{appointment.location}</Text>
+                          {appointment.notes ? <Text style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{appointment.notes}</Text> : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
+                          <View style={{ backgroundColor: getStatusColor(appointment.status), borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 6 }}>
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{appointment.status}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {appointments.cancelled?.length > 0 && (
+                  <View style={{ marginBottom: 18 }}>
+                    <Text style={{ fontSize: 15, color: '#e74c3c', fontWeight: '500', marginBottom: 6 }}>Canceladas</Text>
+                    {appointments.cancelled.map((appointment) => (
                       <View key={appointment.id} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 16, fontWeight: '600', color: '#222' }}>{appointment.users?.fullname || 'Paciente'}</Text>

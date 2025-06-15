@@ -30,6 +30,11 @@ const DoctorAppointmentManagement = () => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [markedDates, setMarkedDates] = useState({});
 
+  // Novos estados para o modal de resultado da consulta
+  const [showOutcomeModal, setShowOutcomeModal] = useState(false);
+  const [outcomeNotes, setOutcomeNotes] = useState('');
+  const [selectedOutcomeStatus, setSelectedOutcomeStatus] = useState(null); // 'completed' ou 'no_show'
+
   useEffect(() => {
     fetchAppointments();
   }, [filter, selectedDate]);
@@ -72,17 +77,20 @@ const DoctorAppointmentManagement = () => {
       approved: '#66bb6a',
       rejected: '#ef5350',
       completed: '#42a5f5',
-      cancelled: '#bdbdbd'
+      cancelled: '#bdbdbd',
+      no_show: '#ff5722', // Cor para o status 'no_show'
+      reschedule_requested: '#8e44ad', // Nova cor para solicitação de reagendamento
     };
     return colors[status] || '#bdbdbd';
   };
 
-  const handleStatusUpdate = async (appointmentId, newStatus) => {
+  const handleStatusUpdate = async (appointmentId, newStatus, notes = null) => {
     try {
       const result = await AppointmentService.updateAppointmentStatus(
         appointmentId,
         newStatus,
-        user.id
+        user.id,
+        notes // Passar as notas, se existirem
       );
 
       if (!result.success) {
@@ -125,9 +133,57 @@ const DoctorAppointmentManagement = () => {
     }
   };
 
+  const handleOutcomeConfirmation = async () => {
+    if (!selectedAppointment || !selectedOutcomeStatus) return;
+
+    try {
+      const result = await AppointmentService.updateAppointmentStatus(
+        selectedAppointment.id,
+        selectedOutcomeStatus,
+        user.id,
+        outcomeNotes // Passar as notas do resultado
+      );
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setShowOutcomeModal(false);
+      setOutcomeNotes('');
+      setSelectedOutcomeStatus(null);
+      setSelectedAppointment(null);
+      await fetchAppointments();
+      Alert.alert('Sucesso', `Consulta marcada como ${selectedOutcomeStatus === 'completed' ? 'concluída' : 'não compareceu'}.`);
+    } catch (error) {
+      console.error('Error updating appointment outcome:', error);
+      Alert.alert('Erro', 'Não foi possível atualizar o resultado da consulta.');
+    }
+  };
+
   const renderAppointmentCard = (appointment) => {
     const appointmentDate = new Date(appointment.appointment_datetime);
     const statusColor = getStatusColor(appointment.status);
+
+    const getStatusMessage = () => {
+      switch (appointment.status) {
+        case 'pending':
+          return 'Pendente';
+        case 'approved':
+          return 'Aprovada';
+        case 'rejected':
+          return 'Rejeitada';
+        case 'completed':
+          return 'Concluída';
+        case 'cancelled':
+          return 'Cancelada';
+        case 'no_show':
+          return 'Não Compareceu';
+        case 'reschedule_requested':
+          return 'Reagendamento Solicitado';
+        default:
+          return 'Desconhecido';
+      }
+    };
 
     return (
       <View key={appointment.id} style={styles.appointmentCard}>
@@ -154,12 +210,7 @@ const DoctorAppointmentManagement = () => {
             </View>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>
-              {filter === 'pending' ? 'Pendente' :
-               filter === 'approved' ? 'Aprovada' :
-               filter === 'rejected' ? 'Rejeitada' :
-               filter === 'completed' ? 'Concluída' : 'Cancelada'}
-            </Text>
+            <Text style={styles.statusText}>{getStatusMessage()}</Text>
           </View>
         </View>
 
@@ -178,6 +229,12 @@ const DoctorAppointmentManagement = () => {
             <View style={styles.detailRow}>
               <Ionicons name="document-text-outline" size={20} color="#666" />
               <Text style={styles.detailText}>{appointment.notes}</Text>
+            </View>
+          )}
+          {appointment.requested_date_change && appointment.status === 'reschedule_requested' && (
+            <View style={styles.detailRow}>
+              <Ionicons name="sync-circle-outline" size={20} color="#8e44ad" />
+              <Text style={styles.detailText}>Nova Data Sugerida: {new Date(appointment.requested_date_change).toLocaleString()}</Text>
             </View>
           )}
         </View>
@@ -205,10 +262,25 @@ const DoctorAppointmentManagement = () => {
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.actionButton, styles.completeButton]}
-              onPress={() => handleStatusUpdate(appointment.id, 'completed')}
+              onPress={() => {
+                setSelectedAppointment(appointment);
+                setSelectedOutcomeStatus('completed');
+                setShowOutcomeModal(true);
+              }}
             >
               <Ionicons name="checkmark-done-circle" size={20} color="#fff" />
               <Text style={styles.actionButtonText}>Concluir</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.noShowButton]}
+              onPress={() => {
+                setSelectedAppointment(appointment);
+                setSelectedOutcomeStatus('no_show');
+                setShowOutcomeModal(true);
+              }}
+            >
+              <Ionicons name="person-remove-outline" size={20} color="#fff" />
+              <Text style={styles.actionButtonText}>Não Compareceu</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.cancelButton]}
@@ -222,8 +294,84 @@ const DoctorAppointmentManagement = () => {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Ações para solicitação de reagendamento */}
+        {appointment.status === 'reschedule_requested' && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={() => handleApproveReschedule(appointment)}
+            >
+              <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+              <Text style={styles.actionButtonText}>Aprovar Reagendamento</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.rejectButton]}
+              onPress={() => handleRejectReschedule(appointment.id)}
+            >
+              <Ionicons name="close-circle-outline" size={20} color="#fff" />
+              <Text style={styles.actionButtonText}>Rejeitar Reagendamento</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
+  };
+
+  const handleApproveReschedule = async (appointment) => {
+    try {
+      if (!appointment.requested_date_change) {
+        Alert.alert('Erro', 'Nenhuma nova data solicitada para aprovação.');
+        return;
+      }
+
+      setLoading(true);
+      // Aprovando o reagendamento: atualiza a data e o status para 'approved'
+      const result = await AppointmentService.updateAppointmentStatus(
+        appointment.id,
+        'approved', // Novo status
+        user.id,
+        null, // Sem notas adicionais neste momento
+        appointment.requested_date_change // Nova data da consulta
+      );
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      await fetchAppointments();
+      Alert.alert('Sucesso', 'Reagendamento aprovado e consulta atualizada!');
+    } catch (error) {
+      console.error('Error approving reschedule:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível aprovar o reagendamento.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectReschedule = async (appointmentId) => {
+    try {
+      setLoading(true);
+      // Rejeitando o reagendamento: mantém a data original e volta para o status 'approved' ou 'pending'
+      // Ou pode-se mudar para um novo status como 'reschedule_rejected' para registro
+      const result = await AppointmentService.updateAppointmentStatus(
+        appointmentId,
+        'rejected', // Voltando para o status original ou um novo status de rejeição
+        user.id
+      );
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      await fetchAppointments();
+      Alert.alert('Sucesso', 'Reagendamento rejeitado.');
+    } catch (error) {
+      console.error('Error rejecting reschedule:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível rejeitar o reagendamento.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (initialLoading) {
@@ -247,7 +395,7 @@ const DoctorAppointmentManagement = () => {
       </View>
 
       <View style={styles.filterContainer}>
-        {['pending', 'approved', 'rejected', 'completed', 'cancelled'].map((status) => (
+        {['pending', 'approved', 'rejected', 'completed', 'cancelled', 'no_show', 'reschedule_requested'].map((status) => (
           <TouchableOpacity
             key={status}
             style={[
@@ -262,6 +410,9 @@ const DoctorAppointmentManagement = () => {
                 status === 'approved' ? 'checkmark-circle' :
                 status === 'rejected' ? 'close-circle' :
                 status === 'completed' ? 'checkmark-done-circle' :
+                status === 'cancelled' ? 'ban' :
+                status === 'no_show' ? 'person-remove-outline' :
+                status === 'reschedule_requested' ? 'sync-circle-outline' :
                 'ban'
               }
               size={20}
@@ -278,6 +429,8 @@ const DoctorAppointmentManagement = () => {
               {status === 'rejected' && 'Rejeitadas'}
               {status === 'completed' && 'Concluídas'}
               {status === 'cancelled' && 'Canceladas'}
+              {status === 'no_show' && 'Não Compareceu'}
+              {status === 'reschedule_requested' && 'Reagendamento Solicitado'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -292,7 +445,9 @@ const DoctorAppointmentManagement = () => {
                               filter === 'approved' ? 'aprovada' : 
                               filter === 'rejected' ? 'rejeitada' : 
                               filter === 'completed' ? 'concluída' : 
-                              'cancelada'} encontrada.
+                              filter === 'cancelled' ? 'cancelada' :
+                              filter === 'no_show' ? 'não compareceu' :
+                              'reagendamento solicitado'} encontrada.
             </Text>
           </View>
         ) : (
@@ -372,6 +527,8 @@ const DoctorAppointmentManagement = () => {
           </View>
         </View>
       </Modal>
+
+      {renderOutcomeModal()}
     </View>
   );
 };
@@ -503,21 +660,22 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
+    marginTop: 15,
   },
   actionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 8,
+    flex: 1,
     marginHorizontal: 5,
   },
   actionButtonText: {
     color: '#fff',
-    fontWeight: '600',
     marginLeft: 5,
+    fontWeight: 'bold',
   },
   approveButton: {
     backgroundColor: '#66bb6a',
@@ -529,7 +687,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#42a5f5',
   },
   cancelButton: {
-    backgroundColor: '#ff9800',
+    backgroundColor: '#bdbdbd',
+  },
+  noShowButton: {
+    backgroundColor: '#ff5722',
+    padding: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    marginHorizontal: 5,
   },
   emptyState: {
     flex: 1,
@@ -585,6 +753,46 @@ const styles = StyleSheet.create({
   cancelConfirmButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalTextInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  modalConfirmButton: {
+    backgroundColor: '#2ecc71',
+  },
+  modalCancelButton: {
+    backgroundColor: '#ccc',
+  },
+  modalNoShowButton: {
+    backgroundColor: '#ff5722',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

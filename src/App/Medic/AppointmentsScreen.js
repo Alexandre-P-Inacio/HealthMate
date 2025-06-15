@@ -34,6 +34,15 @@ const AppointmentsScreen = ({ navigation }) => {
   const [requestNotes, setRequestNotes] = useState('');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [reportType, setReportType] = useState('normal');
+  const [chargedValue, setChargedValue] = useState('');
+
+  // Novos estados para o modal de cancelamento
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isReportEditable, setIsReportEditable] = useState(false);
+
+  const [userDoctorData, setUserDoctorData] = useState(null); // Estado para dados do médico
 
   useEffect(() => {
     const currentUser = DataUser.getUserData();
@@ -47,11 +56,61 @@ const AppointmentsScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
+    const checkUserRoleAndFetchDoctorData = async () => {
+      const userData = DataUser.getUserData();
+      if (userData && userData.role === 'doctor') {
+        setIsMedic(true);
+        // Buscar dados completos do médico logado
+        const { data: doctorData, error: doctorError } = await supabase
+          .from('doctors')
+          .select('*')
+          .eq('user_id', userData.id)
+          .single();
+
+        if (doctorError) {
+          console.error('Error fetching doctor data:', doctorError.message);
+        } else {
+          setUserDoctorData(doctorData); // Guardar os dados completos do médico
+        }
+      } else {
+        setIsMedic(false);
+      }
+      fetchAppointments(filter);
+    };
+    checkUserRoleAndFetchDoctorData();
+  }, [filter]);
+
+  useEffect(() => {
     if (userId) {
       fetchAppointments();
     }
     // eslint-disable-next-line
   }, [userId, filter]);
+
+  useEffect(() => {
+    const now = new Date();
+    // Only run if appointments are loaded
+    if (appointments && appointments.length > 0) {
+      appointments.forEach(async (appointment) => {
+        const appointmentDate = new Date(appointment.appointment_datetime);
+        const fiveHoursAfter = new Date(appointmentDate.getTime() + 5 * 60 * 60 * 1000);
+        if (
+          fiveHoursAfter < now &&
+          appointment.status === 'confirmed' &&
+          (!appointment.notes || appointment.notes.trim() === '')
+        ) {
+          // Update status to 'no-show'
+          await supabase
+            .from('appointments')
+            .update({ status: 'no-show' })
+            .eq('id', appointment.id);
+          // Optionally, you can refetch appointments here if needed
+          fetchAppointments && fetchAppointments();
+        }
+      });
+    }
+    // eslint-disable-next-line
+  }, [appointments]);
 
   const fetchAppointments = async () => {
     try {
@@ -104,9 +163,17 @@ const AppointmentsScreen = ({ navigation }) => {
     const now = new Date();
     switch (filter) {
       case 'upcoming':
-        return data.filter(a => new Date(a.appointment_datetime) > now && a.status !== 'cancelled');
+        return data.filter(a => {
+          const appointmentDate = new Date(a.appointment_datetime);
+          const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+          return appointmentDate > now && a.status === 'confirmed' && oneHourAfter > now;
+        });
       case 'past':
-        return data.filter(a => new Date(a.appointment_datetime) <= now && a.status !== 'cancelled');
+        return data.filter(a => {
+          const appointmentDate = new Date(a.appointment_datetime);
+          const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+          return (appointmentDate <= now || oneHourAfter <= now) && a.status !== 'cancelled';
+        });
       case 'cancelled':
         return data.filter(a => a.status === 'cancelled');
       default:
@@ -136,27 +203,6 @@ const AppointmentsScreen = ({ navigation }) => {
     }
   };
 
-  const handleSaveReport = async () => {
-    if (!editingAppointment) return;
-    try {
-      setLoading(true);
-      const { error } = await supabase
-        .from('appointments')
-        .update({ notes: reportText })
-        .eq('id', editingAppointment.id);
-      if (error) throw error;
-      setReportModalVisible(false);
-      setEditingAppointment(null);
-      setReportText('');
-      fetchAppointments();
-      Alert.alert('Success', 'Report saved!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save report.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRequestNewDate = async (appointmentId, doctorId) => {
     try {
       const result = await AppointmentService.requestDateChange(
@@ -173,6 +219,41 @@ const AppointmentsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error requesting new date:', error);
+    }
+  };
+
+  const handleCancelConfirmation = async () => {
+    if (!cancelReason.trim()) {
+      Alert.alert('Erro', 'Por favor, forneça um motivo para o cancelamento.');
+      return;
+    }
+    if (!selectedAppointment || !userId) {
+      Alert.alert('Erro', 'Dados da consulta ou usuário não disponíveis.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await AppointmentService.cancelAppointment(
+        selectedAppointment.id,
+        userId,
+        cancelReason
+      );
+
+      if (result.success) {
+        setShowCancelModal(false);
+        setCancelReason('');
+        setSelectedAppointment(null);
+        fetchAppointments();
+        Alert.alert('Sucesso', 'Consulta cancelada com sucesso!');
+      } else {
+        Alert.alert('Erro', result.error || 'Não foi possível cancelar a consulta.');
+      }
+    } catch (error) {
+      console.error('Error canceling appointment:', error);
+      Alert.alert('Erro', 'Ocorreu um erro ao cancelar a consulta.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -295,14 +376,22 @@ const AppointmentsScreen = ({ navigation }) => {
 
   const renderAppointmentItem = ({ item }) => {
     const appointmentDate = new Date(item.appointment_datetime);
-    const isUpcoming = new Date(item.appointment_datetime) > new Date();
+    const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000);
+    const fiveHoursAfter = new Date(appointmentDate.getTime() + 5 * 60 * 60 * 1000);
+    const now = new Date();
+    const isUpcoming = appointmentDate > now && oneHourAfter > now;
+    const isPast = appointmentDate <= now;
+    const isPastFiveHours = fiveHoursAfter <= now;
+    const isWithinFiveHours = appointmentDate <= now && fiveHoursAfter > now;
     const canConfirm = isMedic && (item.status === 'pending' || item.status === 'requested') && isUpcoming;
     const canCancel = isMedic && (item.status === 'pending' || item.status === 'requested') && isUpcoming;
     const canComplete = isMedic && item.status === 'confirmed' && isUpcoming;
-    const canEditReport = isMedic && item.status === 'completed';
+    const canEditReport = isMedic && (item.status === 'completed' || (isWithinFiveHours && item.status === 'confirmed'));
     const canReschedule = isMedic && item.status === 'confirmed' && isUpcoming;
-    const canViewReport = !isMedic && item.status === 'completed';
+    const canViewReport = !isMedic && (item.status === 'completed' || item.status === 'no-show' || item.status === 'cancelled');
     const canRequestNewDate = !isMedic && item.status === 'scheduled' && isUpcoming;
+    const canMarkNoShow = isMedic && isPastFiveHours && item.status === 'confirmed';
+    const canMarkCancelled = isMedic && isPastFiveHours && item.status === 'confirmed';
     
     // Check if current user should see response buttons
     const shouldShowResponseButtons = item.status === 'scheduled' && item.requested_by && item.requested_by !== (isMedic ? item.doctor_id : item.user_id);
@@ -318,120 +407,85 @@ const AppointmentsScreen = ({ navigation }) => {
       }
     }
 
+    const getStatusMessage = () => {
+      if (item.status === 'no-show') {
+        return 'Patient did not show up';
+      } else if (item.status === 'cancelled') {
+        return 'Appointment was cancelled';
+      } else if (isPastFiveHours && item.status === 'confirmed') {
+        return 'More than 5 hours have passed - Mark as no-show or cancelled';
+      } else if (isWithinFiveHours && item.status === 'confirmed') {
+        return 'Time available to write report (within 5 hours)';
+      } else if (isUpcoming && item.status === 'confirmed') {
+        return 'Time slot available for report and prescription';
+      } else if (isPast && !isPastFiveHours) {
+        return 'This appointment has passed';
+      }
+      return '';
+    };
+
     return (
       <View style={styles.appointmentCard}>
-        <Text style={styles.doctorName}>
-          {isMedic ? `Paciente: ${patientName}` : `Dr. ${doctorName}`}
-        </Text>
-        {item.requested_by && (
-          <Text style={styles.requestedBy}>
-            Solicitado por: {requestedByName}
+        <View style={styles.appointmentInfo}>
+          <Text style={styles.patientName}>{patientName}</Text>
+          <Text style={styles.appointmentDate}>
+            {appointmentDate.toLocaleDateString()}
           </Text>
-        )}
-        {item.requested_date_change && (
-          <Text style={styles.requestedDateChange}>
-            Nova data/hora solicitada: {new Date(item.requested_date_change).toLocaleString()}
+          <Text style={styles.appointmentTime}>
+            {appointmentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {oneHourAfter.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
-        )}
-        <Text style={styles.appointmentDate}>Date: {appointmentDate.toDateString()}</Text>
-        <Text style={styles.appointmentTime}>Time: {appointmentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-        <Text style={styles.location}>Location: {item.location}</Text>
-        <Text style={styles.status}>Status: {item.status}</Text>
-        
-        {/* Response buttons when someone else requested */}
-        {shouldShowResponseButtons && (
-          <View style={styles.verticalButtonContainer}>
-            <TouchableOpacity 
-              style={[styles.iconButton, styles.acceptButton]}
-              onPress={() => handleAcceptAppointment(item.id)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="checkmark-circle" size={24} color="#4F8CFF" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.iconButton, styles.rejectButton]}
-              onPress={() => handleRejectAppointment(item.id)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close-circle" size={24} color="#F87171" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.iconButton, styles.changeTimeButton]}
-              onPress={() => {
-                setSelectedAppointment(item);
-                setShowRequestModal(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="time" size={24} color="#60A5FA" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Regular action buttons */}
-        {!shouldShowResponseButtons && (
-          <View style={styles.verticalButtonContainer}>
-            {canConfirm && (
+          {item.location && (
+            <Text style={styles.location}>Location: {item.location}</Text>
+          )}
+          <Text style={[styles.status, { 
+            color: item.status === 'no-show' ? '#e74c3c' : 
+                   item.status === 'cancelled' ? '#e74c3c' :
+                   isPastFiveHours ? '#e74c3c' :
+                   isWithinFiveHours ? '#2ecc71' :
+                   isUpcoming ? '#2ecc71' : '#e74c3c'
+          }]}>
+            {getStatusMessage()}
+          </Text>
+          {item.requested_by && (
+            <Text style={styles.requestedBy}>
+              Requested by: {requestedByName}
+            </Text>
+          )}
+          {item.requested_date_change && (
+            <Text style={styles.requestedDateChange}>
+              Date change requested: {new Date(item.requested_date_change).toLocaleString()}
+            </Text>
+          )}
+          {item.charged_value && (
+            <Text style={styles.chargedValue}>
+              Charged Value: ${item.charged_value}
+            </Text>
+          )}
+          {item.notes && (
+            <Text style={styles.reportText}>
+              Report: {item.notes}
+            </Text>
+          )}
+        </View>
+        <View style={styles.buttonContainer}>
+          {shouldShowResponseButtons && (
+            <View style={styles.verticalButtonContainer}>
               <TouchableOpacity 
-                style={[styles.iconButton, styles.confirmButton]}
-                onPress={() => handleStatusChange(item.id, 'confirmed')}
+                style={[styles.iconButton, styles.acceptButton]}
+                onPress={() => handleAcceptAppointment(item.id)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="checkmark-circle" size={24} color="#4F8CFF" />
               </TouchableOpacity>
-            )}
-            {canCancel && (
               <TouchableOpacity 
-                style={[styles.iconButton, styles.cancelButton]}
-                onPress={() => handleStatusChange(item.id, 'cancelled')}
+                style={[styles.iconButton, styles.rejectButton]}
+                onPress={() => handleRejectAppointment(item.id)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="close-circle" size={24} color="#F87171" />
               </TouchableOpacity>
-            )}
-            {canComplete && (
               <TouchableOpacity 
-                style={[styles.iconButton, styles.completeButton]}
-                onPress={() => handleStatusChange(item.id, 'completed')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="checkmark-done" size={24} color="#4F8CFF" />
-              </TouchableOpacity>
-            )}
-            {canEditReport && (
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.editReportButton]}
-                onPress={() => {
-                  setEditingAppointment(item);
-                  setReportText(item.notes || '');
-                  setReportModalVisible(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="create" size={24} color="#4F8CFF" />
-              </TouchableOpacity>
-            )}
-            {canReschedule && (
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.rescheduleButton]}
-                onPress={() => handleStatusChange(item.id, 'confirmed')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="calendar" size={24} color="#4F8CFF" />
-              </TouchableOpacity>
-            )}
-            {canViewReport && (
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.viewReportButton]}
-                onPress={() => handleStatusChange(item.id, 'completed')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="document-text" size={24} color="#4F8CFF" />
-              </TouchableOpacity>
-            )}
-            {canRequestNewDate && (
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.requestNewDateButton]}
+                style={[styles.iconButton, styles.changeTimeButton]}
                 onPress={() => {
                   setSelectedAppointment(item);
                   setShowRequestModal(true);
@@ -440,9 +494,116 @@ const AppointmentsScreen = ({ navigation }) => {
               >
                 <Ionicons name="time" size={24} color="#60A5FA" />
               </TouchableOpacity>
-            )}
-          </View>
-        )}
+            </View>
+          )}
+          {!shouldShowResponseButtons && (
+            <View style={styles.verticalButtonContainer}>
+              {canConfirm && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.confirmButton]}
+                  onPress={() => handleStatusChange(item.id, 'confirmed')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="checkmark-circle" size={24} color="#4F8CFF" />
+                </TouchableOpacity>
+              )}
+              {canCancel && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.cancelButton]}
+                  onPress={() => handleStatusChange(item.id, 'cancelled')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={24} color="#F87171" />
+                </TouchableOpacity>
+              )}
+              {canComplete && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.completeButton]}
+                  onPress={() => {
+                    setEditingAppointment(item);
+                    setReportModalVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="document-text" size={24} color="#4F8CFF" />
+                </TouchableOpacity>
+              )}
+              {canMarkNoShow && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.noShowButton]}
+                  onPress={() => {
+                    setEditingAppointment(item);
+                    setReportModalVisible(true);
+                    setReportType('no-show');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="person-remove" size={24} color="#e74c3c" />
+                </TouchableOpacity>
+              )}
+              {canMarkCancelled && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.cancelButton]}
+                  onPress={() => {
+                    setEditingAppointment(item);
+                    setReportModalVisible(true);
+                    setReportType('cancelled');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={24} color="#F87171" />
+                </TouchableOpacity>
+              )}
+              {canEditReport && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.editReportButton]}
+                  onPress={() => {
+                    setEditingAppointment(item);
+                    setReportText(item.notes || '');
+                    setReportModalVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="create" size={24} color="#4F8CFF" />
+                </TouchableOpacity>
+              )}
+              {canReschedule && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.rescheduleButton]}
+                  onPress={() => handleStatusChange(item.id, 'confirmed')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="calendar" size={24} color="#4F8CFF" />
+                </TouchableOpacity>
+              )}
+              {canViewReport && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.viewReportButton]}
+                  onPress={() => {
+                    setEditingAppointment(item);
+                    setReportText(item.notes || '');
+                    setReportModalVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="document-text" size={24} color="#4F8CFF" />
+                </TouchableOpacity>
+              )}
+              {canRequestNewDate && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.requestNewDateButton]}
+                  onPress={() => {
+                    setSelectedAppointment(item);
+                    setShowRequestModal(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="time" size={24} color="#60A5FA" />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
       </View>
     );
   };
@@ -453,7 +614,7 @@ const AppointmentsScreen = ({ navigation }) => {
       const result = await AppointmentService.updateAppointmentStatus(
         appointmentId,
         'confirmed',
-        isMedic ? doctorId : userId // Set requested_by to current user
+        isMedic ? userId : userId // Set requested_by to current user
       );
       if (result.success) {
         fetchAppointments();
@@ -468,7 +629,7 @@ const AppointmentsScreen = ({ navigation }) => {
       const result = await AppointmentService.updateAppointmentStatus(
         appointmentId,
         'rejected',
-        isMedic ? doctorId : userId // Set requested_by to current user
+        isMedic ? userId : userId // Set requested_by to current user
       );
       if (result.success) {
         fetchAppointments();
@@ -484,6 +645,176 @@ const AppointmentsScreen = ({ navigation }) => {
     setShowRequestModal(true);
   };
 
+  // Modify the report modal to include charged value
+  const renderReportModal = () => {
+    if (!editingAppointment) return null;
+    // Controla a editabilidade do modal: true se for um médico e isReportEditable estiver ativo
+    const isReportAllowedToEdit = isMedic && isReportEditable;
+
+    return (
+      <Modal
+        visible={reportModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setReportModalVisible(false);
+          setReportText('');
+          setChargedValue('');
+          setReportType('normal');
+          setIsReportEditable(false); // Resetar estado de edição
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {isReportAllowedToEdit ? 'Editar Relatório' : 'Ver Relatório'}
+            </Text>
+            
+            {reportType !== 'normal' && (
+              <Text style={styles.modalMessage}>
+                {reportType === 'completed' ? 'Adicione um relatório para esta consulta concluída.' :
+                 reportType === 'no-show' ? 'Adicione notas para o não comparecimento do paciente.' : ''}
+              </Text>
+            )}
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Relatório</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={reportText}
+                onChangeText={setReportText}
+                placeholder="Insira os detalhes do relatório..."
+                multiline
+                numberOfLines={4}
+                editable={isReportAllowedToEdit} // Controla a editabilidade do TextInput
+              />
+            </View>
+
+            {(reportType === 'no-show' || reportType === 'cancelled') && (
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Valor Cobrado ($)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={chargedValue}
+                  onChangeText={setChargedValue}
+                  placeholder="Insira o valor cobrado"
+                  keyboardType="numeric"
+                  editable={isReportAllowedToEdit} // Controla a editabilidade do TextInput
+                />
+              </View>
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setReportModalVisible(false);
+                  setReportText('');
+                  setChargedValue('');
+                  setReportType('normal');
+                  setIsReportEditable(false); // Resetar estado de edição
+                }}
+              >
+                <Text style={[styles.buttonText, { color: '#333' }]}>Cancelar</Text>
+              </TouchableOpacity>
+              {isReportAllowedToEdit && (
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.submitButton]}
+                  onPress={() => {
+                    // Se o tipo de relatório não for 'normal', a mudança de status já é tratada
+                    // Caso contrário, significa que é uma edição de relatório normal sem mudança de status
+                    const newStatus = (reportType === 'normal') ? editingAppointment.status : reportType;
+                    const newChargedValue = (reportType === 'normal') ? (editingAppointment.charged_value || 0) : (parseFloat(chargedValue) || 0);
+                    handleUpdateAppointmentStatus(newStatus, newChargedValue);
+                  }}
+                >
+                  <Text style={styles.buttonText}>Salvar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Add new function to handle appointment status update with charged value
+  const handleUpdateAppointmentStatus = async (status, value) => {
+    if (!editingAppointment) return;
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          status: status,
+          charged_value: parseFloat(value) || 0,
+          notes: reportText
+        })
+        .eq('id', editingAppointment.id);
+      
+      if (error) throw error;
+      
+      setReportModalVisible(false);
+      setEditingAppointment(null);
+      setReportText('');
+      setChargedValue('');
+      setReportType('normal');
+      fetchAppointments();
+      Alert.alert('Sucesso', `Consulta marcada como ${status === 'completed' ? 'concluída' : status === 'no-show' ? 'não compareceu' : 'atualizada'}.`);
+    } catch (error) {
+      Alert.alert('Erro', 'Falha ao atualizar status da consulta.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderCancelModal = () => {
+    if (!selectedAppointment) return null;
+    return (
+      <Modal
+        visible={showCancelModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCancelModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Cancelar Consulta</Text>
+            <Text style={styles.modalMessage}>
+              Tem certeza que deseja cancelar esta consulta? Por favor, forneça um motivo.
+            </Text>
+            <TextInput
+              style={styles.modalTextInput}
+              placeholder="Motivo do cancelamento..."
+              multiline
+              numberOfLines={4}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowCancelModal(false);
+                  setCancelReason('');
+                  setSelectedAppointment(null);
+                }}
+              >
+                <Text style={styles.modalButtonText}>Voltar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmCancelButton]}
+                onPress={handleCancelConfirmation}
+              >
+                <Text style={styles.modalButtonText}>Confirmar Cancelamento</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -495,19 +826,19 @@ const AppointmentsScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f7fafd' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f7fafd" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
       <View style={{ flex: 1 }}>
         {/* Minimal Header with Back Button */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, backgroundColor: '#f7fafd' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, backgroundColor: '#f5f5f5' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={28} color="#4a67e3" />
             </TouchableOpacity>
             <Text style={{ fontSize: 22, fontWeight: '700', color: '#222' }}>Consultas</Text>
           </View>
-          {isMedic && (
-            <TouchableOpacity style={{ marginLeft: 8 }} onPress={() => navigation.navigate('DoctorAppointmentRequest')}>
+          {isMedic && userDoctorData && (
+            <TouchableOpacity style={{ marginLeft: 8 }} onPress={() => navigation.navigate('RequestAppointmentScreen', { doctor: userDoctorData })}>
               <Ionicons name="add-circle-outline" size={28} color="#4a67e3" />
             </TouchableOpacity>
           )}
@@ -547,192 +878,16 @@ const AppointmentsScreen = ({ navigation }) => {
             keyExtractor={(item) => item.id.toString()}
               contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 30 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-              renderItem={({ item }) => {
-                const appointmentDate = new Date(item.appointment_datetime);
-                const isUpcoming = new Date(item.appointment_datetime) > new Date();
-                const canConfirm = isMedic && (item.status === 'pending' || item.status === 'requested') && isUpcoming;
-                const canCancel = isMedic && (item.status === 'pending' || item.status === 'requested') && isUpcoming;
-                const canComplete = isMedic && item.status === 'confirmed' && isUpcoming;
-                const canEditReport = isMedic && item.status === 'completed';
-                const canReschedule = isMedic && item.status === 'confirmed' && isUpcoming;
-                const canViewReport = !isMedic && item.status === 'completed';
-                const canRequestNewDate = !isMedic && item.status === 'scheduled' && isUpcoming;
-                
-                // Check if current user should see response buttons
-                const shouldShowResponseButtons = item.status === 'scheduled' && item.requested_by && item.requested_by !== (isMedic ? item.doctor_id : item.user_id);
-                
-                const patientName = item.users?.fullname || item.users?.name || 'N/A';
-                const doctorName = item.doctors?.name || 'N/A';
-                let requestedByName = 'N/A';
-                if (item.requested_by) {
-                  if (item.requested_by === item.user_id) {
-                    requestedByName = patientName;
-                  } else if (item.requested_by === item.doctor_id) {
-                    requestedByName = doctorName;
-                  }
-                }
-                return (
-                  <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 18, marginBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '600', color: '#222' }}>{isMedic ? `Paciente: ${patientName}` : `Dr. ${doctorName}`}</Text>
-                      {item.requested_by && (
-                        <Text style={styles.requestedBy}>
-                          Solicitado por: {requestedByName}
-                        </Text>
-                      )}
-                      {item.requested_date_change && (
-                        <Text style={styles.requestedDateChange}>
-                          Nova data/hora solicitada: {new Date(item.requested_date_change).toLocaleString()}
-                        </Text>
-                      )}
-                      <Text style={{ fontSize: 13, color: '#6a7a8c', marginTop: 2 }}>{appointmentDate.toLocaleDateString()} {appointmentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                      <Text style={{ fontSize: 13, color: '#8a99a8', marginTop: 2 }}>{item.location}</Text>
-                      {item.notes && <Text style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{item.notes}</Text>}
-                    </View>
-                    <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
-                      <View style={{ backgroundColor: getStatusColor(item.status), borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 6 }}>
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{item.status}</Text>
-                      </View>
-                      {shouldShowResponseButtons && (
-                        <View style={styles.verticalButtonContainer}>
-                          <TouchableOpacity 
-                            style={[styles.iconButton, styles.acceptButton]}
-                            onPress={() => handleAcceptAppointment(item.id)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="checkmark-circle" size={24} color="#4F8CFF" />
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.iconButton, styles.rejectButton]}
-                            onPress={() => handleRejectAppointment(item.id)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="close-circle" size={24} color="#F87171" />
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.iconButton, styles.changeTimeButton]}
-                            onPress={() => {
-                              setSelectedAppointment(item);
-                              setShowRequestModal(true);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="time" size={24} color="#60A5FA" />
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                      {!shouldShowResponseButtons && (
-                        <View style={styles.verticalButtonContainer}>
-                          {canConfirm && (
-                            <TouchableOpacity 
-                              style={[styles.iconButton, styles.confirmButton]}
-                              onPress={() => handleStatusChange(item.id, 'confirmed')}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="checkmark-circle" size={24} color="#4F8CFF" />
-                            </TouchableOpacity>
-                          )}
-                          {canCancel && (
-                            <TouchableOpacity 
-                              style={[styles.iconButton, styles.cancelButton]}
-                              onPress={() => handleStatusChange(item.id, 'cancelled')}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="close-circle" size={24} color="#F87171" />
-                            </TouchableOpacity>
-                          )}
-                          {canComplete && (
-                            <TouchableOpacity 
-                              style={[styles.iconButton, styles.completeButton]}
-                              onPress={() => handleStatusChange(item.id, 'completed')}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="checkmark-done" size={24} color="#4F8CFF" />
-                            </TouchableOpacity>
-                          )}
-                          {canEditReport && (
-                            <TouchableOpacity 
-                              style={[styles.iconButton, styles.editReportButton]}
-                              onPress={() => {
-                                setEditingAppointment(item);
-                                setReportText(item.notes || '');
-                                setReportModalVisible(true);
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="create" size={24} color="#4F8CFF" />
-                            </TouchableOpacity>
-                          )}
-                          {canReschedule && (
-                            <TouchableOpacity 
-                              style={[styles.iconButton, styles.rescheduleButton]}
-                              onPress={() => handleStatusChange(item.id, 'confirmed')}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="calendar" size={24} color="#4F8CFF" />
-                            </TouchableOpacity>
-                          )}
-                          {canViewReport && (
-                            <TouchableOpacity 
-                              style={[styles.iconButton, styles.viewReportButton]}
-                              onPress={() => handleStatusChange(item.id, 'completed')}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="document-text" size={24} color="#4F8CFF" />
-                            </TouchableOpacity>
-                          )}
-                          {canRequestNewDate && (
-                            <TouchableOpacity 
-                              style={[styles.iconButton, styles.requestNewDateButton]}
-                              onPress={() => {
-                                setSelectedAppointment(item);
-                                setShowRequestModal(true);
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="time" size={24} color="#60A5FA" />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                );
-              }}
+              renderItem={renderAppointmentItem}
             />
           )}
           {/* Modal for editing report */}
-          <Modal
-            visible={reportModalVisible}
-            animationType="slide"
-            transparent={true}
-            onRequestClose={() => setReportModalVisible(false)}
-          >
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-              <View style={{ backgroundColor: '#fff', padding: 22, borderRadius: 14, width: '90%' }}>
-                <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 10 }}>Editar Relatório da Consulta</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, minHeight: 80, marginBottom: 15 }}
-                  multiline
-                  value={reportText}
-                  onChangeText={setReportText}
-                  placeholder="Digite o relatório/notas da consulta..."
-                />
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
-                  <TouchableOpacity onPress={() => setReportModalVisible(false)} style={{ marginRight: 10 }}>
-                    <Text style={{ color: '#e74c3c', fontWeight: 'bold' }}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleSaveReport}>
-                    <Text style={{ color: '#3498db', fontWeight: 'bold' }}>Salvar</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </Modal>
+          {renderReportModal()}
         </View>
         <Navbar navigation={navigation} />
       </View>
       {renderRequestModal()}
+      {renderCancelModal()}
     </SafeAreaView>
   );
 };
@@ -740,181 +895,148 @@ const AppointmentsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6A8DFD',
+    backgroundColor: '#f5f5f5',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F5F6FA',
-    paddingBottom: 80,
+    padding: 16,
   },
   header: {
-    backgroundColor: '#6A8DFD',
-    padding: 16,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    marginBottom: 16,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
+  title: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginLeft: 16,
+    color: '#333',
   },
-  filterRow: {
+  filterContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 10,
+    marginBottom: 16,
     backgroundColor: '#fff',
-    borderRadius: 10,
-    marginHorizontal: 10,
-    padding: 5,
+    borderRadius: 8,
+    padding: 4,
   },
   filterButton: {
+    flex: 1,
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
   },
-  activeFilterButton: {
-    backgroundColor: '#3498db',
+  activeFilter: {
+    backgroundColor: '#4F8CFF',
   },
-  filterButtonText: {
-    color: '#333',
-    fontWeight: 'bold',
+  filterText: {
+    fontSize: 14,
+    color: '#666',
   },
-  activeFilterButtonText: {
+  activeFilterText: {
     color: '#fff',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noDataText: {
-    fontSize: 18,
-    color: '#7f8c8d',
-    marginTop: 10,
-  },
-  listContainer: {
-    paddingHorizontal: 15,
-    paddingTop: 10,
-    paddingBottom: 20,
+    fontWeight: 'bold',
   },
   appointmentCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
-    elevation: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  doctorName: {
+  appointmentInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  patientName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#3498db',
-    marginBottom: 5,
+    color: '#333',
+    marginBottom: 8,
   },
   appointmentDate: {
     fontSize: 15,
     color: '#555',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   appointmentTime: {
     fontSize: 15,
     color: '#555',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   location: {
     fontSize: 15,
     color: '#555',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   status: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 'bold',
-    marginTop: 5,
-    color: '#2ecc71',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    marginTop: 10,
-    gap: 10,
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginRight: 8,
-  },
-  buttonText: {
-    marginLeft: 6,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  acceptButton: {
-    backgroundColor: '#2ecc71',
-  },
-  rejectButton: {
-    backgroundColor: '#e74c3c',
-  },
-  changeTimeButton: {
-    backgroundColor: '#4CAF50',
-  },
-  confirmButton: {
-    backgroundColor: '#2ecc71',
-  },
-  cancelButton: {
-    backgroundColor: '#e74c3c',
-  },
-  completeButton: {
-    backgroundColor: '#3498db',
-  },
-  editReportButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  rescheduleButton: {
-    backgroundColor: '#3498db',
-  },
-  viewReportButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  requestNewDateButton: {
-    backgroundColor: '#f1c40f',
+    marginTop: 8,
   },
   requestedBy: {
     fontSize: 13,
     color: '#6a7a8c',
-    marginTop: 2,
+    marginTop: 4,
   },
   requestedDateChange: {
     fontSize: 13,
     color: '#8a99a8',
     marginTop: 2,
   },
+  buttonContainer: {
+    justifyContent: 'center',
+  },
   verticalButtonContainer: {
-    marginTop: 12,
     gap: 8,
-    paddingHorizontal: 0,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  acceptButton: {
+    backgroundColor: '#e8f5e9',
+  },
+  rejectButton: {
+    backgroundColor: '#ffebee',
+  },
+  changeTimeButton: {
+    backgroundColor: '#e3f2fd',
+  },
+  confirmButton: {
+    backgroundColor: '#e8f5e9',
+  },
+  cancelButton: {
+    backgroundColor: '#ffebee',
+  },
+  completeButton: {
+    backgroundColor: '#e3f2fd',
+  },
+  editReportButton: {
+    backgroundColor: '#fff3e0',
+  },
+  rescheduleButton: {
+    backgroundColor: '#e8eaf6',
+  },
+  viewReportButton: {
+    backgroundColor: '#e3f2fd',
+  },
+  requestNewDateButton: {
+    backgroundColor: '#fff3e0',
   },
   modalContainer: {
     flex: 1,
@@ -946,7 +1068,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 5,
+    borderRadius: 8,
     padding: 10,
     fontSize: 16,
   },
@@ -955,62 +1077,119 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   modalButtons: {
-    flexDirection: 'column',
-    gap: 8,
-    marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
   },
   modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+  },
+  submitButton: {
+    backgroundColor: '#4F8CFF',
+  },
+  buttonText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  noShowButton: {
+    backgroundColor: '#ffebee',
+  },
+  chargedValue: {
+    fontSize: 15,
+    color: '#2ecc71',
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  reportText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  // Novos estilos para o modal de cancelamento
+  modalConfirmCancelButton: {
+    backgroundColor: '#e74c3c',
+  },
+  patientActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 15,
+  },
+  modalMessage: {
+    color: '#666',
+    marginBottom: 15,
+  },
+  modalTextInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+  },
+  modalCancelButton: {
+    backgroundColor: '#e9ecf4',
+  },
+  modalButtonText: {
+    color: '#333',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  actionButton: {
+    backgroundColor: '#e74c3c',
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+  },
+  actionButtonText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 15,
+  },
+  listContent: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 30,
+  },
+  // Novo estilo para o botão de alteração de data
+  changeDateButton: {
+    backgroundColor: '#3498db', // Cor para 'Alterar Data'
+    padding: 10,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    minHeight: 38,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: '#F3F6FA',
-    shadowColor: 'transparent',
-    elevation: 0,
-    marginBottom: 0,
-    marginTop: 0,
-    marginHorizontal: 0,
-    marginVertical: 0,
+    flex: 1,
+    marginHorizontal: 5,
   },
-  submitButton: {
-    backgroundColor: '#4F8CFF', // azul principal
-  },
-  dateTimeButton: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 10,
-    backgroundColor: '#f8f9fa',
-  },
-  dateTimeButtonText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  iconButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    borderRadius: 16,
-    padding: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 36,
-    height: 36,
-    marginHorizontal: 2,
-  },
-  acceptButton: {},
-  rejectButton: {},
-  changeTimeButton: {},
-  confirmButton: {},
-  cancelButton: {},
-  completeButton: {},
-  editReportButton: {},
-  rescheduleButton: {},
-  viewReportButton: {},
-  requestNewDateButton: {},
 });
 
 function getStatusColor(status) {
