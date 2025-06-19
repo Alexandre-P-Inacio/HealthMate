@@ -49,7 +49,7 @@ const AppointmentsScreen = ({ navigation }) => {
     if (currentUser && currentUser.id) {
       const id = parseInt(currentUser.id);
       setUserId(isNaN(id) ? null : id);
-      setIsMedic(currentUser.role === 'medic');
+      setIsMedic(currentUser.role === 'doctor' || currentUser.role === 'medic');
     } else {
       Alert.alert('Error', 'User not logged in.');
       setLoading(false);
@@ -59,7 +59,7 @@ const AppointmentsScreen = ({ navigation }) => {
   useEffect(() => {
     const checkUserRoleAndFetchDoctorData = async () => {
       const userData = DataUser.getUserData();
-      if (userData && userData.role === 'doctor') {
+      if (userData && (userData.role === 'doctor' || userData.role === 'medic')) {
         setIsMedic(true);
         // Buscar dados completos do médico logado
         const { data: doctorData, error: doctorError } = await supabase
@@ -82,7 +82,7 @@ const AppointmentsScreen = ({ navigation }) => {
       }
     };
     checkUserRoleAndFetchDoctorData();
-  }, [filter, userId]); // Add userId to dependencies to re-run when it's set
+  }, [filter, userId]);
 
   useEffect(() => {
     if (userId) {
@@ -146,14 +146,27 @@ const AppointmentsScreen = ({ navigation }) => {
         if (res.success) data = res.data;
         // Fallback: fetch doctor data if missing
         for (let apt of data) {
-          if (!apt.doctors || !apt.doctors.fullname) {
-            const { data: doctorData } = await supabase
-              .from('doctors')
-              .select('fullname')
-              .eq('id', apt.doctor_id)
-              .single();
-            if (doctorData && doctorData.fullname) {
-              apt.doctors = { fullname: doctorData.fullname };
+          if (!apt.doctors || (!apt.doctors.fullname && !apt.doctors.name)) {
+            if (apt.doctor_id) {
+              // Fetch doctor from doctors table
+              const { data: doctorData } = await supabase
+                .from('doctors')
+                .select('id, name, user_id')
+                .eq('id', apt.doctor_id)
+                .single();
+              if (doctorData) {
+                // Fetch user fullname from users table
+                const { data: userData } = await supabase
+                  .from('users')
+                  .select('fullname')
+                  .eq('id', doctorData.user_id)
+                  .single();
+                if (userData && userData.fullname) {
+                  apt.doctors = { fullname: userData.fullname, name: doctorData.name };
+                } else if (doctorData.name) {
+                  apt.doctors = { name: doctorData.name };
+                }
+              }
             }
           }
         }
@@ -406,15 +419,7 @@ const AppointmentsScreen = ({ navigation }) => {
     const shouldShowResponseButtons = item.status === 'scheduled' && item.requested_by && item.requested_by !== (isMedic ? item.doctor_id : item.user_id);
     
     const patientName = item.users?.fullname || item.users?.name || 'N/A';
-    const doctorName = item.doctors?.name || 'N/A';
-    let requestedByName = 'N/A';
-    if (item.requested_by) {
-      if (item.requested_by === item.user_id) {
-        requestedByName = patientName;
-      } else if (item.requested_by === item.doctor_id) {
-        requestedByName = doctorName;
-      }
-    }
+    const doctorName = item.doctors?.fullname || item.doctors?.name || 'N/A';
 
     const getStatusMessage = () => {
       if (item.status === 'no-show') {
@@ -457,7 +462,7 @@ const AppointmentsScreen = ({ navigation }) => {
           </Text>
           {item.requested_by && (
             <Text style={styles.requestedBy}>
-              Requested by: {requestedByName}
+              Requested by: {doctorName}
             </Text>
           )}
           {item.requested_date_change && (

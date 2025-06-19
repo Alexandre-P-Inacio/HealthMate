@@ -25,6 +25,8 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
     age: '',
     years_experience: '',
     description: '',
+    appointment_duration_minutes: '60',
+    work_description: '',
   });
 
   useEffect(() => {
@@ -53,6 +55,8 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
           age: doctorData?.age ? doctorData.age.toString() : '',
           years_experience: doctorData?.years_experience ? doctorData.years_experience.toString() : '',
           description: doctorData?.description || '',
+          appointment_duration_minutes: doctorData?.appointment_duration_minutes ? doctorData.appointment_duration_minutes.toString() : '60',
+          work_description: doctorData?.work_description || '',
         });
       } else {
         setFormData({
@@ -61,6 +65,8 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
           age: '',
           years_experience: '',
           description: '',
+          appointment_duration_minutes: '60',
+          work_description: '',
         });
       }
     } catch (error) {
@@ -110,13 +116,14 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
         .single();
       if (userProfileError) throw userProfileError;
       const doctorData = {
-        id: userData.id, // Use the user's ID
         name: userProfile?.fullname || '',
         specialization: formData.specialization.trim() || null,
         age: formData.age ? parseInt(formData.age) : null,
         years_experience: formData.years_experience ? parseInt(formData.years_experience) : null,
         description: formData.description.trim() || null,
-        pfpimg: userProfile?.pfpimg || null, // Set the doctor's profile picture from the user
+        appointment_duration_minutes: formData.appointment_duration_minutes ? parseInt(formData.appointment_duration_minutes) : 60,
+        work_description: formData.work_description.trim() || null,
+        user_id: userData.id,
       };
       let error;
       if (isEditing) {
@@ -235,6 +242,34 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
                 placeholderTextColor="#999"
                 multiline
                 numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Appointment Duration Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Appointment Duration (minutes)</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.appointment_duration_minutes}
+                onChangeText={text => setFormData(prev => ({ ...prev, appointment_duration_minutes: text.replace(/[^0-9]/g, '') }))}
+                placeholder="Ex: 60"
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            {/* Work Description Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Work Description</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={formData.work_description}
+                onChangeText={text => setFormData(prev => ({ ...prev, work_description: text }))}
+                placeholder="Describe your work or type of care provided"
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
                 textAlignVertical="top"
               />
             </View>

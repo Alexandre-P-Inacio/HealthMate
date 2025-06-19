@@ -11,6 +11,8 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
+  ScrollView,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import supabase from '../../../supabase';
@@ -24,6 +26,30 @@ const DoctorsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
   const [userDoctorData, setUserDoctorData] = useState(null);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [selectedSpecialization, setSelectedSpecialization] = useState('All');
+  const [searchText, setSearchText] = useState('');
+
+  // Extract unique specializations from medics
+  const specializations = React.useMemo(() => {
+    const specs = medics.map(d => d.specialization).filter(Boolean);
+    const unique = Array.from(new Set(specs.filter(s => s && s !== 'Nao encontrado' && s !== 'Não informado')));
+    unique.sort((a, b) => a.localeCompare(b));
+    return ['All', ...unique];
+  }, [medics]);
+
+  // Filter medics by specialization and search text
+  const filteredMedics = React.useMemo(() => {
+    let filtered = medics;
+    if (selectedSpecialization !== 'All') {
+      filtered = filtered.filter(d => d.specialization === selectedSpecialization);
+    }
+    if (searchText.trim()) {
+      const lower = searchText.trim().toLowerCase();
+      filtered = filtered.filter(d => d.user.fullname.toLowerCase().includes(lower));
+    }
+    return filtered;
+  }, [medics, selectedSpecialization, searchText]);
 
   useEffect(() => {
     const fetchScreenData = async () => {
@@ -48,15 +74,31 @@ const DoctorsScreen = ({ navigation }) => {
         navigation.goBack();
       }
 
-      // Sempre buscar todos os médicos para exibição
+      // Buscar favoritos do usuário
+      let favoriteIds = [];
+      if (currentUser && currentUser.id) {
+        const { data: user } = await supabase
+          .from('users')
+          .select('favorite_doctors')
+          .eq('id', currentUser.id)
+          .single();
+        if (user && user.favorite_doctors) {
+          favoriteIds = user.favorite_doctors.split(';').map(s => s.trim()).filter(Boolean);
+        }
+      }
+
+      // Buscar todos os médicos
       const { success: allDoctorsSuccess, data: allDoctors, error: allDoctorsError } = await DoctorService.getAllDoctors();
       if (!allDoctorsSuccess) {
         console.error('Error fetching all doctors:', allDoctorsError);
         Alert.alert('Erro', 'Não foi possível carregar a lista de médicos.');
       } else {
-        // Usar dados diretos do médico, já que não há user_id na tabela doctors para a relação
-        setMedics(allDoctors);
-        }
+        // Ordenar: favoritos primeiro
+        const favs = allDoctors.filter(d => favoriteIds.includes(String(d.id)));
+        const nonFavs = allDoctors.filter(d => !favoriteIds.includes(String(d.id)));
+        setMedics([...favs, ...nonFavs]);
+        setFavoriteIds(favoriteIds);
+      }
 
       setLoading(false);
     };
@@ -67,18 +109,38 @@ const DoctorsScreen = ({ navigation }) => {
     <TouchableOpacity 
       style={styles.doctorCard} 
       onPress={() => navigation.navigate('DoctorDetailsScreen', { doctor: item })}
+      activeOpacity={0.85}
     >
-      <Image 
-        source={item.user.pfpimg ? { uri: `data:image/png;base64,${item.user.pfpimg}` } : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' }}
-        style={styles.doctorImage}
-      />
-      <View style={styles.doctorInfo}>
+      <View style={styles.cardLeft}>
+        <Image 
+          source={item.user.pfpimg ? { uri: `data:image/png;base64,${item.user.pfpimg}` } : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' }}
+          style={styles.doctorImage}
+        />
+      </View>
+      <View style={styles.cardRight}>
         <Text style={styles.doctorName}>{item.user.fullname}</Text>
-        <Text style={styles.doctorSpecialization}>Spec: {item.specialization || 'Não informado'}</Text>
-        <Text style={styles.doctorDetails}>Exp: {item.years_experience || 'Não informado'} years</Text>
+        <Text style={styles.doctorSpecialization}>{item.specialization || 'Não informado'}</Text>
+        <Text style={styles.doctorDetails}>{item.years_experience || 'Não informado'} years exp</Text>
       </View>
     </TouchableOpacity>
   );
+
+  const renderList = () => {
+    if (favoriteIds.length > 0) {
+      const favs = filteredMedics.filter(d => favoriteIds.includes(String(d.id)));
+      const nonFavs = filteredMedics.filter(d => !favoriteIds.includes(String(d.id)));
+      return (
+        <>
+          {favs.length > 0 && <Text style={styles.favLabel}>Favoritos</Text>}
+          {favs.map(item => renderMedicItem({ item }))}
+          {favs.length > 0 && <View style={styles.dashedDivider} />}
+          {nonFavs.map(item => renderMedicItem({ item }))}
+        </>
+      );
+    } else {
+      return filteredMedics.map(item => renderMedicItem({ item }));
+    }
+  };
 
   if (loading) {
     return (
@@ -93,37 +155,55 @@ const DoctorsScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#6A8DFD' }}>
-          <TouchableOpacity onPress={() => navigation.navigate('AccountScreen')} style={{ marginRight: 16 }}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.navigate('AccountScreen')} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold', flex: 1 }}>Doctors</Text>
+          <Text style={styles.headerTitle}>Doctors</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate('AppointmentsScreen')}
-            style={{ marginLeft: 8 }}
+            style={styles.headerRight}
           >
             <Ionicons name="calendar-outline" size={28} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate('RequestAppointmentScreen', role === 'doctor' && userDoctorData ? { doctor: userDoctorData } : {})}
-            style={{ marginLeft: 8 }}
+            style={styles.headerRight}
           >
             <Ionicons name="add" size={28} color="#fff" />
-            </TouchableOpacity>
+          </TouchableOpacity>
         </View>
 
-          <FlatList
-            data={medics}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderMedicItem}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="people-outline" size={64} color="#bdc3c7" />
-              <Text style={styles.noDataText}>Nenhum médico disponível.</Text>
-            </View>
-          }
-        />
+        {/* Specialization filter bar */}
+        <View style={styles.filterBarContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBarScroll}>
+            {specializations.map(spec => (
+              <TouchableOpacity
+                key={spec}
+                style={[styles.filterChip, selectedSpecialization === spec && styles.filterChipSelected]}
+                onPress={() => setSelectedSpecialization(spec)}
+              >
+                <Text style={[styles.filterChipText, selectedSpecialization === spec && styles.filterChipTextSelected]}>{spec}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+        {/* Search by name */}
+        <View style={styles.searchBarContainer}>
+          <Ionicons name="search" size={20} color="#6A8DFD" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search doctor by name..."
+            placeholderTextColor="#aaa"
+            value={searchText}
+            onChangeText={setSearchText}
+            returnKeyType="search"
+          />
+        </View>
+
+        <View style={styles.listContainer}>
+          {renderList()}
+        </View>
 
         <Navbar navigation={navigation} />
       </View>
@@ -189,37 +269,123 @@ const styles = StyleSheet.create({
   },
   doctorCard: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 12,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 14,
     alignItems: 'center',
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e0e8f9',
   },
   doctorImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 15,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: '#6A8DFD',
+    backgroundColor: '#e0e8f9',
   },
   doctorName: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: 'bold',
     color: '#2c3e50',
+    marginBottom: 2,
   },
   doctorSpecialization: {
     fontSize: 15,
-    color: '#3498db',
-    marginTop: 4,
+    color: '#6A8DFD',
+    marginBottom: 2,
   },
   doctorDetails: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#7f8c8d',
-    marginTop: 2,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  favLabel: {
+    marginLeft: 20,
+    marginTop: 10,
+    marginBottom: 4,
+    color: '#4A67E3',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  dashedDivider: {
+    height: 1,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderRadius: 2,
+    borderColor: '#4A67E3',
+    marginVertical: 8,
+    marginHorizontal: 16,
+  },
+  filterBarContainer: {
+    backgroundColor: '#F5F6FA',
+    paddingVertical: 8,
+    paddingLeft: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  filterBarScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 10,
+  },
+  filterChip: {
+    backgroundColor: '#e0e8f9',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e0e8f9',
+  },
+  filterChipSelected: {
+    backgroundColor: '#6A8DFD',
+    borderColor: '#6A8DFD',
+  },
+  filterChipText: {
+    color: '#6A8DFD',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  filterChipTextSelected: {
+    color: '#fff',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    margin: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    paddingVertical: 4,
+  },
+  cardLeft: {
+    marginRight: 15,
+  },
+  cardRight: {
+    flex: 1,
+    justifyContent: 'center',
   },
   cancelButtonText: {
     color: '#fff',

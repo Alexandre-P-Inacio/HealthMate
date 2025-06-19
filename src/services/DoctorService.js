@@ -4,36 +4,35 @@ class DoctorService {
   static async getDoctorById(doctorId) {
     try {
       if (!doctorId) {
-        console.warn(`DoctorService: ID de médico inválido fornecido: ${doctorId}`);
-        return { success: false, error: 'ID de médico inválido.' };
+        console.warn(`DoctorService: Invalid doctorId provided: ${doctorId}`);
+        return { success: false, error: 'Invalid doctorId.' };
       }
       const { data: doctor, error: doctorError } = await supabase
         .from('doctors')
-        .select(`*
-        `)
+        .select('*')
         .eq('id', doctorId)
         .single();
 
       if (doctorError) throw doctorError;
 
       if (doctor) {
-        // Buscar informações do usuário associado
+        // Fetch associated user info using user_id
         const { data: user, error: userError } = await supabase
           .from('users')
           .select('fullname, pfpimg')
-          .eq('id', doctor.id) // Assumindo que doctor.id é o mesmo que user.id
+          .eq('id', doctor.user_id)
           .single();
 
         if (userError) {
-          console.warn(`DoctorService: Erro ao buscar usuário para o médico ID ${doctor.id}: ${userError.message}`);
+          console.warn(`DoctorService: Error fetching user for doctor ID ${doctor.id}: ${userError.message}`);
           return { success: true, data: { ...doctor, user: { fullname: doctor.name, pfpimg: null } } };
         } else {
           return { success: true, data: { ...doctor, user: { fullname: user.fullname, pfpimg: user.pfpimg } } };
         }
       }
-      return { success: false, error: 'Médico não encontrado.' };
+      return { success: false, error: 'Doctor not found.' };
     } catch (error) {
-      console.error('DoctorService: Erro ao buscar médico por ID:', error);
+      console.error('DoctorService: Error fetching doctor by ID:', error);
       return { success: false, error: error.message };
     }
   }
@@ -41,36 +40,35 @@ class DoctorService {
   static async getDoctorByUserId(userId) {
     try {
       if (!userId) {
-        console.warn(`DoctorService: ID de usuário inválido para médico fornecido: ${userId}`);
-        return { success: false, error: 'ID de usuário inválido para médico.' };
+        console.warn(`DoctorService: Invalid userId for doctor: ${userId}`);
+        return { success: false, error: 'Invalid userId for doctor.' };
       }
       const { data: doctor, error: doctorError } = await supabase
         .from('doctors')
-        .select(`*
-        `)
-        .eq('id', userId) // Assumindo que o user_id do doctor é o próprio id do usuário
+        .select('*')
+        .eq('user_id', userId)
         .single();
 
       if (doctorError) throw doctorError;
 
       if (doctor) {
-        // Buscar informações do usuário associado
+        // Fetch associated user info using user_id
         const { data: user, error: userError } = await supabase
           .from('users')
           .select('fullname, pfpimg')
-          .eq('id', doctor.id) // Assumindo que doctor.id é o mesmo que user.id
+          .eq('id', doctor.user_id)
           .single();
 
         if (userError) {
-          console.warn(`DoctorService: Erro ao buscar usuário (por user ID) para o médico ID ${doctor.id}: ${userError.message}`);
+          console.warn(`DoctorService: Error fetching user (by user ID) for doctor ID ${doctor.id}: ${userError.message}`);
           return { success: true, data: { ...doctor, user: { fullname: doctor.name, pfpimg: null } } };
         } else {
           return { success: true, data: { ...doctor, user: { fullname: user.fullname, pfpimg: user.pfpimg } } };
         }
       }
-      return { success: false, error: 'Médico não encontrado pelo ID de usuário.' };
+      return { success: false, error: 'Doctor not found by user ID.' };
     } catch (error) {
-      console.error('DoctorService: Erro ao buscar médico por ID de usuário:', error);
+      console.error('DoctorService: Error fetching doctor by user ID:', error);
       return { success: false, error: error.message };
     }
   }
@@ -79,8 +77,7 @@ class DoctorService {
     try {
       const { data: doctors, error: doctorsError } = await supabase
         .from('doctors')
-        .select(`*
-        `);
+        .select('*');
 
       if (doctorsError) throw doctorsError;
 
@@ -88,11 +85,11 @@ class DoctorService {
         const { data: user, error: userError } = await supabase
           .from('users')
           .select('fullname, pfpimg')
-          .eq('id', doctor.id) // Assumindo que doctor.id é o mesmo que user.id
+          .eq('id', doctor.user_id)
           .single();
 
         if (userError) {
-          console.warn(`DoctorService: Erro ao buscar usuário para o médico ID ${doctor.id} em getAllDoctors: ${userError.message}`);
+          console.warn(`DoctorService: Error fetching user for doctor ID ${doctor.id} in getAllDoctors: ${userError.message}`);
           return { ...doctor, user: { fullname: doctor.name, pfpimg: null } };
         } else {
           return { ...doctor, user: { fullname: user.fullname, pfpimg: user.pfpimg } };
@@ -101,7 +98,7 @@ class DoctorService {
 
       return { success: true, data: doctorsWithUserDetails };
     } catch (error) {
-      console.error('DoctorService: Erro ao buscar todos os médicos:', error);
+      console.error('DoctorService: Error fetching all doctors:', error);
       return { success: false, error: error.message };
     }
   }

@@ -27,9 +27,7 @@ const AccountScreen = ({ navigation }) => {
   const [userData, setUserData] = useState(null);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [statsModalVisible, setStatsModalVisible] = useState(false);
-  const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [statsView, setStatsView] = useState('weekly'); // 'weekly' or 'monthly'
-  const [isPremiumPlus, setIsPremiumPlus] = useState(false);
   const [isMedic, setIsMedic] = useState(false);
   const [medicationStats, setMedicationStats] = useState({
     totalScheduled: 0,
@@ -73,8 +71,6 @@ const AccountScreen = ({ navigation }) => {
       if (data) {
         setUserData(data);
         DataUser.setUserData(data);
-        // Check if user is premium plus (ID 16)
-        setIsPremiumPlus(data.id === 16);
         // Check if user is a medic
         setIsMedic(data.role === 'medic');
       }
@@ -377,36 +373,33 @@ const AccountScreen = ({ navigation }) => {
 
           {/* Quick Actions */}
           <View style={styles.quickActionsGrid}>
-                <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('DoctorsScreen')}
-                >
-              <FontAwesome name="user-md" size={30} color="#6A8DFD" />
-              <Text style={styles.actionButtonText}>Doctors</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('InformationScreen')}
-                >
-              <FontAwesome name="info-circle" size={30} color="#6A8DFD" />
-              <Text style={styles.actionButtonText}>Information</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('AppointmentsScreen')}
-                >
-              <FontAwesome name="calendar" size={30} color="#6A8DFD" />
-              <Text style={styles.actionButtonText}>Consultas</Text>
-                </TouchableOpacity>
-            {isPremiumPlus && (
             <TouchableOpacity 
               style={styles.actionButton}
-              onPress={() => setPremiumModalVisible(true)}
+              onPress={() => {
+                if ((userData && userData.role === 'medic') || isMedic) {
+                  navigation.navigate('DoctorDashboard');
+                } else {
+                  navigation.navigate('DoctorsScreen');
+                }
+              }}
             >
-                <FontAwesome name="star" size={30} color="#FFD700" />
-                <Text style={styles.actionButtonText}>Premium</Text>
+              <FontAwesome name="user-md" size={30} color="#6A8DFD" />
+              <Text style={styles.actionButtonText}>{(userData && userData.role === 'medic') || isMedic ? 'Doctor' : 'Doctors'}</Text>
             </TouchableOpacity>
-            )}
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('InformationScreen')}
+            >
+              <FontAwesome name="info-circle" size={30} color="#6A8DFD" />
+              <Text style={styles.actionButtonText}>Information</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('AppointmentsScreen')}
+            >
+              <FontAwesome name="calendar" size={30} color="#6A8DFD" />
+              <Text style={styles.actionButtonText}>Consultas</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Account Actions */}
@@ -428,110 +421,6 @@ const AccountScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </ScrollView>
-
-        {/* Settings Modal */}
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={settingsModalVisible}
-          onRequestClose={() => setSettingsModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
-              <View style={styles.modalHeader}>
-                <TouchableOpacity 
-                  style={styles.closeButton}
-                  onPress={() => setSettingsModalVisible(false)}
-                >
-                  {Platform.OS === 'ios' ? (
-                    <FontAwesome name="chevron-down" size={20} color="#666" />
-                  ) : (
-                    <FontAwesome name="times" size={24} color="#666" />
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Settings</Text>
-                <View style={styles.modalHeaderRight} />
-              </View>
-
-              <ScrollView style={styles.modalScroll}>
-                {/* Settings Options */}
-                {settingsOptions.map((option, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.settingOption,
-                      option.title === 'Notifications' && showNotificationOptions && 
-                      styles.activeOption
-                    ]}
-                    onPress={option.onPress}
-                  >
-                    <View style={styles.optionIconWrapper}>
-                      <FontAwesome name={option.icon} size={18} color="#3498db" />
-                    </View>
-                    <Text style={styles.optionText}>{option.title}</Text>
-                    <FontAwesome 
-                      name={option.title === 'Notifications' && showNotificationOptions ? 
-                        'chevron-up' : 'chevron-right'} 
-                      size={14} 
-                      color="#999" 
-                    />
-                  </TouchableOpacity>
-                ))}
-
-                {/* Notification Settings */}
-                {showNotificationOptions && (
-                  <View style={styles.notificationPanel}>
-                    <View style={styles.notificationOption}>
-                      <Text style={styles.notificationTitle}>Enable All</Text>
-                      <Switch
-                        value={notificationsEnabled}
-                        onValueChange={toggleNotifications}
-                        trackColor={{ false: '#e9ecef', true: '#bde0fe' }}
-                        thumbColor={notificationsEnabled ? '#3498db' : '#f4f3f4'}
-                        ios_backgroundColor="#e9ecef"
-                      />
-                    </View>
-                    
-                    <View style={styles.notificationSubOptions}>
-                      <View style={styles.notificationOption}>
-                        <Text style={styles.notificationText}>Medication Reminders</Text>
-                        <Switch
-                          value={medicationReminders}
-                          onValueChange={toggleMedicationReminders}
-                          trackColor={{ false: '#e9ecef', true: '#bde0fe' }}
-                          thumbColor={medicationReminders ? '#3498db' : '#f4f3f4'}
-                          ios_backgroundColor="#e9ecef"
-                        />
-                      </View>
-                      
-                      <View style={styles.notificationOption}>
-                        <Text style={styles.notificationText}>General Updates</Text>
-                        <Switch
-                          value={generalUpdates}
-                          onValueChange={toggleGeneralUpdates}
-                          trackColor={{ false: '#e9ecef', true: '#bde0fe' }}
-                          thumbColor={generalUpdates ? '#3498db' : '#f4f3f4'}
-                          ios_backgroundColor="#e9ecef"
-                        />
-                      </View>
-                      
-                      <View style={styles.notificationOption}>
-                        <Text style={styles.notificationText}>Promotional Offers</Text>
-                        <Switch
-                          value={promotionalOffers}
-                          onValueChange={togglePromotionalOffers}
-                          trackColor={{ false: '#e9ecef', true: '#bde0fe' }}
-                          thumbColor={promotionalOffers ? '#3498db' : '#f4f3f4'}
-                          ios_backgroundColor="#e9ecef"
-                        />
-                      </View>
-                    </View>
-                  </View>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
 
         {/* Stats Modal */}
         <Modal
@@ -759,105 +648,6 @@ const AccountScreen = ({ navigation }) => {
                     </View>
                   </>
                 )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Premium Modal */}
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={premiumModalVisible}
-          onRequestClose={() => setPremiumModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
-              <View style={styles.modalHeader}>
-                <TouchableOpacity 
-                  style={styles.closeButton}
-                  onPress={() => setPremiumModalVisible(false)}
-                >
-                  <FontAwesome name="times" size={24} color="#666" />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Upgrade to Premium</Text>
-                <View style={styles.modalHeaderRight} />
-              </View>
-
-              <ScrollView style={styles.premiumScroll}>
-                {/* Premium Plan */}
-                <View style={styles.premiumCard}>
-                  <View style={styles.premiumHeader}>
-                    <FontAwesome name="star" size={24} color="#FFD700" />
-                    <Text style={styles.premiumTitle}>Premium</Text>
-                    <Text style={styles.premiumPrice}>$9.99/month</Text>
-                  </View>
-                  <View style={styles.featuresList}>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>Unlimited medication tracking</Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>Advanced statistics and insights</Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>Priority support</Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>Ad-free experience</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity 
-                    style={[styles.subscribeButton, isPremiumPlus && styles.disabledButton]}
-                    disabled={isPremiumPlus}
-                  >
-                    <Text style={styles.subscribeButtonText}>
-                      {isPremiumPlus ? "Current Plan" : "Subscribe Now"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Premium Plus Plan */}
-                <View style={[styles.premiumCard, styles.premiumPlusCard]}>
-                  <View style={styles.premiumHeader}>
-                    <FontAwesome name="star" size={24} color="#FFD700" />
-                    <Text style={styles.premiumTitle}>Premium Plus</Text>
-                    <Text style={styles.premiumPrice}>$19.99/month</Text>
-                  </View>
-                  <View style={styles.featuresList}>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>All Premium features</Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>Personal health coach</Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>Custom medication reports</Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>Family account sharing</Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <FontAwesome name="check-circle" size={16} color="#2ecc71" />
-                      <Text style={styles.featureText}>24/7 emergency support</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity 
-                    style={[styles.subscribeButton, styles.premiumPlusButton, isPremiumPlus && styles.disabledButton]}
-                    disabled={isPremiumPlus}
-                  >
-                    <Text style={styles.subscribeButtonText}>
-                      {isPremiumPlus ? "Current Plan" : "Subscribe Now"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
               </ScrollView>
             </View>
           </View>
@@ -1220,75 +1010,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 10,
-  },
-  premiumScroll: {
-    padding: 20,
-  },
-  premiumCard: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  premiumPlusCard: {
-    backgroundColor: '#F8F9FF',
-    borderWidth: 2,
-    borderColor: '#FFD700',
-  },
-  premiumHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  premiumTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginTop: 10,
-    marginBottom: 5,
-  },
-  premiumPrice: {
-    fontSize: 20,
-    color: '#3498db',
-    fontWeight: '600',
-  },
-  featuresList: {
-    marginBottom: 20,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  featureText: {
-    fontSize: 16,
-    color: '#2c3e50',
-    marginLeft: 10,
-  },
-  subscribeButton: {
-    backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  premiumPlusButton: {
-    backgroundColor: '#2c3e50',
-  },
-  subscribeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  disabledButton: {
-    backgroundColor: '#95a5a6',
-    opacity: 0.8,
   },
 });
 

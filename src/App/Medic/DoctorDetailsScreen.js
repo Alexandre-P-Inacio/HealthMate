@@ -3,10 +3,33 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, TouchableOpaci
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../Components/Navbar';
 import DataUser from '../../../navigation/DataUser';
+import { DoctorAvailabilityService } from '../../services/DoctorAvailabilityService';
+import supabase from '../../../supabase';
+
+const WEEKDAYS = [
+  { key: 'sunday', label: 'Sun', idx: 0 },
+  { key: 'monday', label: 'Mon', idx: 1 },
+  { key: 'tuesday', label: 'Tue', idx: 2 },
+  { key: 'wednesday', label: 'Wed', idx: 3 },
+  { key: 'thursday', label: 'Thu', idx: 4 },
+  { key: 'friday', label: 'Fri', idx: 5 },
+  { key: 'saturday', label: 'Sat', idx: 6 },
+];
+const defaultSchedule = {
+  monday: { start: '08:00', end: '18:00' },
+  tuesday: { start: '08:00', end: '18:00' },
+  wednesday: { start: '08:00', end: '18:00' },
+  thursday: { start: '08:00', end: '18:00' },
+  friday: { start: '08:00', end: '18:00' },
+  saturday: { start: '', end: '' },
+  sunday: { start: '', end: '' }
+};
 
 const DoctorDetailsScreen = ({ route, navigation }) => {
   const { doctor } = route.params;
   const [isMedic, setIsMedic] = useState(false);
+  const [schedule, setSchedule] = useState(defaultSchedule);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     const currentUser = DataUser.getUserData();
@@ -14,7 +37,78 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
       // Verifica se o ID do usuário logado corresponde ao ID do médico (assumindo que doctor.id é o user.id)
       setIsMedic(currentUser.role === 'doctor' && currentUser.id === doctor.id);
     }
+    // Buscar disponibilidade do médico
+    const fetchAvailability = async () => {
+      const result = await DoctorAvailabilityService.getAvailabilityByDoctorId(doctor.id);
+      if (result.success) {
+        const blankSchedule = { ...defaultSchedule };
+        const recurring = result.data.filter(a => a.is_recurring && a.start_time && a.end_time);
+        let hasAny = false;
+        recurring.forEach(slot => {
+          const dayKey = WEEKDAYS.find(d => d.idx === slot.day_of_week)?.key;
+          if (dayKey) {
+            blankSchedule[dayKey] = {
+              start: slot.start_time ? slot.start_time.substring(0,5) : '',
+              end: slot.end_time ? slot.end_time.substring(0,5) : ''
+            };
+            hasAny = true;
+          }
+        });
+        setSchedule(hasAny ? blankSchedule : defaultSchedule);
+      } else {
+        setSchedule(defaultSchedule);
+      }
+    };
+    fetchAvailability();
   }, [doctor]); // Adicione doctor como dependência
+
+  // Buscar favoritos do usuário no Supabase
+  useEffect(() => {
+    const fetchFavorite = async () => {
+      const userId = DataUser.getUserData()?.id;
+      if (!userId) return;
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('favorite_doctors')
+        .eq('id', userId)
+        .single();
+      if (user && user.favorite_doctors) {
+        const favs = user.favorite_doctors.split(';').map(s => s.trim()).filter(Boolean);
+        setIsFavorite(favs.includes(String(doctor.id)));
+      } else {
+        setIsFavorite(false);
+      }
+    };
+    fetchFavorite();
+  }, [doctor]);
+
+  const handleToggleFavorite = async () => {
+    const userId = DataUser.getUserData()?.id;
+    if (!userId) return;
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('favorite_doctors')
+      .eq('id', userId)
+      .single();
+    let favs = [];
+    if (user && user.favorite_doctors) {
+      favs = user.favorite_doctors.split(';').map(s => s.trim()).filter(Boolean);
+    }
+    const doctorIdStr = String(doctor.id);
+    if (!isFavorite) {
+      favs = favs.filter(id => id !== doctorIdStr); // Remove if exists (prevent dupe)
+      favs.push(doctorIdStr);
+    } else {
+      favs = favs.filter(id => id !== doctorIdStr);
+    }
+    // Always keep unique
+    favs = Array.from(new Set(favs));
+    await supabase
+      .from('users')
+      .update({ favorite_doctors: favs.join(';') })
+      .eq('id', userId);
+    setIsFavorite(!isFavorite);
+  };
 
   const profileImageSource = doctor.user?.pfpimg
     ? { uri: `data:image/png;base64,${doctor.user.pfpimg}` }
@@ -65,9 +159,12 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
                 <Text style={styles.yearsExperience}>
                   {doctor.years_experience !== 'Nao encontrado' ? `${doctor.years_experience} years experience` : ''}
                 </Text>
+                {/* Focus Area Balloon */}
                 <View style={styles.focusAreaBox}>
                   <Text style={styles.focusAreaText}>
-                    Focus On: Conditions such as heart failure, arrhythmia, coronary artery disease, and hypertension.
+                    {doctor.work_description == null
+                      ? (doctor.specialization || 'No specialization available.')
+                      : (doctor.work_description.trim().length > 0 ? doctor.work_description : '')}
                   </Text>
                 </View>
               </View>
@@ -84,11 +181,20 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
               </View>
               <View style={styles.scheduleItem}>
                 <Ionicons name="time-outline" size={20} color="#6A8DFD" />
-                <Text style={styles.scheduleText}>40 min</Text>
+                <Text style={styles.scheduleText}>{doctor.appointment_duration_minutes ? `${doctor.appointment_duration_minutes} min` : '60 min'}</Text>
               </View>
               <View style={styles.scheduleItem}>
                 <Ionicons name="calendar-outline" size={20} color="#6A8DFD" />
-                <Text style={styles.scheduleText}>Mon-Sat / 9:00 - 18:00</Text>
+                <View>
+                  <Text style={[styles.scheduleText, { fontWeight: 'bold', color: '#4A67E3', fontSize: 15 }]}> 
+                    {WEEKDAYS.filter(d => schedule[d.key].start && schedule[d.key].end).map(d => d.label).join(', ') || 'Mon, Tue, Wed, Thu, Fri'}
+                  </Text>
+                  <Text style={[styles.scheduleText, { color: '#888', fontSize: 13, marginTop: 2 }]}> 
+                    {WEEKDAYS.some(d => schedule[d.key].start && schedule[d.key].end) ?
+                      `${Object.values(schedule).find(s => s.start && s.end)?.start || '08:00'} - ${Object.values(schedule).reverse().find(s => s.start && s.end)?.end || '18:00'}`
+                      : '08:00 - 18:00'}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -100,25 +206,28 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
                 <Ionicons name="calendar-outline" size={20} color="#FFF" />
                 <Text style={styles.actionButtonText}>Solicitar Consulta</Text>
               </TouchableOpacity>
-              {isMedic && (
-                <>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.infoButton]}
-                    onPress={() => navigation.navigate('DoctorRegistration', { doctorId: doctor.id })}
-                  >
-                    <Ionicons name="create-outline" size={20} color="#6A8DFD" />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.infoButton]}
-                    onPress={() => navigation.navigate('DoctorDashboard')}
-                  >
-                    <Ionicons name="stats-chart-outline" size={20} color="#6A8DFD" />
-                  </TouchableOpacity>
-                </>
-              )}
-              <TouchableOpacity style={[styles.actionButton, styles.infoButton]}>
-                <Ionicons name="heart-outline" size={20} color="#6A8DFD" />
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.infoButton]}
+                onPress={handleToggleFavorite}
+              >
+                <Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={24} color={isFavorite ? '#e74c3c' : '#6A8DFD'} />
               </TouchableOpacity>
+              {isMedic && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.infoButton]}
+                  onPress={() => navigation.navigate('DoctorRegistration', { doctorId: doctor.id })}
+                >
+                  <Ionicons name="create-outline" size={20} color="#6A8DFD" />
+                </TouchableOpacity>
+              )}
+              {isMedic && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.infoButton]}
+                  onPress={() => navigation.navigate('DoctorDashboard')}
+                >
+                  <Ionicons name="stats-chart-outline" size={20} color="#6A8DFD" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -126,12 +235,6 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Profile</Text>
             <Text style={styles.sectionContent}>{doctor.description || 'No profile description available.'}</Text>
-          </View>
-
-          {/* Career Path Section (Placeholder)*/}
-           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Career Path</Text>
-            <Text style={styles.sectionContent}>Career path information not available.</Text>
           </View>
 
         </ScrollView>
