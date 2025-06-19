@@ -9,7 +9,8 @@ import {
   Modal,
   Dimensions,
   Platform,
-  StatusBar
+  StatusBar,
+  SafeAreaView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -411,78 +412,69 @@ const InformationScreen = ({ navigation }) => {
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryDark]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="chevron-back" size={24} color={COLORS.surface} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Health Information</Text>
-          <View style={styles.headerRight} />
-        </LinearGradient>
-        <View style={styles.centerContainer}>
-          <Ionicons name="alert-circle-outline" size={50} color={COLORS.error} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton} 
-            onPress={fetchHealthData}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#6A8DFD' }}>
+        <StatusBar backgroundColor="#6A8DFD" barStyle="light-content" />
+        <View style={{ flex: 1, backgroundColor: '#F5F6FA' }}>
+          <View style={{ backgroundColor: '#6A8DFD', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}>
+            <TouchableOpacity 
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF', flex: 1, textAlign: 'center' }}>Health Information</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <View style={styles.centerContainer}>
+            <Ionicons name="alert-circle-outline" size={50} color={COLORS.error} />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity 
+              style={styles.retryButton} 
+              onPress={fetchHealthData}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={[COLORS.primary, COLORS.primaryDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.header}
-      >
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="chevron-back" size={24} color={COLORS.surface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Health Information</Text>
-        <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => setIsFilterOpen(true)}
-        >
-          <Ionicons name="filter" size={20} color={COLORS.surface} />
-        </TouchableOpacity>
-      </LinearGradient>
-      {renderFilterDropdown()}
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading health information...</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#6A8DFD' }}>
+      <StatusBar backgroundColor="#6A8DFD" barStyle="light-content" />
+      <View style={{ flex: 1, backgroundColor: '#F5F6FA' }}>
+        <View style={{ backgroundColor: '#6A8DFD', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}>
+          <TouchableOpacity 
+            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF', flex: 1, textAlign: 'center' }}>Health Information</Text>
+          <View style={{ width: 40 }} />
         </View>
-      ) : (
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {Object.entries(healthData)
-            .filter(([_, section]) => 
-              activeSection === 'all' || section.category === activeSection
-            )
-            .map(renderSection)}
-        </ScrollView>
-      )}
-    </View>
+        {renderFilterDropdown()}
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading health information...</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {Object.entries(healthData)
+              .filter(([_, section]) => 
+                activeSection === 'all' || section.category === activeSection
+              )
+              .map(renderSection)}
+          </ScrollView>
+        )}
+      </View>
+    </SafeAreaView>
   );
 };
 

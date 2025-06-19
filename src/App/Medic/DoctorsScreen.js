@@ -29,6 +29,7 @@ const DoctorsScreen = ({ navigation }) => {
   const [favoriteIds, setFavoriteIds] = useState([]);
   const [selectedSpecialization, setSelectedSpecialization] = useState('All');
   const [searchText, setSearchText] = useState('');
+  const [doctorRatings, setDoctorRatings] = useState({});
 
   // Extract unique specializations from medics
   const specializations = React.useMemo(() => {
@@ -98,32 +99,61 @@ const DoctorsScreen = ({ navigation }) => {
         const nonFavs = allDoctors.filter(d => !favoriteIds.includes(String(d.id)));
         setMedics([...favs, ...nonFavs]);
         setFavoriteIds(favoriteIds);
-      }
+        }
 
       setLoading(false);
     };
     fetchScreenData();
   }, []);
 
-  const renderMedicItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.doctorCard} 
-      onPress={() => navigation.navigate('DoctorDetailsScreen', { doctor: item })}
-      activeOpacity={0.85}
-    >
-      <View style={styles.cardLeft}>
-        <Image 
-          source={item.user.pfpimg ? { uri: `data:image/png;base64,${item.user.pfpimg}` } : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' }}
-          style={styles.doctorImage}
-        />
-      </View>
-      <View style={styles.cardRight}>
-        <Text style={styles.doctorName}>{item.user.fullname}</Text>
-        <Text style={styles.doctorSpecialization}>{item.specialization || 'Não informado'}</Text>
-        <Text style={styles.doctorDetails}>{item.years_experience || 'Não informado'} years exp</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  useEffect(() => {
+    const fetchRatings = async () => {
+      const { data, error } = await supabase.from('doctor_ratings').select('doctor_id, rating');
+      if (!error && data) {
+        const ratingsMap = {};
+        data.forEach(r => {
+          if (!ratingsMap[r.doctor_id]) ratingsMap[r.doctor_id] = [];
+          ratingsMap[r.doctor_id].push(r.rating);
+        });
+        setDoctorRatings(ratingsMap);
+      }
+    };
+    fetchRatings();
+  }, []);
+
+  const renderMedicItem = ({ item }) => {
+    const ratings = doctorRatings[item.id] || [];
+    const avgRating = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) : null;
+    return (
+      <TouchableOpacity 
+        style={styles.doctorCard} 
+        onPress={() => navigation.navigate('DoctorDetailsScreen', { doctor: item })}
+        activeOpacity={0.85}
+      >
+        <View style={styles.cardLeft}>
+          <Image 
+            source={item.user.pfpimg ? { uri: `data:image/png;base64,${item.user.pfpimg}` } : { uri: 'https://i.pravatar.cc/150?img=3' }}
+            style={styles.doctorImage}
+          />
+        </View>
+        <View style={styles.cardRight}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+            <Text style={styles.doctorName}>{item.user.fullname}</Text>
+            {avgRating && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
+                {[1,2,3,4,5].map(star => (
+                  <Ionicons key={star} name={star <= Math.round(avgRating) ? 'star' : 'star-outline'} size={16} color="#FFD700" />
+                ))}
+                <Text style={{ marginLeft: 4, color: '#FFD700', fontWeight: 'bold', fontSize: 14 }}>{avgRating}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.doctorSpecialization}>{item.specialization || 'Não informado'}</Text>
+          <Text style={styles.doctorDetails}>{item.years_experience || 'Não informado'} years exp</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderList = () => {
     if (favoriteIds.length > 0) {
@@ -171,7 +201,7 @@ const DoctorsScreen = ({ navigation }) => {
             style={styles.headerRight}
           >
             <Ionicons name="add" size={28} color="#fff" />
-          </TouchableOpacity>
+            </TouchableOpacity>
         </View>
 
         {/* Specialization filter bar */}
@@ -187,7 +217,7 @@ const DoctorsScreen = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
+            </View>
         {/* Search by name */}
         <View style={styles.searchBarContainer}>
           <Ionicons name="search" size={20} color="#6A8DFD" style={{ marginRight: 8 }} />

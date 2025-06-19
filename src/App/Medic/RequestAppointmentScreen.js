@@ -284,7 +284,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
           <Text style={styles.sectionTitle}>Médico Selecionado</Text>
           <View style={styles.selectedDoctorCardDisplay}>
             <Image
-              source={selectedDoctor.user?.pfpimg ? { uri: `data:image/png;base64,${selectedDoctor.user.pfpimg}` } : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' }}
+              source={selectedDoctor.user?.pfpimg ? { uri: `data:image/png;base64,${selectedDoctor.user.pfpimg}` } : { uri: 'https://i.pravatar.cc/150?img=3' }}
               style={styles.selectedDoctorImage}
             />
             <View style={styles.selectedDoctorInfo}>

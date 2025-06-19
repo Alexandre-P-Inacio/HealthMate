@@ -30,6 +30,8 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
   const [isMedic, setIsMedic] = useState(false);
   const [schedule, setSchedule] = useState(defaultSchedule);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [doctorRatings, setDoctorRatings] = useState([]);
+  const [doctorComments, setDoctorComments] = useState([]);
 
   useEffect(() => {
     const currentUser = DataUser.getUserData();
@@ -82,6 +84,28 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
     fetchFavorite();
   }, [doctor]);
 
+  useEffect(() => {
+    const fetchRatings = async () => {
+      const { data, error } = await supabase.from('doctor_ratings').select('rating').eq('doctor_id', doctor.id);
+      if (!error && data) {
+        setDoctorRatings(data.map(r => r.rating));
+      }
+    };
+    fetchRatings();
+  }, [doctor.id]);
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      const { data, error } = await supabase
+        .from('doctor_ratings')
+        .select('rating, comment, is_anonymous, user_id, users (fullname)')
+        .eq('doctor_id', doctor.id)
+        .order('created_at', { ascending: false });
+      if (!error && data) setDoctorComments(data);
+    };
+    fetchComments();
+  }, [doctor.id]);
+
   const handleToggleFavorite = async () => {
     const userId = DataUser.getUserData()?.id;
     if (!userId) return;
@@ -113,6 +137,40 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
   const profileImageSource = doctor.user?.pfpimg
     ? { uri: `data:image/png;base64,${doctor.user.pfpimg}` }
     : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' };
+
+  // Improved schedule label logic
+  const workingDays = WEEKDAYS.filter(d => schedule[d.key].start && schedule[d.key].end);
+  let scheduleDaysLabel = '';
+  if (workingDays.length === 7) {
+    scheduleDaysLabel = 'Mon-Sun';
+  } else if (workingDays.length > 1) {
+    // Find consecutive ranges
+    let ranges = [];
+    let start = 0;
+    for (let i = 1; i <= workingDays.length; i++) {
+      if (i === workingDays.length || workingDays[i].idx !== workingDays[i-1].idx + 1) {
+        if (start === i-1) {
+          ranges.push(workingDays[start].label);
+        } else {
+          ranges.push(`${workingDays[start].label}-${workingDays[i-1].label}`);
+        }
+        start = i;
+      }
+    }
+    scheduleDaysLabel = ranges.join(', ');
+  } else if (workingDays.length === 1) {
+    scheduleDaysLabel = workingDays[0].label;
+  } else {
+    scheduleDaysLabel = 'Mon, Tue, Wed, Thu, Fri';
+  }
+  const scheduleHoursLabel = workingDays.length
+    ? `${Object.values(schedule).find(s => s.start && s.end)?.start || '08:00'} - ${Object.values(schedule).reverse().find(s => s.start && s.end)?.end || '18:00'}`
+    : '08:00 - 18:00';
+
+  // Calculate average rating
+  const avgRating = doctorComments.length
+    ? (doctorComments.reduce((sum, c) => sum + c.rating, 0) / doctorComments.length).toFixed(1)
+    : '0.0';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -152,10 +210,6 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
                 )}
               </View>
               <View style={styles.summaryInfo}>
-                <View style={styles.badge}>
-                  <Ionicons name="star" size={16} color="#FFF" />
-                  <Text style={styles.badgeText}>4.9</Text>
-                </View>
                 <Text style={styles.yearsExperience}>
                   {doctor.years_experience !== 'Nao encontrado' ? `${doctor.years_experience} years experience` : ''}
                 </Text>
@@ -170,31 +224,16 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
               </View>
             </View>
             <Text style={styles.doctorName}>{doctor.user?.fullname}</Text>
-            <Text style={styles.doctorSpecialization}>
-              {doctor.specialization !== 'Nao encontrado' ? doctor.specialization : 'Specialization not found'}
-            </Text>
-
-            <View style={styles.scheduleInfo}>
-              <View style={styles.scheduleItem}>
-                <Ionicons name="star-outline" size={20} color="#6A8DFD" />
-                <Text style={styles.scheduleText}>5</Text>
-              </View>
-              <View style={styles.scheduleItem}>
-                <Ionicons name="time-outline" size={20} color="#6A8DFD" />
-                <Text style={styles.scheduleText}>{doctor.appointment_duration_minutes ? `${doctor.appointment_duration_minutes} min` : '60 min'}</Text>
-              </View>
-              <View style={styles.scheduleItem}>
-                <Ionicons name="calendar-outline" size={20} color="#6A8DFD" />
-                <View>
-                  <Text style={[styles.scheduleText, { fontWeight: 'bold', color: '#4A67E3', fontSize: 15 }]}> 
-                    {WEEKDAYS.filter(d => schedule[d.key].start && schedule[d.key].end).map(d => d.label).join(', ') || 'Mon, Tue, Wed, Thu, Fri'}
-                  </Text>
-                  <Text style={[styles.scheduleText, { color: '#888', fontSize: 13, marginTop: 2 }]}> 
-                    {WEEKDAYS.some(d => schedule[d.key].start && schedule[d.key].end) ?
-                      `${Object.values(schedule).find(s => s.start && s.end)?.start || '08:00'} - ${Object.values(schedule).reverse().find(s => s.start && s.end)?.end || '18:00'}`
-                      : '08:00 - 18:00'}
-                  </Text>
-                </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 8 }}>
+              <Ionicons name="star" size={18} color="#FFD700" style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 16, color: '#6A8DFD', fontWeight: 'bold', marginRight: 16 }}>{avgRating}</Text>
+              <Ionicons name="time-outline" size={20} color="#6A8DFD" style={{ marginRight: 4 }} />
+              <Text style={styles.scheduleText}>{doctor.appointment_duration_minutes || 60} min</Text>
+              <View style={{ width: 16 }} />
+              <Ionicons name="calendar-outline" size={20} color="#6A8DFD" style={{ marginRight: 4 }} />
+              <View>
+                <Text style={[styles.scheduleText, { color: '#6A8DFD', fontWeight: 'bold', fontSize: 15 }]}>{scheduleDaysLabel}</Text>
+                <Text style={[styles.scheduleText, { color: '#aaa', fontSize: 13, marginTop: 2 }]}>{scheduleHoursLabel}</Text>
               </View>
             </View>
 
@@ -213,20 +252,20 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
                 <Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={24} color={isFavorite ? '#e74c3c' : '#6A8DFD'} />
               </TouchableOpacity>
               {isMedic && (
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.infoButton]}
-                  onPress={() => navigation.navigate('DoctorRegistration', { doctorId: doctor.id })}
-                >
-                  <Ionicons name="create-outline" size={20} color="#6A8DFD" />
-                </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.infoButton]}
+                    onPress={() => navigation.navigate('DoctorRegistration', { doctorId: doctor.id })}
+                  >
+                    <Ionicons name="create-outline" size={20} color="#6A8DFD" />
+                  </TouchableOpacity>
               )}
               {isMedic && (
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.infoButton]}
-                  onPress={() => navigation.navigate('DoctorDashboard')}
-                >
-                  <Ionicons name="stats-chart-outline" size={20} color="#6A8DFD" />
-                </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.infoButton]}
+                    onPress={() => navigation.navigate('DoctorDashboard')}
+                  >
+                    <Ionicons name="stats-chart-outline" size={20} color="#6A8DFD" />
+                  </TouchableOpacity>
               )}
             </View>
           </View>
@@ -236,6 +275,25 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
             <Text style={styles.sectionTitle}>Profile</Text>
             <Text style={styles.sectionContent}>{doctor.description || 'No profile description available.'}</Text>
           </View>
+
+          {doctorComments.length > 0 && (
+            <View style={{ marginTop: 18 }}>
+              <Text style={{ fontWeight: 'bold', fontSize: 17, marginBottom: 8, color: '#222' }}>Comentários dos pacientes</Text>
+              {doctorComments.map((c, idx) => (
+                <View key={idx} style={{ backgroundColor: '#f5f6fa', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    {[1,2,3,4,5].map(star => (
+                      <Ionicons key={star} name={star <= c.rating ? 'star' : 'star-outline'} size={16} color="#FFD700" />
+                    ))}
+                    <Text style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>
+                      {c.is_anonymous ? 'Anônimo' : (c.users?.fullname || 'Usuário')}
+                    </Text>
+                  </View>
+                  {c.comment && <Text style={{ color: '#333', fontSize: 15 }}>{c.comment}</Text>}
+                </View>
+              ))}
+            </View>
+          )}
 
         </ScrollView>
 
@@ -314,22 +372,6 @@ const styles = StyleSheet.create({
   summaryInfo: {
     flex: 1,
   },
-   badge: {
-    backgroundColor: '#6A8DFD',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    alignSelf: 'flex-start', // Align badge to the start
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginLeft: 5,
-  },
    yearsExperience: {
     fontSize: 16,
     color: '#333',
@@ -349,11 +391,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2D3142',
     marginBottom: 5,
-  },
-  doctorSpecialization: {
-    fontSize: 16,
-    color: '#6A8DFD',
-    marginBottom: 20,
   },
   scheduleInfo: {
     flexDirection: 'row',

@@ -44,6 +44,18 @@ const AppointmentsScreen = ({ navigation }) => {
 
   const [userDoctorData, setUserDoctorData] = useState(null); // Estado para dados do médico
 
+  // Add state for rating modal
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [ratedAppointmentId, setRatedAppointmentId] = useState(null);
+
+  // Add state for ratings per appointment
+  const [doctorRatingsForUser, setDoctorRatingsForUser] = useState({});
+
+  // Add state for anonymity
+  const [isAnonymous, setIsAnonymous] = useState(false);
+
   useEffect(() => {
     const currentUser = DataUser.getUserData();
     if (currentUser && currentUser.id) {
@@ -115,6 +127,19 @@ const AppointmentsScreen = ({ navigation }) => {
     }
     // eslint-disable-next-line
   }, [appointments]);
+
+  useEffect(() => {
+    // Fetch ratings for this user
+    const fetchUserRatings = async () => {
+      const { data, error } = await supabase.from('doctor_ratings').select('appointment_id').eq('user_id', userId);
+      if (!error && data) {
+        const map = {};
+        data.forEach(r => { map[r.appointment_id] = true; });
+        setDoctorRatingsForUser(map);
+      }
+    };
+    if (userId) fetchUserRatings();
+  }, [userId, appointments]);
 
   const fetchAppointments = async () => {
     try {
@@ -419,7 +444,7 @@ const AppointmentsScreen = ({ navigation }) => {
     const shouldShowResponseButtons = item.status === 'scheduled' && item.requested_by && item.requested_by !== (isMedic ? item.doctor_id : item.user_id);
     
     const patientName = item.users?.fullname || item.users?.name || 'N/A';
-    const doctorName = item.doctors?.fullname || item.doctors?.name || 'N/A';
+    const doctorName = item.doctors?.fullname || item.doctors?.name || 'Nome não disponível';
 
     const getStatusMessage = () => {
       if (item.status === 'no-show') {
@@ -438,10 +463,28 @@ const AppointmentsScreen = ({ navigation }) => {
       return '';
     };
 
+    // Add a function to check if appointment is rateable
+    const isRateable = (item) => {
+      if (item.status === 'cancelled') return false;
+      if (doctorRatingsForUser[item.id]) return false;
+      return true;
+    };
+
+    // Add a function to check if appointment is actually cancelled
+    const isActuallyCancelled = (item) => {
+      if (item.status === 'cancelled') return true;
+      if (item.notes && item.notes.toLowerCase().includes('cancelado')) return true;
+      return false;
+    };
+
     return (
       <View style={styles.appointmentCard}>
         <View style={styles.appointmentInfo}>
-          <Text style={styles.patientName}>{patientName}</Text>
+          {isMedic ? (
+            <Text style={styles.patientName}>{patientName}</Text>
+          ) : (
+            <Text style={styles.doctorName}>Dr(a). {doctorName}</Text>
+          )}
           <Text style={styles.appointmentDate}>
             {appointmentDate.toLocaleDateString()}
           </Text>
@@ -479,6 +522,22 @@ const AppointmentsScreen = ({ navigation }) => {
             <Text style={styles.reportText}>
               Report: {item.notes}
             </Text>
+          )}
+          {isRateable(item) && !isActuallyCancelled(item) && (
+            <TouchableOpacity
+              style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}
+              onPress={() => {
+                setRatedAppointmentId(item.id);
+                setShowRatingModal(true);
+              }}
+            >
+              <Ionicons name="star-outline" size={28} color="#FFD700" />
+            </TouchableOpacity>
+          )}
+          {isActuallyCancelled(item) && (
+            <View style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, backgroundColor: '#e74c3c', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Cancelada</Text>
+            </View>
           )}
         </View>
         <View style={styles.buttonContainer}>
@@ -774,6 +833,10 @@ const AppointmentsScreen = ({ navigation }) => {
       setChargedValue('');
       setReportType('normal');
       fetchAppointments();
+      if (!isMedic && status === 'completed') {
+        setRatedAppointmentId(editingAppointment.id);
+        setShowRatingModal(true);
+      }
       Alert.alert('Sucesso', `Consulta marcada como ${status === 'completed' ? 'concluída' : status === 'no-show' ? 'não compareceu' : 'atualizada'}.`);
     } catch (error) {
       Alert.alert('Erro', 'Falha ao atualizar status da consulta.');
@@ -828,6 +891,78 @@ const AppointmentsScreen = ({ navigation }) => {
       </Modal>
     );
   };
+
+  // Rating Modal
+  const renderRatingModal = () => (
+    <Modal
+      visible={showRatingModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowRatingModal(false)}
+    >
+      <TouchableOpacity
+        activeOpacity={1}
+        style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}
+        onPressOut={() => setShowRatingModal(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ backgroundColor: '#fff', borderRadius: 20, padding: 28, width: '85%', alignItems: 'center' }}
+          onPress={() => {}}
+        >
+          <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 18 }}>Avalie o Médico</Text>
+          <View style={{ flexDirection: 'row', marginBottom: 18 }}>
+            {[1,2,3,4,5].map(star => (
+              <TouchableOpacity key={star} onPress={() => setRating(star)}>
+                <Ionicons name={star <= rating ? 'star' : 'star-outline'} size={36} color={star <= rating ? '#FFD700' : '#ccc'} style={{ marginHorizontal: 4 }} />
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={{ width: '100%', minHeight: 60, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 10, marginBottom: 18, fontSize: 16 }}
+            placeholder="Deixe um comentário (opcional)"
+            value={ratingComment}
+            onChangeText={setRatingComment}
+            multiline
+          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+            <TouchableOpacity
+              onPress={() => setIsAnonymous(!isAnonymous)}
+              style={{ marginRight: 8, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#6A8DFD', alignItems: 'center', justifyContent: 'center', backgroundColor: isAnonymous ? '#6A8DFD' : '#fff' }}
+            >
+              {isAnonymous && <Ionicons name="checkmark" size={16} color="#fff" />}
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, color: '#333' }}>Avaliar como anônimo</Text>
+          </View>
+          <TouchableOpacity
+            style={{ backgroundColor: '#6A8DFD', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 40, width: '100%' }}
+            onPress={async () => {
+              if (rating === 0) {
+                Alert.alert('Por favor, selecione uma nota.');
+                return;
+              }
+              // Save rating to doctor_ratings table
+              await supabase.from('doctor_ratings').insert({
+                appointment_id: ratedAppointmentId,
+                doctor_id: appointments.find(a => a.id === ratedAppointmentId)?.doctor_id,
+                user_id: userId,
+                rating,
+                comment: ratingComment,
+                is_anonymous: isAnonymous
+              });
+              setShowRatingModal(false);
+              setRating(0);
+              setRatingComment('');
+              setRatedAppointmentId(null);
+              Alert.alert('Obrigado!', 'Sua avaliação foi registrada.');
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 17, textAlign: 'center' }}>Enviar Avaliação</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   if (loading) {
     return (
@@ -902,6 +1037,7 @@ const AppointmentsScreen = ({ navigation }) => {
       </View>
       {renderRequestModal()}
       {renderCancelModal()}
+      {renderRatingModal()}
     </SafeAreaView>
   );
 };
@@ -973,6 +1109,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   patientName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  doctorName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',

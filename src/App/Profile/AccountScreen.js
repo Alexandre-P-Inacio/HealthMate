@@ -131,13 +131,6 @@ const AccountScreen = ({ navigation }) => {
       }
     },
     {
-      icon: 'bell',
-      title: 'Notifications',
-      onPress: () => {
-        setShowNotificationOptions(prev => !prev);
-      }
-    },
-    {
       icon: 'question-circle',
       title: 'Help & Support',
       onPress: () => {
@@ -649,6 +642,37 @@ const AccountScreen = ({ navigation }) => {
                   </>
                 )}
               </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Settings Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={settingsModalVisible}
+          onRequestClose={() => setSettingsModalVisible(false)}
+        >
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 28, paddingTop: 16, paddingBottom: 32, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 10 }}>
+              <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: '#e0e0e0', marginBottom: 18 }} />
+              <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 24, color: '#222' }}>Settings</Text>
+              {settingsOptions.map((option, idx) => (
+                <TouchableOpacity
+                  key={option.title}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 18, width: '100%', borderRadius: 12, marginBottom: 6, backgroundColor: '#f7fafd' }}
+                  onPress={option.onPress}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#eaf3ff', justifyContent: 'center', alignItems: 'center', marginRight: 18 }}>
+                    <FontAwesome name={option.icon} size={24} color="#3498db" />
+                  </View>
+                  <Text style={{ fontSize: 17, color: '#222', fontWeight: '500' }}>{option.title}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => setSettingsModalVisible(false)} style={{ marginTop: 18, backgroundColor: '#3498db', borderRadius: 10, paddingVertical: 14, paddingHorizontal: 40, width: '100%' }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 17, textAlign: 'center' }}>Fechar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>

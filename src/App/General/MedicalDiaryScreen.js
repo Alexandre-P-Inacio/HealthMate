@@ -546,18 +546,18 @@ const MedicalDiaryScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor="#4A67E3" barStyle="light-content" />
-      <View style={styles.container}>
-        <View style={styles.header}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#6A8DFD' }}>
+      <StatusBar backgroundColor="#6A8DFD" barStyle="light-content" />
+      <View style={{ flex: 1, backgroundColor: '#F5F6FA' }}>
+        <View style={{ backgroundColor: '#6A8DFD', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}>
           <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.navigate('HomeScreen')}
+            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Diário Médico</Text>
-          <View style={styles.headerRight} />
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF', flex: 1, textAlign: 'center' }}>Diário Médico</Text>
+          <View style={{ width: 40 }} />
         </View>
         
         {renderDateSelector()}
