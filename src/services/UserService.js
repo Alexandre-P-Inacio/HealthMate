@@ -23,6 +23,24 @@ class UserService {
       return { success: false, error: error.message };
     }
   }
+
+  static async getAllUsers() {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, fullname, pfpimg, email, phone, role')
+        .not('role', 'eq', 'doctor'); // Exclude doctors
+
+      if (error) {
+        console.warn('UserService: Erro ao buscar todos os usuários:', error.message);
+        return { success: false, error: error.message };
+      }
+      return { success: true, data };
+    } catch (error) {
+      console.error('UserService: Erro geral ao buscar todos os usuários:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export default UserService; 

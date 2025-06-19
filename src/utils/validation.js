@@ -31,10 +31,6 @@ export const validateAppointmentRequest = (data) => {
     }
   }
 
-  if (!data.location || data.location.trim().length < 5) {
-    errors.location = 'Por favor, forneça um endereço válido com pelo menos 5 caracteres';
-  }
-
   if (data.notes && data.notes.length > 500) {
     errors.notes = 'As observações não podem exceder 500 caracteres';
   }

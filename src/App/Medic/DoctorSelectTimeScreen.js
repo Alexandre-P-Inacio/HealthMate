@@ -130,7 +130,6 @@ const DoctorSelectTimeScreen = ({ route, navigation }) => {
                 user_id: userData.id,
                 doctor_id: doctor.id,
                 appointment_datetime: selectedTime.date.toISOString(),
-                location: 'Clínica XYZ', // Você pode tornar isso dinâmico ou fixo
                 notes: '', // Opcional: adicionar campo de notas na UI
                 status: 'pending', // Ou 'scheduled', dependendo do fluxo
                 requested_by: userData.id, // O usuário que solicitou (o próprio paciente)

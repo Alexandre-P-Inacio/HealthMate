@@ -7,6 +7,7 @@ import DataUser from '../../../navigation/DataUser';
 import Navbar from '../../Components/Navbar';
 import supabase from '../../../supabase';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { DoctorAvailabilityService } from '../../services/DoctorAvailabilityService';
 
 const FILTERS = [
   { label: 'All', value: 'all' },
@@ -55,6 +56,10 @@ const AppointmentsScreen = ({ navigation }) => {
 
   // Add state for anonymity
   const [isAnonymous, setIsAnonymous] = useState(false);
+
+  // Adicionar estados para slots disponíveis e slot selecionado
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState(null);
 
   useEffect(() => {
     const currentUser = DataUser.getUserData();
@@ -212,14 +217,16 @@ const AppointmentsScreen = ({ navigation }) => {
       case 'upcoming':
         return data.filter(a => {
           const appointmentDate = new Date(a.appointment_datetime);
-          const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000); // Add 1 hour
-          return appointmentDate > now && a.status === 'confirmed' && oneHourAfter > now;
+          const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000);
+          // Mostrar 'pending' e 'confirmed' futuros
+          return (a.status === 'pending' || a.status === 'confirmed') && oneHourAfter > now;
         });
       case 'past':
         return data.filter(a => {
           const appointmentDate = new Date(a.appointment_datetime);
-          const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000); // Add 1 hour
-          return (appointmentDate <= now || oneHourAfter <= now) && a.status !== 'cancelled';
+          const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000);
+          // Mostrar qualquer consulta cujo horário já passou (exceto canceladas)
+          return oneHourAfter <= now && a.status !== 'cancelled';
         });
       case 'cancelled':
         return data.filter(a => a.status === 'cancelled');
@@ -250,18 +257,18 @@ const AppointmentsScreen = ({ navigation }) => {
     }
   };
 
-  const handleRequestNewDate = async (appointmentId, doctorId) => {
+  const handleRequestNewDate = async (appointmentId, doctorId, newSlot) => {
     try {
       const result = await AppointmentService.requestDateChange(
         appointmentId,
-        requestDate,
+        newSlot,
         isMedic ? doctorId : userId
       );
       if (result.success) {
         setShowRequestModal(false);
         setRequestDate(new Date());
-        setRequestLocation('');
-        setRequestNotes('');
+        setAvailableSlots([]);
+        setSelectedSlot(null);
         fetchAppointments();
       }
     } catch (error) {
@@ -304,6 +311,41 @@ const AppointmentsScreen = ({ navigation }) => {
     }
   };
 
+  // Função para buscar horários disponíveis do médico para o dia selecionado
+  const fetchAvailableSlots = async (doctorId, date) => {
+    setAvailableSlots([]);
+    setSelectedSlot(null);
+    const result = await DoctorAvailabilityService.getAvailabilityByDoctorId(doctorId);
+    if (!result.success) return;
+    const availabilities = result.data;
+    const dayOfWeek = date.getDay();
+    const slots = [];
+    availabilities.filter(a => a.is_recurring && a.day_of_week === dayOfWeek).forEach(a => {
+      let start = a.start_time.split(':');
+      let end = a.end_time.split(':');
+      let startHour = parseInt(start[0]);
+      let startMinute = parseInt(start[1]);
+      let endHour = parseInt(end[0]);
+      let endMinute = parseInt(end[1]);
+      let current = new Date(date);
+      current.setHours(startHour, startMinute, 0, 0);
+      const endTime = new Date(date);
+      endTime.setHours(endHour, endMinute, 0, 0);
+      while (current < endTime) {
+        slots.push(new Date(current));
+        current = new Date(current.getTime() + 60 * 60 * 1000); // 1h slots
+      }
+    });
+    setAvailableSlots(slots);
+  };
+
+  useEffect(() => {
+    if (showRequestModal && selectedAppointment && requestDate) {
+      fetchAvailableSlots(selectedAppointment.doctor_id, requestDate);
+    }
+    // eslint-disable-next-line
+  }, [showRequestModal, selectedAppointment, requestDate]);
+
   const renderRequestModal = () => {
     return (
       <Modal
@@ -313,11 +355,10 @@ const AppointmentsScreen = ({ navigation }) => {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Request New Date</Text>
-            
+            <Text style={styles.modalTitle}>Escolha nova data e horário</Text>
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Date</Text>
-              <TouchableOpacity 
+              <Text style={styles.label}>Data</Text>
+              <TouchableOpacity
                 style={styles.dateTimeButton}
                 onPress={() => setShowDatePicker(true)}
               >
@@ -333,86 +374,78 @@ const AppointmentsScreen = ({ navigation }) => {
                   onChange={(event, date) => {
                     setShowDatePicker(false);
                     if (date) {
-                      // Preserve the current time when changing date
-                      const newDate = new Date(date);
-                      newDate.setHours(requestDate.getHours());
-                      newDate.setMinutes(requestDate.getMinutes());
-                      setRequestDate(newDate);
+                      setRequestDate(date);
                     }
                   }}
                 />
               )}
             </View>
-
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Time</Text>
-              <TouchableOpacity 
-                style={styles.dateTimeButton}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Text style={styles.dateTimeButtonText}>
-                  {requestDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </TouchableOpacity>
-              {showTimePicker && (
-                <DateTimePicker
-                  value={requestDate}
-                  mode="time"
-                  is24Hour={true}
-                  display="default"
-                  onChange={(event, time) => {
-                    setShowTimePicker(false);
-                    if (time) {
-                      // Preserve the current date when changing time
-                      const newDate = new Date(requestDate);
-                      newDate.setHours(time.getHours());
-                      newDate.setMinutes(time.getMinutes());
-                      setRequestDate(newDate);
-                    }
-                  }}
-                />
-              )}
+              <Text style={styles.label}>Horário disponível</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {availableSlots.length === 0 && <Text style={{ color: '#888' }}>Nenhum horário disponível</Text>}
+                {availableSlots.map(slot => (
+                  <TouchableOpacity
+                    key={slot.toISOString()}
+                    style={{
+                      backgroundColor: selectedSlot?.toISOString() === slot.toISOString() ? '#4A67E3' : '#fff',
+                      borderColor: selectedSlot?.toISOString() === slot.toISOString() ? '#4A67E3' : '#E0E8F9',
+                      borderWidth: 2,
+                      borderRadius: 10,
+                      marginRight: 8,
+                      marginBottom: 8,
+                      minWidth: 70,
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setSelectedSlot(slot)}
+                  >
+                    <Text style={{
+                      color: selectedSlot?.toISOString() === slot.toISOString() ? '#fff' : '#4A67E3',
+                      fontWeight: 'bold',
+                      fontSize: 15,
+                    }}>
+                      {slot.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Location</Text>
-              <TextInput
-                style={styles.input}
-                value={requestLocation}
-                onChangeText={setRequestLocation}
-                placeholder="Enter location"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={requestNotes}
-                onChangeText={setRequestNotes}
-                placeholder="Add any notes"
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[
+                  styles.modalButton,
+                  {
+                    borderWidth: 2,
+                    borderColor: '#4A67E3',
+                    backgroundColor: 'transparent',
+                    borderRadius: 10,
+                    paddingVertical: 12,
+                    paddingHorizontal: 24,
+                    marginRight: 8,
+                  },
+                ]}
                 onPress={() => {
                   setShowRequestModal(false);
                   setRequestDate(new Date());
-                  setRequestLocation('');
-                  setRequestNotes('');
+                  setAvailableSlots([]);
+                  setSelectedSlot(null);
                 }}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text style={{ color: '#4A67E3', fontWeight: 'bold', fontSize: 16 }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
-                onPress={() => handleRequestNewDate(selectedAppointment?.id, selectedAppointment?.doctor_id)}
+                onPress={() => {
+                  if (!selectedSlot) {
+                    Alert.alert('Selecione um horário disponível!');
+                    return;
+                  }
+                  handleRequestNewDate(selectedAppointment?.id, selectedAppointment?.doctor_id, selectedSlot);
+                }}
               >
-                <Text style={styles.buttonText}>Submit Request</Text>
+                <Text style={styles.buttonText}>Confirmar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -467,7 +500,10 @@ const AppointmentsScreen = ({ navigation }) => {
     const isRateable = (item) => {
       if (item.status === 'cancelled') return false;
       if (doctorRatingsForUser[item.id]) return false;
-      return true;
+      const appointmentDate = new Date(item.appointment_datetime);
+      const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000);
+      const now = new Date();
+      return now > oneHourAfter;
     };
 
     // Add a function to check if appointment is actually cancelled
@@ -541,54 +577,37 @@ const AppointmentsScreen = ({ navigation }) => {
           )}
         </View>
         <View style={styles.buttonContainer}>
-          {shouldShowResponseButtons && (
-            <View style={styles.verticalButtonContainer}>
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.acceptButton]}
+          {/* Icones em coluna à direita para status 'pending' e 'scheduled' */}
+          {(item.status === 'scheduled' || item.status === 'pending') && (
+            <View style={{ flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 }]}
                 onPress={() => handleAcceptAppointment(item.id)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="checkmark-circle" size={24} color="#4F8CFF" />
+                <Ionicons name="checkmark-circle" size={28} color="#4A67E3" />
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.rejectButton]}
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 }]}
                 onPress={() => handleRejectAppointment(item.id)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="close-circle" size={24} color="#F87171" />
+                <Ionicons name="close-circle" size={28} color="#4A67E3" />
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.changeTimeButton]}
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 }]}
                 onPress={() => {
                   setSelectedAppointment(item);
                   setShowRequestModal(true);
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="time" size={24} color="#60A5FA" />
+                <Ionicons name="time" size={28} color="#4A67E3" />
               </TouchableOpacity>
             </View>
           )}
           {!shouldShowResponseButtons && (
             <View style={styles.verticalButtonContainer}>
-              {canConfirm && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.confirmButton]}
-                  onPress={() => handleStatusChange(item.id, 'confirmed')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="checkmark-circle" size={24} color="#4F8CFF" />
-                </TouchableOpacity>
-              )}
-              {canCancel && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.cancelButton]}
-                  onPress={() => handleStatusChange(item.id, 'cancelled')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close-circle" size={24} color="#F87171" />
-                </TouchableOpacity>
-              )}
               {canComplete && (
                 <TouchableOpacity 
                   style={[styles.iconButton, styles.completeButton]}

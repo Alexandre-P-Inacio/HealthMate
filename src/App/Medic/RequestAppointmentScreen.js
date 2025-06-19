@@ -21,6 +21,7 @@ import DoctorService from '../../services/DoctorService';
 import { validateAppointmentRequest } from '../../utils/validation';
 import DataUser from '../../../navigation/DataUser';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import UserService from '../../services/UserService';
 
 const RequestAppointmentScreen = ({ route, navigation }) => {
   const { doctor: initialDoctor } = route.params || {};
@@ -33,15 +34,20 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
-  const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [userId, setUserId] = useState(null);
   const [appointmentDuration, setAppointmentDuration] = useState(60);
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isDoctor, setIsDoctor] = useState(false);
+  const [location, setLocation] = useState('');
+  const [description, setDescription] = useState('');
 
   useEffect(() => {
     const currentUser = DataUser.getUserData();
     if (currentUser && currentUser.id) {
       setUserId(currentUser.id);
+      setIsDoctor(currentUser.role === 'doctor' || currentUser.role === 'medic');
     } else {
       Alert.alert('Erro', 'Usuário não logado. Por favor, faça login novamente.');
       navigation.goBack();
@@ -98,6 +104,23 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
       setAppointmentDuration(selectedDoctor.appointment_duration_minutes ? parseInt(selectedDoctor.appointment_duration_minutes) : 60);
     }
   }, [selectedDoctor]);
+
+  useEffect(() => {
+    if (isDoctor) {
+      const fetchUsers = async () => {
+        setLoading(true);
+        const result = await UserService.getAllUsers();
+        if (result.success) {
+          // Filtrar apenas usuários com role 'user'
+          setUsers(result.data.filter(u => u.role === 'user'));
+        } else {
+          Alert.alert('Erro', result.error || 'Não foi possível carregar a lista de usuários.');
+        }
+        setLoading(false);
+      };
+      fetchUsers();
+    }
+  }, [isDoctor]);
 
   // Reutilizando a função de DoctorSelectTimeScreen (precisa ser definida aqui ou importada)
   const generateAvailableTimeSlots = async (availabilities, date, doctorId) => {
@@ -194,32 +217,34 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedDoctor || !selectedTimeSlot || !userId) {
+    if (!selectedDoctor || !selectedTimeSlot || (!userId && !selectedUser)) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos necessários.');
       return;
     }
-
+    const patientId = isDoctor ? selectedUser?.id : userId;
+    if (isDoctor && !selectedUser) {
+      Alert.alert('Erro', 'Selecione o paciente para a consulta.');
+      return;
+    }
     const appointmentData = {
-      user_id: userId,
-      doctor_id: selectedDoctor.id,
-      appointment_datetime: selectedTimeSlot.date.toISOString(),
-      location: location.trim() === '' ? 'Clínica Padrão' : location,
+      userId: patientId,
+      doctorId: selectedDoctor.id,
+      appointmentDateTime: selectedTimeSlot.date.toISOString(),
+      location: location.trim() || null,
       notes: notes,
+      description: description.trim() || null,
       status: 'pending',
-      requested_by: userId,
+      requestedBy: userId,
     };
-
     const validation = validateAppointmentRequest(appointmentData);
     if (!validation.isValid) {
       const errorMessages = Object.values(validation.errors).join('\n');
       Alert.alert('Erro de Validação', errorMessages);
       return;
     }
-
     setLoading(true);
     const result = await AppointmentService.createAppointment(appointmentData);
     setLoading(false);
-
     if (result.success) {
       Alert.alert('Sucesso', 'Sua solicitação de consulta foi enviada!');
       navigation.goBack();
@@ -255,7 +280,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={{ flex: 1, backgroundColor: '#F5F6FA' }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 60 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#3498db' }}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 16 }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -263,8 +288,41 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
         <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>Agendar Consulta</Text>
       </View>
 
-      {/* Nunca mostrar a lista de médicos se initialDoctor estiver presente */}
-      {(!initialDoctor && doctors.length > 0) && (
+      {/* User selection for doctors only */}
+      {isDoctor && (
+        <View style={styles.selectedDoctorSection}>
+          <Text style={styles.sectionTitle}>Paciente Selecionado</Text>
+          <FlatList
+            data={users}
+            keyExtractor={(item) => item.id.toString()}
+            horizontal
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.doctorCard,
+                  { backgroundColor: '#e6effc' },
+                  selectedUser?.id === item.id && styles.selectedDoctorCard,
+                  { width: 220 }
+                ]}
+                onPress={() => setSelectedUser(item)}
+              >
+                <Image
+                  source={item.pfpimg ? { uri: `data:image/png;base64,${item.pfpimg}` } : { uri: 'https://i.pravatar.cc/150?img=3' }}
+                  style={styles.doctorImage}
+                />
+                <View style={styles.doctorInfo}>
+                  <Text style={styles.doctorName}>{item.fullname}</Text>
+                  <Text style={styles.doctorDetails}>{item.email}</Text>
+                  <Text style={styles.doctorDetails}>{item.phone}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
+
+      {/* Mostrar seleção de médico apenas se NÃO for doutor */}
+      {!isDoctor && (!initialDoctor && doctors.length > 0) && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Selecione o Médico</Text>
           <FlatList
@@ -275,23 +333,6 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.doctorListContainer}
           />
-        </View>
-      )}
-
-      {/* Sempre mostrar o médico selecionado se houver initialDoctor */}
-      {(selectedDoctor && initialDoctor) && (
-        <View style={styles.selectedDoctorSection}>
-          <Text style={styles.sectionTitle}>Médico Selecionado</Text>
-          <View style={styles.selectedDoctorCardDisplay}>
-            <Image
-              source={selectedDoctor.user?.pfpimg ? { uri: `data:image/png;base64,${selectedDoctor.user.pfpimg}` } : { uri: 'https://i.pravatar.cc/150?img=3' }}
-              style={styles.selectedDoctorImage}
-            />
-            <View style={styles.selectedDoctorInfo}>
-              <Text style={styles.selectedDoctorName}>{selectedDoctor.user?.fullname}</Text>
-              <Text style={styles.selectedDoctorSpecialization}>{selectedDoctor.specialization || 'Especialidade não informada'}</Text>
-            </View>
-          </View>
         </View>
       )}
 
@@ -316,16 +357,6 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
 
       {selectedDoctor && availableTimeSlots.length > 0 ? (
         <View style={{marginHorizontal: 16, marginBottom: 10}}>
-          <Text style={{
-            textAlign: 'center',
-            fontSize: 18,
-            fontWeight: 'bold',
-            color: '#4A67E3',
-            marginBottom: 14,
-            letterSpacing: 0.2
-          }}>
-            Horários Disponíveis ({selectedDate.toLocaleDateString()})
-          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal: 4}}>
             {availableTimeSlots.map((item) => {
               const isSelected = selectedTimeSlot?.id === item.id;
@@ -336,18 +367,18 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
                     backgroundColor: isSelected ? '#4A67E3' : '#fff',
                     borderColor: isSelected ? '#4A67E3' : '#E0E8F9',
                     borderWidth: 2,
-                    borderRadius: 16,
-                    marginRight: 12,
-                    minWidth: 90,
-                    paddingVertical: 14,
-                    paddingHorizontal: 18,
+                    borderRadius: 10,
+                    marginRight: 8,
+                    minWidth: 70,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
                     alignItems: 'center',
                     shadowColor: isSelected ? '#4A67E3' : '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: isSelected ? 0.18 : 0.08,
-                    shadowRadius: 6,
-                    elevation: isSelected ? 4 : 2,
-                    transform: [{ scale: isSelected ? 1.08 : 1 }],
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: isSelected ? 0.12 : 0.06,
+                    shadowRadius: 3,
+                    elevation: isSelected ? 3 : 1,
+                    transform: [{ scale: isSelected ? 1.05 : 1 }],
                   }}
                   onPress={() => setSelectedTimeSlot(item)}
                   activeOpacity={0.85}
@@ -355,8 +386,8 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
                   <Text style={{
                     color: isSelected ? '#fff' : '#4A67E3',
                     fontWeight: isSelected ? 'bold' : '600',
-                    fontSize: 17,
-                    letterSpacing: 0.5
+                    fontSize: 15,
+                    letterSpacing: 0.2
                   }}>
                     {item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
@@ -383,6 +414,18 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Detalhes da Consulta</Text>
         <TextInput
+          style={[styles.input]}
+          placeholder="Local da consulta (opcional)"
+          value={location}
+          onChangeText={setLocation}
+        />
+        <TextInput
+          style={[styles.input]}
+          placeholder="Descrição (opcional)"
+          value={description}
+          onChangeText={setDescription}
+        />
+        <TextInput
           style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
           placeholder="Notas ou observações (opcional)"
           value={notes}
@@ -399,7 +442,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
         <Text style={styles.submitButtonText}>Confirmar Agendamento</Text>
       </TouchableOpacity>
 
-    </View>
+    </ScrollView>
   );
 };
 

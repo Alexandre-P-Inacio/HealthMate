@@ -1,5 +1,5 @@
 import supabase from '../../supabase';
-import { NotificationService } from './NotificationService';
+import NotificationService from './NotificationService';
 import {
   validateAppointmentRequest,
   validateDoctorAvailability,
@@ -53,8 +53,9 @@ export class AppointmentService {
           user_id: !isNaN(parseInt(appointmentData.userId)) ? parseInt(appointmentData.userId) : null,
           doctor_id: !isNaN(parseInt(appointmentData.doctorId)) ? parseInt(appointmentData.doctorId) : null,
           appointment_datetime: appointmentData.appointmentDateTime,
-          location: appointmentData.location,
+          location: appointmentData.location || null,
           notes: appointmentData.notes,
+          description: appointmentData.description || null,
           status: 'pending',
           requested_by: (appointmentData.requestedBy !== null && appointmentData.requestedBy !== undefined && !isNaN(parseInt(appointmentData.requestedBy))) ? parseInt(appointmentData.requestedBy) : null,
           requested_date_change: appointmentData.requestedDateChange || null
@@ -63,13 +64,6 @@ export class AppointmentService {
         .single();
 
       if (error) throw error;
-
-      // Get doctor's data for notification
-        await NotificationService.sendAppointmentStatusNotification(
-        appointmentData.doctorId,
-          'new_request',
-          data
-        );
 
       return {
         success: true,
@@ -107,22 +101,6 @@ export class AppointmentService {
         .single();
 
       if (error) throw error;
-
-      if (currentAppointment.user_id) {
-        await NotificationService.sendAppointmentStatusNotification(
-          currentAppointment.user_id,
-          newStatus,
-          data
-        );
-      }
-
-      if (currentAppointment.doctor_id) {
-        await NotificationService.sendAppointmentStatusNotification(
-          currentAppointment.doctor_id,
-          newStatus,
-          data
-        );
-      }
 
       return {
         success: true,
@@ -231,23 +209,6 @@ export class AppointmentService {
 
       if (error) throw error;
 
-      if (data) {
-        if (data.user_id) {
-      await NotificationService.sendAppointmentStatusNotification(
-            data.user_id,
-        'cancelled',
-        data
-      );
-        }
-        if (data.doctor_id) {
-      await NotificationService.sendAppointmentStatusNotification(
-            data.doctor_id,
-        'cancelled',
-        data
-      );
-        }
-      }
-
       return { success: true, data };
     } catch (error) {
       console.error('Error cancelling appointment:', error);
@@ -271,16 +232,6 @@ export class AppointmentService {
         .single();
 
       if (error) throw error;
-
-      if (data) {
-        if (data.doctor_id) {
-          await NotificationService.sendAppointmentStatusNotification(
-            data.doctor_id,
-            'reschedule_requested',
-            data
-          );
-        }
-      }
 
       return { success: true, data };
     } catch (error) {
@@ -327,23 +278,6 @@ export class AppointmentService {
         .single();
 
       if (error) throw error;
-
-      if (data) {
-        if (data.user_id) {
-          await NotificationService.sendAppointmentStatusNotification(
-            data.user_id,
-            status === 'approved' ? 'reschedule_approved' : 'reschedule_rejected',
-            data
-          );
-        }
-        if (data.doctor_id) {
-          await NotificationService.sendAppointmentStatusNotification(
-            data.doctor_id,
-            status === 'approved' ? 'reschedule_approved' : 'reschedule_rejected',
-            data
-          );
-        }
-      }
 
       return { success: true, data };
     } catch (error) {

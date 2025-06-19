@@ -7,6 +7,7 @@ import Navbar from '../../Components/Navbar';
 import { useNavigation } from '@react-navigation/native';
 import HealthQuote from '../../Components/HealthQuote';
 import FunZone from '../../Components/FunZone';
+import { AppointmentService } from '../../services/AppointmentService';
 
 const HomeScreen = () => {
   const [userData, setUserData] = useState({
@@ -187,6 +188,7 @@ const HomeScreen = () => {
       setIsRefreshing(true);
       const userData = DataUser.getUserData();
       const userId = userData?.id;
+      const userRole = userData?.role;
       
       if (!userId) {
         setIsRefreshing(false);
@@ -194,8 +196,8 @@ const HomeScreen = () => {
       }
 
       const formattedDate = selectedDate.toISOString().split('T')[0];
-      
-      const { data, error } = await supabase
+      // Fetch medication events
+      const { data: medData, error: medError } = await supabase
         .from('medication_schedule_times')
         .select(`
           id,
@@ -217,37 +219,109 @@ const HomeScreen = () => {
         .eq('user_id', userId)
         .eq('scheduled_date', formattedDate);
 
-      if (error) {
+      if (medError) {
         setIsRefreshing(false);
         return;
       }
 
-      const calendarEvents = data.map(item => {
-        const isTaken = item.status === 'taken' || false;
+      // Fetch appointments for the selected date (for both doctor and user roles)
+      let appointmentEvents = [];
+      try {
+        let result = null;
+        if (userRole === 'doctor' || userRole === 'medic') {
+          result = await AppointmentService.getDoctorAppointments(userId);
+        } else {
+          result = await AppointmentService.getUserAppointments(userId);
+        }
+        if (result && result.success && Array.isArray(result.data)) {
+          const appointmentsWithNames = await Promise.all(result.data
+            .filter(app => {
+              const appDate = new Date(app.appointment_datetime);
+              return appDate.toISOString().split('T')[0] === formattedDate && app.status === 'confirmed';
+            })
+            .map(async app => {
+              let otherPerson = '';
+              if (userRole === 'doctor' || userRole === 'medic') {
+                // Show patient name
+                if (app.users && (app.users.fullname || app.users.name)) {
+                  otherPerson = app.users.fullname || app.users.name;
+                } else if (app.user_id) {
+                  const { data: userData } = await supabase
+                    .from('users')
+                    .select('fullname')
+                    .eq('id', app.user_id)
+                    .single();
+                  otherPerson = userData?.fullname || 'Paciente';
+                }
+              } else {
+                // Show doctor name
+                if (app.doctors && (app.doctors.fullname || app.doctors.name)) {
+                  otherPerson = app.doctors.fullname || app.doctors.name;
+                } else if (app.doctor_id) {
+                  const { data: doctorData } = await supabase
+                    .from('doctors')
+                    .select('name, user_id')
+                    .eq('id', app.doctor_id)
+                    .single();
+                  if (doctorData) {
+                    const { data: userData } = await supabase
+                      .from('users')
+                      .select('fullname')
+                      .eq('id', doctorData.user_id)
+                      .single();
+                    otherPerson = userData?.fullname || doctorData.name || 'Médico';
+                  }
+                }
+              }
+              if (!otherPerson) otherPerson = userRole === 'doctor' || userRole === 'medic' ? 'Paciente' : 'Médico';
+              const appDate = new Date(app.appointment_datetime);
+              return {
+                id: `appointment-${app.id}`,
+                title: `Appointment with ${otherPerson}`,
+                startDate: appDate.toISOString(),
+                endDate: new Date(appDate.getTime() + 60 * 60000).toISOString(), // 1 hour block
+                notes: app.location ? `Location: ${app.location}` : '',
+                scheduledDate: appDate.toISOString().split('T')[0],
+                scheduledTime: appDate.toTimeString().substring(0, 5),
+                isAppointment: true,
+                status: app.status,
+                allDay: false,
+                color: '#FFB347', // Distinct color for appointments
+              };
+            })
+          );
+          appointmentEvents = appointmentsWithNames;
+        }
+      } catch (err) {
+        // Ignore appointment fetch errors for now
+      }
 
-        const timeComponents = item.scheduled_time?.split(':') || ['08', '00', '00'];
-        const hours = parseInt(timeComponents[0], 10);
-        const minutes = parseInt(timeComponents[1], 10);
-        const seconds = parseInt(timeComponents[2], 10);
-
-        const eventDate = new Date(item.scheduled_date);
-        eventDate.setHours(hours, minutes, seconds, 0);
-        
-        return {
-          id: item.id,
-          title: item.pills_warning?.titulo || 'Medicamento',
-          startDate: eventDate.toISOString(),
-          endDate: new Date(eventDate.getTime() + 30 * 60000).toISOString(),
-          notes: `Dose: ${item.dosage || item.pills_warning?.quantidade_comprimidos_por_vez || 1} comprimido(s)`,
-          scheduledDate: item.scheduled_date,
-          scheduledTime: item.scheduled_time,
-          pill_id: item.pill_id,
-          isTaken: isTaken,
-          status: item.status || 'pending',
-          allDay: false,
-          color: isTaken ? '#2ECC71' : '#6A8DFD'
-        };
-      });
+      const calendarEvents = [
+        ...medData.map(item => {
+          const isTaken = item.status === 'taken' || false;
+          const timeComponents = item.scheduled_time?.split(':') || ['08', '00', '00'];
+          const hours = parseInt(timeComponents[0], 10);
+          const minutes = parseInt(timeComponents[1], 10);
+          const seconds = parseInt(timeComponents[2], 10);
+          const eventDate = new Date(item.scheduled_date);
+          eventDate.setHours(hours, minutes, seconds, 0);
+          return {
+            id: item.id,
+            title: item.pills_warning?.titulo || 'Medicamento',
+            startDate: eventDate.toISOString(),
+            endDate: new Date(eventDate.getTime() + 30 * 60000).toISOString(),
+            notes: `Dose: ${item.dosage || item.pills_warning?.quantidade_comprimidos_por_vez || 1} comprimido(s)`,
+            scheduledDate: item.scheduled_date,
+            scheduledTime: item.scheduled_time,
+            pill_id: item.pill_id,
+            isTaken: isTaken,
+            status: item.status || 'pending',
+            allDay: false,
+            color: isTaken ? '#2ECC71' : '#6A8DFD',
+          };
+        }),
+        ...appointmentEvents
+      ];
 
       setEvents(calendarEvents);
       setIsRefreshing(false);
@@ -885,7 +959,7 @@ const HomeScreen = () => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.dayScrollView}
-                contentContainerStyle={styles.dayScrollViewContent}
+                contentContainerStyle={{ ...styles.dayScrollViewContent, paddingBottom: 60 }}
                 data={getNextDays(7)}
                 keyExtractor={(item, index) => index.toString()}
                 renderItem={({item: date, index}) => {
@@ -897,23 +971,25 @@ const HomeScreen = () => {
                   ).length > 0;
                   
                   return (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[
                         styles.dayButton,
                         isSelected && styles.selectedDayButton,
                         isToday && styles.todayButton
-                      ]} 
+                      ]}
                       onPress={() => setSelectedDate(date)}
                     >
                       <Text style={[
                         styles.daySubText,
-                        (isSelected || isToday) && styles.selectedDayText
+                        (isSelected && isToday) ? styles.selectedDayText : isToday ? styles.todayText : null,
+                        isSelected && !isToday && styles.selectedDayText
                       ]}>
                         {date.toLocaleString('en-US', { weekday: 'short' }).toUpperCase()}
                       </Text>
                       <Text style={[
                         styles.dayText,
-                        (isSelected || isToday) && styles.selectedDayText
+                        (isSelected && isToday) ? styles.selectedDayText : isToday ? styles.todayText : null,
+                        isSelected && !isToday && styles.selectedDayText
                       ]}>
                         {date.getDate()}
                       </Text>
@@ -936,7 +1012,7 @@ const HomeScreen = () => {
                       ref={hourlyScrollViewRef}
                       style={styles.hourlySchedule}
                       showsVerticalScrollIndicator={true}
-                      contentContainerStyle={styles.hourlyScheduleContent}
+                      contentContainerStyle={{ ...styles.hourlyScheduleContent, paddingBottom: 60 }}
                       data={getAllHours()}
                       keyExtractor={(hour) => hour.toString()}
                       renderItem={({item: hour}) => {
@@ -1045,7 +1121,7 @@ const HomeScreen = () => {
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollViewContent}
+              contentContainerStyle={{ ...styles.scrollViewContent, paddingBottom: 60 }}
             >
               <HealthQuote />
             </ScrollView>
@@ -1329,8 +1405,9 @@ const styles = StyleSheet.create({
     borderColor: '#6A8DFD',
   },
   todayButton: {
+    backgroundColor: '#e6effc',
     borderColor: '#6A8DFD',
-    borderWidth: 2,
+    borderWidth: 0,
   },
   dayText: {
     fontSize: 20,
@@ -1345,7 +1422,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   todayText: {
-    color: '#ffffff',
+    color: '#4A67E3',
   },
   dayEventIndicator: {
     position: 'absolute',

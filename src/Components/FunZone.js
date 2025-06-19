@@ -524,7 +524,7 @@ const FunZone = () => {
       <Text style={styles.subtitle}>Stay healthy while having fun! 🎮</Text>
       <ScrollView 
         style={styles.activitiesContainer}
-        contentContainerStyle={styles.activitiesContent}
+        contentContainerStyle={{ ...styles.activitiesContent, paddingBottom: 60 }}
         showsVerticalScrollIndicator={true}
         bounces={true}
       >
@@ -540,7 +540,7 @@ const FunZone = () => {
         <View style={styles.modalContainer}>
           <ScrollView 
             style={styles.modalScrollView}
-            contentContainerStyle={styles.modalScrollContent}
+            contentContainerStyle={{ ...styles.modalScrollContent, paddingBottom: 60 }}
             showsVerticalScrollIndicator={true}
             bounces={true}
           >

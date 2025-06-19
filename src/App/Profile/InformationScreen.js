@@ -464,7 +464,7 @@ const InformationScreen = ({ navigation }) => {
           <ScrollView
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={{ ...styles.scrollContent, paddingBottom: 60 }}
           >
             {Object.entries(healthData)
               .filter(([_, section]) => 
