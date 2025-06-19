@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, StatusBar, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Image, StatusBar, Dimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,11 +13,23 @@ const { width, height } = Dimensions.get('window'); // Get screen dimensions
 
 const SplashScreen = () => {
   const navigation = useNavigation();
-  const videoRef = React.useRef(null);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    // Timeout de fallback: navega para Welcome após 5 segundos
+    const timeout = setTimeout(() => {
+      navigation.replace('Welcome');
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [navigation]);
 
   const handlePlaybackStatusUpdate = (status) => {
     if (status.didJustFinish) {
-      // Video finished playing, navigate to Welcome screen
+      navigation.replace('Welcome');
+    }
+    if (status.isLoaded === false && status.error) {
+      Alert.alert('Erro', 'Não foi possível carregar o vídeo de abertura.');
       navigation.replace('Welcome');
     }
   };

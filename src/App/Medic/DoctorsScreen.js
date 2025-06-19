@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
+import { 
+  View, 
+  Text, 
+  FlatList, 
+  TouchableOpacity, 
+  StyleSheet, 
   Alert,
   Image,
   SafeAreaView,
@@ -39,7 +39,7 @@ const DoctorsScreen = ({ navigation }) => {
           const { success, data: doctorData, error: doctorError } = await DoctorService.getDoctorByUserId(currentUser.id);
           if (!success) {
             console.error('Error fetching current doctor data:', doctorError);
-          } else {
+        } else {
             setUserDoctorData(doctorData);
           }
         }
@@ -56,7 +56,7 @@ const DoctorsScreen = ({ navigation }) => {
       } else {
         // Usar dados diretos do médico, já que não há user_id na tabela doctors para a relação
         setMedics(allDoctors);
-      }
+        }
 
       setLoading(false);
     };
@@ -64,11 +64,11 @@ const DoctorsScreen = ({ navigation }) => {
   }, []);
 
   const renderMedicItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.doctorCard}
+    <TouchableOpacity 
+      style={styles.doctorCard} 
       onPress={() => navigation.navigate('DoctorDetailsScreen', { doctor: item })}
     >
-      <Image
+      <Image 
         source={item.user.pfpimg ? { uri: `data:image/png;base64,${item.user.pfpimg}` } : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' }}
         style={styles.doctorImage}
       />
@@ -109,17 +109,17 @@ const DoctorsScreen = ({ navigation }) => {
             style={{ marginLeft: 8 }}
           >
             <Ionicons name="add" size={28} color="#fff" />
-          </TouchableOpacity>
+            </TouchableOpacity>
         </View>
 
-        <FlatList
-          data={medics}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderMedicItem}
-          contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={64} color="#bdc3c7" />
+          <FlatList
+            data={medics}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderMedicItem}
+            contentContainerStyle={styles.listContainer}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Ionicons name="people-outline" size={64} color="#bdc3c7" />
               <Text style={styles.noDataText}>Nenhum médico disponível.</Text>
             </View>
           }

@@ -376,60 +376,37 @@ const AccountScreen = ({ navigation }) => {
           </View>
 
           {/* Quick Actions */}
-          <View style={styles.gridActionsContainer}>
-            {isMedic ? (
-              <>
+          <View style={styles.quickActionsGrid}>
                 <TouchableOpacity 
-                  style={[styles.gridActionButton, styles.gridDashboard]}
-                  onPress={() => navigation.navigate('DoctorDashboard')}
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('DoctorsScreen')}
                 >
-                  <FontAwesome name="stethoscope" size={36} color="#fff" style={styles.gridActionIcon} />
-                  <Text style={styles.gridActionText}>Dashboard</Text>
+              <FontAwesome name="user-md" size={30} color="#6A8DFD" />
+              <Text style={styles.actionButtonText}>Doctors</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.gridActionButton}
-                  onPress={() => navigation.navigate('AppointmentsScreen')}
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('InformationScreen')}
                 >
-                  <FontAwesome name="calendar" size={30} color="#3498db" style={styles.gridActionIcon} />
-                  <Text style={styles.gridActionText}>Appointments</Text>
+              <FontAwesome name="info-circle" size={30} color="#6A8DFD" />
+              <Text style={styles.actionButtonText}>Information</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.gridActionButton}
-                  onPress={() => navigation.navigate('DoctorDetailsScreen')}
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('AppointmentsScreen')}
                 >
-                  <FontAwesome name="user-md" size={30} color="#3498db" style={styles.gridActionIcon} />
-                  <Text style={styles.gridActionText}>Profile</Text>
+              <FontAwesome name="calendar" size={30} color="#6A8DFD" />
+              <Text style={styles.actionButtonText}>Consultas</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.gridActionButton}
-                  onPress={() => {
-                    fetchMedicationStats();
-                    setStatsModalVisible(true);
-                  }}
-                >
-                  <FontAwesome name="bar-chart" size={30} color="#3498db" style={styles.gridActionIcon} />
-                  <Text style={styles.gridActionText}>Statistics</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity style={styles.gridActionButton} onPress={() => navigation.navigate('DoctorsScreen')}>
-                  <FontAwesome name="user-md" size={30} color="#3498db" style={styles.gridActionIcon} />
-                  <Text style={styles.gridActionText}>Doctors</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.gridActionButton} onPress={() => navigation.navigate('InformationScreen')}>
-                  <FontAwesome name="info-circle" size={30} color="#3498db" style={styles.gridActionIcon} />
-                  <Text style={styles.gridActionText}>Information</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            {isPremiumPlus && (
             <TouchableOpacity 
-              style={styles.gridActionButton}
+              style={styles.actionButton}
               onPress={() => setPremiumModalVisible(true)}
             >
-              <FontAwesome name="star" size={30} color={isPremiumPlus ? "#FFD700" : "#3498db"} style={styles.gridActionIcon} />
-              <Text style={styles.gridActionText}>{isPremiumPlus ? "Premium Plus" : "Premium"}</Text>
+                <FontAwesome name="star" size={30} color="#FFD700" />
+                <Text style={styles.actionButtonText}>Premium</Text>
             </TouchableOpacity>
+            )}
           </View>
 
           {/* Account Actions */}
@@ -979,7 +956,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#34495e',
   },
-  gridActionsContainer: {
+  quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
@@ -988,7 +965,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     gap: 16,
   },
-  gridActionButton: {
+  actionButton: {
     backgroundColor: '#fff',
     borderRadius: 16,
     alignItems: 'center',
@@ -1002,13 +979,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  gridDashboard: {
-    backgroundColor: '#3498db',
-  },
-  gridActionIcon: {
-    marginBottom: 8,
-  },
-  gridActionText: {
+  actionButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#3498db',

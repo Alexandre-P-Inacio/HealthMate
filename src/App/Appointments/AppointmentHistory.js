@@ -25,8 +25,20 @@ const AppointmentHistory = () => {
 
   const fetchAppointments = async () => {
     try {
+      if (!user || !user.id) {
+        console.warn('Cannot fetch appointments: user or user.id is null/undefined.');
+        setLoading(false);
+        return;
+      }
+      const parsedUserId = parseInt(user.id);
+      if (isNaN(parsedUserId)) {
+        console.warn(`AppointmentHistory: Invalid userId parsed: ${user.id}`);
+        setLoading(false);
+        return;
+      }
+
       const result = await AppointmentService.getUserAppointments(
-        user.id,
+        parsedUserId,
         filter === 'all' ? null : filter
       );
 

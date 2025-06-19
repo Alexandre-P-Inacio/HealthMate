@@ -186,7 +186,7 @@ const DoctorDashboardScreen = ({ navigation }) => {
               <Ionicons name="calendar-outline" size={28} color="#4a67e3" />
               <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Consultas</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('DoctorAvailabilityScreen')} style={{ alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => navigation.navigate('DoctorAvailability')} style={{ alignItems: 'center' }}>
               <Ionicons name="time-outline" size={28} color="#4a67e3" />
               <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Disponibilidade</Text>
             </TouchableOpacity>

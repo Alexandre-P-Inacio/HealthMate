@@ -95,7 +95,7 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
             <View style={styles.actionButtons}>
               <TouchableOpacity 
                 style={[styles.actionButton, styles.scheduleButton]}
-                onPress={() => navigation.navigate('RequestAppointmentScreen', { doctor: doctor })}
+                onPress={() => navigation.navigate('RequestAppointmentScreen', { doctor })}
               >
                 <Ionicons name="calendar-outline" size={20} color="#FFF" />
                 <Text style={styles.actionButtonText}>Solicitar Consulta</Text>

@@ -3,6 +3,10 @@ import supabase from '../../supabase';
 class DoctorService {
   static async getDoctorById(doctorId) {
     try {
+      if (!doctorId) {
+        console.warn(`DoctorService: ID de médico inválido fornecido: ${doctorId}`);
+        return { success: false, error: 'ID de médico inválido.' };
+      }
       const { data: doctor, error: doctorError } = await supabase
         .from('doctors')
         .select(`*
@@ -36,6 +40,10 @@ class DoctorService {
 
   static async getDoctorByUserId(userId) {
     try {
+      if (!userId) {
+        console.warn(`DoctorService: ID de usuário inválido para médico fornecido: ${userId}`);
+        return { success: false, error: 'ID de usuário inválido para médico.' };
+      }
       const { data: doctor, error: doctorError } = await supabase
         .from('doctors')
         .select(`*

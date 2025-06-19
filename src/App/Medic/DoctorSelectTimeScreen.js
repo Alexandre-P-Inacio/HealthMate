@@ -65,9 +65,9 @@ const generateAvailableTimeSlots = async (availabilities, selectedDate, doctorId
           slots.push({
             id: slotId,
             date: new Date(currentSlot),
-          });
+      });
         }
-      }
+  }
       currentSlot.setMinutes(currentSlot.getMinutes() + 30); // Slots de 30 em 30 minutos
     }
   }
@@ -92,7 +92,7 @@ const DoctorSelectTimeScreen = ({ route, navigation }) => {
     } else {
       Alert.alert('Erro', result.error);
     }
-    setLoading(false);
+      setLoading(false);
   }, [doctor]);
 
   useEffect(() => {
@@ -143,7 +143,7 @@ const DoctorSelectTimeScreen = ({ route, navigation }) => {
                 navigation.goBack(); // Ou navegar para uma tela de confirmação
               } else {
                 Alert.alert('Erro', result.errors?.general || result.error || 'Não foi possível agendar a consulta.');
-              }
+    }
             }
           }
         ]
@@ -198,22 +198,22 @@ const DoctorSelectTimeScreen = ({ route, navigation }) => {
       ) : (
         availableTimes.length === 0 ? (
           <Text style={styles.emptyText}>Nenhum horário disponível para a data selecionada.</Text>
-        ) : (
-          <FlatList
-            data={availableTimes}
-            keyExtractor={item => item.id}
+      ) : (
+        <FlatList
+          data={availableTimes}
+          keyExtractor={item => item.id}
             style={{ marginTop: 20, paddingHorizontal: 20 }}
             numColumns={3} // Mostrar 3 colunas de horários
             columnWrapperStyle={styles.row}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.timeSlot, selectedTime?.id === item.id && styles.selectedTimeSlot]}
-                onPress={() => setSelectedTime(item)}
-              >
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.timeSlot, selectedTime?.id === item.id && styles.selectedTimeSlot]}
+              onPress={() => setSelectedTime(item)}
+            >
                 <Text style={styles.timeText}>{item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-              </TouchableOpacity>
-            )}
-          />
+            </TouchableOpacity>
+          )}
+        />
         )
       )}
       {selectedTime && !loading && (

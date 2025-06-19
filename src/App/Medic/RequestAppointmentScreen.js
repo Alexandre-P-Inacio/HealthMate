@@ -14,13 +14,13 @@ import {
   Modal,
   Button
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { AppointmentService } from '../../services/AppointmentService';
 import { DoctorAvailabilityService } from '../../services/DoctorAvailabilityService';
 import DoctorService from '../../services/DoctorService';
 import { validateAppointmentRequest } from '../../utils/validation';
 import DataUser from '../../../navigation/DataUser';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const RequestAppointmentScreen = ({ route, navigation }) => {
   const { doctor: initialDoctor } = route.params || {};
@@ -38,10 +38,13 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
   const [userId, setUserId] = useState(null);
 
   useEffect(() => {
+    console.log('useEffect: DataUser.getUserData chamado');
     const currentUser = DataUser.getUserData();
     if (currentUser && currentUser.id) {
       setUserId(currentUser.id);
+      console.log('UserId setado:', currentUser.id);
     } else {
+      console.log('Usuário não logado, voltando.');
       Alert.alert('Erro', 'Usuário não logado. Por favor, faça login novamente.');
       navigation.goBack();
     }
@@ -50,12 +53,15 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
   // Fetch doctors (no need to fetch user details separately now)
   useEffect(() => {
     const fetchDoctors = async () => {
+      console.log('fetchDoctors chamado');
       setLoading(true);
       if (initialDoctor) {
         setSelectedDoctor(initialDoctor);
         setDoctors([initialDoctor]); // Definir o médico inicial na lista de médicos
+        console.log('Médico inicial definido:', initialDoctor);
       } else {
         const result = await DoctorService.getAllDoctors();
+        console.log('Resultado getAllDoctors:', result);
         if (result.success) {
           setDoctors(result.data);
         } else {
@@ -63,6 +69,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
         }
       }
       setLoading(false);
+      console.log('fetchDoctors terminou, loading:', false);
     };
     fetchDoctors();
   }, [initialDoctor]);
@@ -70,9 +77,11 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
   // Fetch doctor availabilities and generate time slots
   useEffect(() => {
     const fetchAvailabilityAndGenerateSlots = async () => {
+      console.log('fetchAvailabilityAndGenerateSlots chamado', { selectedDoctor, userId, selectedDate });
       if (selectedDoctor && selectedDoctor.id && userId) {
         setLoading(true);
         const availabilitiesResult = await DoctorAvailabilityService.getAvailabilityByDoctorId(selectedDoctor.id);
+        console.log('availabilitiesResult:', availabilitiesResult);
         if (availabilitiesResult.success) {
           // Reutiliza a lógica de geração de slots da DoctorSelectTimeScreen
           const generatedSlots = await generateAvailableTimeSlots(
@@ -81,12 +90,15 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
             selectedDoctor.id
           );
           setAvailableTimeSlots(generatedSlots);
+          console.log('generatedSlots:', generatedSlots);
         } else {
           Alert.alert('Erro', availabilitiesResult.error || 'Não foi possível carregar a disponibilidade do médico.');
         }
         setLoading(false);
+        console.log('fetchAvailabilityAndGenerateSlots terminou, loading:', false);
       } else {
         setAvailableTimeSlots([]); // Limpar slots se nenhum médico selecionado
+        console.log('Nenhum médico selecionado ou userId ausente.');
       }
     };
     fetchAvailabilityAndGenerateSlots();
@@ -94,6 +106,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
 
   // Reutilizando a função de DoctorSelectTimeScreen (precisa ser definida aqui ou importada)
   const generateAvailableTimeSlots = async (availabilities, date, doctorId) => {
+    console.log('generateAvailableTimeSlots chamado', { availabilities, date, doctorId });
     const slots = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -146,7 +159,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
             });
           }
         }
-        currentSlot.setMinutes(currentSlot.getMinutes() + 30);
+        currentSlot.setMinutes(currentSlot.getMinutes() + 60);
       }
     }
     return slots;
@@ -172,6 +185,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
   };
 
   const handleSubmit = async () => {
+    console.log('handleSubmit chamado');
     if (!selectedDoctor || !selectedTimeSlot || !userId) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos necessários.');
       return;
@@ -197,6 +211,7 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
     setLoading(true);
     const result = await AppointmentService.createAppointment(appointmentData);
     setLoading(false);
+    console.log('Resultado createAppointment:', result);
 
     if (result.success) {
       Alert.alert('Sucesso', 'Sua solicitação de consulta foi enviada!');
@@ -241,7 +256,8 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
         <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>Agendar Consulta</Text>
       </View>
 
-      {!initialDoctor && (
+      {/* Nunca mostrar a lista de médicos se initialDoctor estiver presente */}
+      {(!initialDoctor && doctors.length > 0) && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Selecione o Médico</Text>
           <FlatList
@@ -255,7 +271,8 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      {selectedDoctor && (
+      {/* Sempre mostrar o médico selecionado se houver initialDoctor */}
+      {(selectedDoctor && initialDoctor) && (
         <View style={styles.selectedDoctorSection}>
           <Text style={styles.sectionTitle}>Médico Selecionado</Text>
           <View style={styles.selectedDoctorCardDisplay}>
@@ -278,77 +295,41 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
             <Ionicons name="calendar-outline" size={20} color="#fff" />
             <Text style={styles.datePickerButtonText}>{selectedDate.toLocaleDateString()}</Text>
           </TouchableOpacity>
-          {Platform.OS === 'android' && showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display="default"
-              onChange={onChangeDate}
-              minimumDate={new Date()}
-            />
-          )}
-          {Platform.OS === 'ios' && showDatePicker && (
-            <Modal
-              transparent={true}
-              animationType="slide"
-              visible={showDatePicker}
-              onRequestClose={() => setShowDatePicker(false)}
-            >
-              <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowDatePicker(false)}>
-                <View style={styles.iosPickerContainer}>
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display="inline"
-                    onChange={onChangeDate}
-                    minimumDate={new Date()}
-                  />
-                  <Button title="Confirmar" onPress={() => setShowDatePicker(false)} />
-                </View>
-              </TouchableOpacity>
-            </Modal>
-          )}
         </View>
-
-        {selectedDoctor && availableTimeSlots.length > 0 ? (
-          <View>
-            <Text style={styles.sectionSubtitle}>Horários Disponíveis ({selectedDate.toLocaleDateString()})</Text>
-            <FlatList
-              data={availableTimeSlots}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlotButton,
-                    selectedTimeSlot?.id === item.id && styles.selectedTimeSlotButton,
-                  ]}
-                  onPress={() => setSelectedTimeSlot(item)}
-                >
-                  <Text style={[
-                    styles.timeSlotText,
-                    selectedTimeSlot?.id === item.id && styles.selectedTimeSlotTextSelected,
-                  ]}>
-                    {item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              numColumns={3}
-              columnWrapperStyle={styles.timeSlotRow}
-            />
-          </View>
-        ) : (
-          selectedDoctor && <Text style={styles.noAvailabilityText}>Nenhum horário disponível para a data selecionada.</Text>
-        )}
       </View>
+
+      {selectedDoctor && availableTimeSlots.length > 0 ? (
+        <View>
+          <Text style={styles.sectionSubtitle}>Horários Disponíveis ({selectedDate.toLocaleDateString()})</Text>
+          <FlatList
+            data={availableTimeSlots}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.timeSlotButton,
+                  selectedTimeSlot?.id === item.id && styles.selectedTimeSlotButton,
+                ]}
+                onPress={() => setSelectedTimeSlot(item)}
+              >
+                <Text style={[
+                  styles.timeSlotText,
+                  selectedTimeSlot?.id === item.id && styles.selectedTimeSlotTextSelected,
+                ]}>
+                  {item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </TouchableOpacity>
+            )}
+            numColumns={3}
+            columnWrapperStyle={styles.timeSlotRow}
+          />
+        </View>
+      ) : (
+        selectedDoctor && <Text style={styles.noAvailabilityText}>Nenhum horário disponível para a data selecionada.</Text>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Detalhes da Consulta</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Local da Consulta (opcional)"
-          value={location}
-          onChangeText={setLocation}
-        />
         <TextInput
           style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
           placeholder="Notas ou observações (opcional)"
@@ -358,7 +339,11 @@ const RequestAppointmentScreen = ({ route, navigation }) => {
         />
       </View>
 
-      <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+      <TouchableOpacity
+        style={[styles.submitButton, !selectedTimeSlot && styles.submitButtonDisabled]}
+        onPress={handleSubmit}
+        disabled={!selectedTimeSlot}
+      >
         <Text style={styles.submitButtonText}>Confirmar Agendamento</Text>
       </TouchableOpacity>
 
@@ -516,6 +501,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#b0b7c3',
   },
   noAvailabilityText: {
     textAlign: 'center',

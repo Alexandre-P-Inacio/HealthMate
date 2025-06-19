@@ -30,9 +30,12 @@
       ],
       "package": "com.apinacio.HealthMate"
     },
-    "web": {
-    },
-    "plugins": [
-    ]
+    "web": {},
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "4da7b4eb-0d16-4aeb-90fe-94a36e0cd618"
+      }
+    }
   }
 }

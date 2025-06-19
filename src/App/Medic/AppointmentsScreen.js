@@ -47,7 +47,8 @@ const AppointmentsScreen = ({ navigation }) => {
   useEffect(() => {
     const currentUser = DataUser.getUserData();
     if (currentUser && currentUser.id) {
-      setUserId(currentUser.id);
+      const id = parseInt(currentUser.id);
+      setUserId(isNaN(id) ? null : id);
       setIsMedic(currentUser.role === 'medic');
     } else {
       Alert.alert('Error', 'User not logged in.');
@@ -75,10 +76,13 @@ const AppointmentsScreen = ({ navigation }) => {
       } else {
         setIsMedic(false);
       }
-      fetchAppointments(filter);
+      // Ensure userId is valid before fetching appointments
+      if (userId) {
+        fetchAppointments(filter);
+      }
     };
     checkUserRoleAndFetchDoctorData();
-  }, [filter]);
+  }, [filter, userId]); // Add userId to dependencies to re-run when it's set
 
   useEffect(() => {
     if (userId) {
@@ -115,6 +119,11 @@ const AppointmentsScreen = ({ navigation }) => {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
+      if (!userId) {
+        console.warn('Cannot fetch appointments: userId is null or undefined.');
+        setLoading(false);
+        return;
+      }
       let data = [];
       if (isMedic) {
         const res = await AppointmentService.getDoctorAppointments(userId);
@@ -676,7 +685,7 @@ const AppointmentsScreen = ({ navigation }) => {
                  reportType === 'no-show' ? 'Adicione notas para o não comparecimento do paciente.' : ''}
               </Text>
             )}
-
+            
             <View style={styles.formGroup}>
               <Text style={styles.label}>Relatório</Text>
               <TextInput
@@ -718,18 +727,18 @@ const AppointmentsScreen = ({ navigation }) => {
                 <Text style={[styles.buttonText, { color: '#333' }]}>Cancelar</Text>
               </TouchableOpacity>
               {isReportAllowedToEdit && (
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.submitButton]}
-                  onPress={() => {
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={() => {
                     // Se o tipo de relatório não for 'normal', a mudança de status já é tratada
                     // Caso contrário, significa que é uma edição de relatório normal sem mudança de status
                     const newStatus = (reportType === 'normal') ? editingAppointment.status : reportType;
                     const newChargedValue = (reportType === 'normal') ? (editingAppointment.charged_value || 0) : (parseFloat(chargedValue) || 0);
                     handleUpdateAppointmentStatus(newStatus, newChargedValue);
-                  }}
-                >
+                }}
+              >
                   <Text style={styles.buttonText}>Salvar</Text>
-                </TouchableOpacity>
+              </TouchableOpacity>
               )}
             </View>
           </View>

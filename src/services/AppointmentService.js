@@ -5,6 +5,8 @@ import {
   validateDoctorAvailability,
   validateUserAppointments
 } from '../utils/validation';
+import DoctorService from './DoctorService';
+import UserService from './UserService';
 
 export class AppointmentService {
   static async createAppointment(appointmentData) {
@@ -48,13 +50,13 @@ export class AppointmentService {
       const { data, error } = await supabase
         .from('appointments')
         .insert([{
-          user_id: appointmentData.userId,
-          doctor_id: appointmentData.doctorId,
+          user_id: !isNaN(parseInt(appointmentData.userId)) ? parseInt(appointmentData.userId) : null,
+          doctor_id: !isNaN(parseInt(appointmentData.doctorId)) ? parseInt(appointmentData.doctorId) : null,
           appointment_datetime: appointmentData.appointmentDateTime,
           location: appointmentData.location,
           notes: appointmentData.notes,
           status: 'pending',
-          requested_by: parseInt(appointmentData.requestedBy),
+          requested_by: (appointmentData.requestedBy !== null && appointmentData.requestedBy !== undefined && !isNaN(parseInt(appointmentData.requestedBy))) ? parseInt(appointmentData.requestedBy) : null,
           requested_date_change: appointmentData.requestedDateChange || null
         }])
         .select()
@@ -63,20 +65,11 @@ export class AppointmentService {
       if (error) throw error;
 
       // Get doctor's data for notification
-      const { data: doctorData } = await supabase
-        .from('doctors')
-        .select('user_id')
-        .eq('id', appointmentData.doctorId)
-        .single();
-
-      if (doctorData) {
-        // Send notification to doctor about new appointment request
         await NotificationService.sendAppointmentStatusNotification(
-          doctorData.user_id,
+        appointmentData.doctorId,
           'new_request',
           data
         );
-      }
 
       return {
         success: true,
@@ -93,14 +86,9 @@ export class AppointmentService {
 
   static async updateAppointmentStatus(appointmentId, newStatus, requestedById) {
     try {
-      // Primeiro, buscar os dados atuais da consulta para obter o user_id do paciente e o doctor_id
       const { data: currentAppointment, error: fetchError } = await supabase
         .from('appointments')
-        .select(`
-          *,
-          users!appointments_user_id_fkey (user_id:id),
-          doctors!appointments_doctor_id_fkey (user_id)
-        `)
+        .select('user_id, doctor_id')
         .eq('id', appointmentId)
         .single();
 
@@ -111,7 +99,7 @@ export class AppointmentService {
         .from('appointments')
         .update({
           status: newStatus,
-          requested_by: parseInt(requestedById),
+          requested_by: (requestedById !== null && requestedById !== undefined && !isNaN(parseInt(requestedById))) ? parseInt(requestedById) : null,
           updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId)
@@ -120,19 +108,17 @@ export class AppointmentService {
 
       if (error) throw error;
 
-      // Enviar notificação para o paciente
-      if (currentAppointment.users?.user_id) {
+      if (currentAppointment.user_id) {
         await NotificationService.sendAppointmentStatusNotification(
-          currentAppointment.users.user_id,
+          currentAppointment.user_id,
           newStatus,
           data
         );
       }
 
-      // Enviar notificação para o médico
-      if (currentAppointment.doctors?.user_id) {
+      if (currentAppointment.doctor_id) {
         await NotificationService.sendAppointmentStatusNotification(
-          currentAppointment.doctors.user_id,
+          currentAppointment.doctor_id,
           newStatus,
           data
         );
@@ -153,10 +139,16 @@ export class AppointmentService {
 
   static async getDoctorAppointments(doctorId, status = null, date = null) {
     try {
+      const parsedDoctorId = parseInt(doctorId);
+      if (isNaN(parsedDoctorId)) {
+        console.warn(`AppointmentService: Invalid doctorId provided to getDoctorAppointments: ${doctorId}`);
+        return { success: false, error: 'Invalid Doctor ID.' };
+      }
+
       let query = supabase
         .from('appointments')
-        .select('*, users:users(fullname), doctors:doctors(name), requested_by, requested_date_change, updated_at')
-        .eq('doctor_id', doctorId)
+        .select('*')
+        .eq('doctor_id', parsedDoctorId)
         .order('appointment_datetime', { ascending: true });
 
       if (status) {
@@ -173,206 +165,229 @@ export class AppointmentService {
           .lte('appointment_datetime', endOfDay.toISOString());
       }
 
-      const { data, error } = await query;
+      const { data: appointments, error } = await query;
       if (error) throw error;
-
-      // Lógica de cancelamento automático
-      const now = new Date();
-      for (const appointment of data) {
-        if (appointment.status !== 'cancelled' && appointment.status !== 'completed') {
-          const appointmentDate = new Date(appointment.appointment_datetime);
-          const updatedAt = appointment.updated_at ? new Date(appointment.updated_at) : null;
-          const hasUpdate = !!appointment.requested_date_change || !!updatedAt;
-          const diffMs = appointmentDate - now;
-          const diffHours = diffMs / (1000 * 60 * 60);
-
-          if (!hasUpdate && diffHours <= 24) {
-            // Faltando 1 dia ou já passou e sem update
-            await supabase
-              .from('appointments')
-              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.' })
-              .eq('id', appointment.id);
-            appointment.status = 'cancelled';
-            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.';
-          } else if (hasUpdate && diffHours <= 12) {
-            // Houve update, cancela se faltar 12h ou já passou
-            await supabase
-              .from('appointments')
-              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.' })
-              .eq('id', appointment.id);
-            appointment.status = 'cancelled';
-            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.';
-          }
-        }
-      }
 
       return {
         success: true,
-        data
+        data: appointments
       };
     } catch (error) {
       console.error('Error fetching doctor appointments:', error);
       return {
         success: false,
-        error: 'Erro ao buscar consultas.'
+        error: error.message
       };
     }
   }
 
   static async getUserAppointments(userId, status = null) {
     try {
+      const parsedUserId = parseInt(userId);
+      if (isNaN(parsedUserId)) {
+        console.warn(`AppointmentService: Invalid userId provided to getUserAppointments: ${userId}`);
+        return { success: false, error: 'Invalid User ID.' };
+      }
+
       let query = supabase
         .from('appointments')
-        .select('*, users:users(fullname), doctors:doctors(name), requested_by, requested_date_change, updated_at')
-        .eq('user_id', userId)
+        .select('*')
+        .eq('user_id', parsedUserId)
         .order('appointment_datetime', { ascending: true });
 
-      if (status) {
+      if (status && status !== 'null') {
         query = query.eq('status', status);
       }
 
-      const { data, error } = await query;
+      const { data: appointments, error } = await query;
       if (error) throw error;
-
-      // Lógica de cancelamento automático
-      const now = new Date();
-      for (const appointment of data) {
-        if (appointment.status !== 'cancelled' && appointment.status !== 'completed') {
-          const appointmentDate = new Date(appointment.appointment_datetime);
-          const updatedAt = appointment.updated_at ? new Date(appointment.updated_at) : null;
-          const hasUpdate = !!appointment.requested_date_change || !!updatedAt;
-          const diffMs = appointmentDate - now;
-          const diffHours = diffMs / (1000 * 60 * 60);
-
-          if (!hasUpdate && diffHours <= 24) {
-            // Faltando 1 dia ou já passou e sem update
-            await supabase
-              .from('appointments')
-              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.' })
-              .eq('id', appointment.id);
-            appointment.status = 'cancelled';
-            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente por ausência de atualização.';
-          } else if (hasUpdate && diffHours <= 12) {
-            // Houve update, cancela se faltar 12h ou já passou
-            await supabase
-              .from('appointments')
-              .update({ status: 'cancelled', notes: (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.' })
-              .eq('id', appointment.id);
-            appointment.status = 'cancelled';
-            appointment.notes = (appointment.notes || '') + '\n\nCancelado automaticamente após atualização.';
-          }
-        }
-      }
 
       return {
         success: true,
-        data
+        data: appointments
       };
     } catch (error) {
       console.error('Error fetching user appointments:', error);
       return {
         success: false,
-        error: 'Erro ao buscar consultas.'
+        error: error.message
       };
     }
   }
 
   static async cancelAppointment(appointmentId, canceledBy, reason) {
     try {
-      const { data: currentAppointment, error: fetchError } = await supabase
-        .from('appointments')
-        .select(`
-          *,
-          doctors!appointments_doctor_id_fkey (user_id)
-        `)
-        .eq('id', appointmentId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
       const { data, error } = await supabase
         .from('appointments')
         .update({
           status: 'cancelled',
-          notes: `${currentAppointment.notes}\n\nCancelado por: ${canceledBy}\nMotivo: ${reason}`,
-          updated_by: canceledBy,
+          cancellation_reason: reason,
+          canceled_by: (canceledBy !== null && canceledBy !== undefined && !isNaN(parseInt(canceledBy))) ? parseInt(canceledBy) : null,
           updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId)
-        .select()
+        .select('user_id, doctor_id, appointment_datetime')
         .single();
 
       if (error) throw error;
 
-      // Notify both patient and doctor
+      if (data) {
+        if (data.user_id) {
       await NotificationService.sendAppointmentStatusNotification(
-        currentAppointment.user_id,
+            data.user_id,
         'cancelled',
         data
       );
-
+        }
+        if (data.doctor_id) {
       await NotificationService.sendAppointmentStatusNotification(
-        currentAppointment.doctors.user_id,
+            data.doctor_id,
         'cancelled',
         data
       );
+        }
+      }
 
-      return {
-        success: true,
-        data
-      };
+      return { success: true, data };
     } catch (error) {
-      console.error('Error canceling appointment:', error);
-      return {
-        success: false,
-        error: 'Erro ao cancelar consulta.'
-      };
+      console.error('Error cancelling appointment:', error);
+      return { success: false, error: error.message };
     }
   }
 
   static async requestDateChange(appointmentId, newDate, requestedById, newNotes = null) {
     try {
-      // Buscar a consulta atual para obter o doctor_id e user_id
-      const { data: currentAppointment, error: fetchError } = await supabase
-        .from('appointments')
-        .select(`
-          *,
-          doctors!appointments_doctor_id_fkey (user_id)
-        `)
-        .eq('id', appointmentId)
-        .single();
-
-      if (fetchError) throw fetchError;
-      if (!currentAppointment) throw new Error('Consulta não encontrada.');
-
       const { data, error } = await supabase
         .from('appointments')
         .update({
-          status: 'reschedule_requested', // Novo status para solicitação de alteração
-          requested_date_change: newDate,
-          requested_by: parseInt(requestedById),
-          notes: newNotes, // Adicionar as novas notas à consulta
-          updated_at: new Date().toISOString() // Atualizar o timestamp de modificação
+          status: 'reschedule_requested',
+          requested_date_change: newDate.toISOString(),
+          requested_by: (requestedById !== null && requestedById !== undefined && !isNaN(parseInt(requestedById))) ? parseInt(requestedById) : null,
+          notes: newNotes,
+          updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId)
-        .select()
+        .select('user_id, doctor_id, appointment_datetime')
         .single();
 
       if (error) throw error;
 
-      // Enviar notificação para o médico
-      if (currentAppointment.doctors?.user_id) {
-        await NotificationService.sendAppointmentStatusNotification(
-          currentAppointment.doctors.user_id,
-          'reschedule_requested',
-          data
-        );
+      if (data) {
+        if (data.doctor_id) {
+          await NotificationService.sendAppointmentStatusNotification(
+            data.doctor_id,
+            'reschedule_requested',
+            data
+          );
+        }
       }
 
       return { success: true, data };
     } catch (error) {
       console.error('Error requesting date change:', error);
-      return { success: false, error: 'Erro ao solicitar nova data.' };
+      return { success: false, error: error.message };
+    }
+  }
+
+  static async respondToRescheduleRequest(appointmentId, status, requestedById) {
+    try {
+      let updateData = {
+        requested_by: (requestedById !== null && requestedById !== undefined && !isNaN(parseInt(requestedById))) ? parseInt(requestedById) : null,
+        updated_at: new Date().toISOString()
+      };
+
+      if (status === 'approved') {
+        const { data: appointmentData, error: fetchError } = await supabase
+          .from('appointments')
+          .select('requested_date_change')
+          .eq('id', appointmentId)
+          .single();
+
+        if (fetchError) throw fetchError;
+        if (!appointmentData || !appointmentData.requested_date_change) {
+          throw new Error('Data de reagendamento não encontrada.');
+        }
+
+        updateData.status = 'confirmed';
+        updateData.appointment_datetime = appointmentData.requested_date_change;
+        updateData.requested_date_change = null;
+
+      } else if (status === 'rejected') {
+        updateData.status = 'pending';
+        updateData.requested_date_change = null;
+      } else {
+        throw new Error('Status de resposta inválido.');
+      }
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .update(updateData)
+        .eq('id', appointmentId)
+        .select('user_id, doctor_id, appointment_datetime')
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        if (data.user_id) {
+          await NotificationService.sendAppointmentStatusNotification(
+            data.user_id,
+            status === 'approved' ? 'reschedule_approved' : 'reschedule_rejected',
+            data
+          );
+        }
+        if (data.doctor_id) {
+          await NotificationService.sendAppointmentStatusNotification(
+            data.doctor_id,
+            status === 'approved' ? 'reschedule_approved' : 'reschedule_rejected',
+            data
+          );
+        }
+      }
+
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error responding to reschedule request:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  static async getAppointmentById(appointmentId) {
+    try {
+      const { data: appointment, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', appointmentId)
+        .single();
+
+      if (error) throw error;
+
+      if (appointment) {
+        let user = null;
+        if (appointment.user_id) {
+          const userResult = await UserService.getUserById(appointment.user_id);
+          user = userResult.success ? userResult.data : null;
+        }
+
+        let doctor = null;
+        if (appointment.doctor_id) {
+          const doctorResult = await DoctorService.getDoctorById(appointment.doctor_id);
+          doctor = doctorResult.success ? doctorResult.data : null;
+        }
+
+        return {
+          success: true,
+          data: {
+            ...appointment,
+            user: user,
+            doctor: doctor,
+          },
+        };
+      }
+      return { success: false, error: 'Consulta não encontrada.' };
+    } catch (error) {
+      console.error('Error fetching appointment by ID:', error);
+      return { success: false, error: error.message };
     }
   }
 } 

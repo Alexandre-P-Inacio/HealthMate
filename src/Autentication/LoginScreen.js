@@ -82,17 +82,19 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      DataUser.setUserData(user);
+      // Ensure user.id is an integer or null before setting it globally
+      const userIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
+      DataUser.setUserData({ ...user, id: userIdToSet });
 
       if (user.biometric_enabled) {
-        await AsyncStorage.setItem('biometricUserId', user.id.toString());
+        await AsyncStorage.setItem('biometricUserId', userIdToSet.toString());
       }
 
       if (user.role === 'medic') {
         const { data: doctorData, error: doctorError } = await supabase
           .from('doctors')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', userIdToSet)
           .single();
 
         if (doctorError && doctorError.code !== 'PGRST116') {
@@ -107,7 +109,7 @@ const LoginScreen = ({ navigation }) => {
           navigation.navigate('DoctorRegistration');
         }
       } else {
-        navigation.navigate('HomeScreen', { userId: user.id });
+        navigation.navigate('HomeScreen', { userId: userIdToSet });
       }
     } catch (error) {
       console.error('Authentication error:', error);
@@ -160,13 +162,15 @@ const LoginScreen = ({ navigation }) => {
           return;
         }
 
-        DataUser.setUserData(user);
+        // Ensure user.id is an integer or null before setting it globally
+        const bioUserIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
+        DataUser.setUserData({ ...user, id: bioUserIdToSet });
 
         if (user.role === 'medic') {
           const { data: doctorData, error: doctorError } = await supabase
             .from('doctors')
             .select('*')
-            .eq('id', user.id)
+            .eq('id', bioUserIdToSet)
             .single();
 
           if (doctorError && doctorError.code !== 'PGRST116') {
@@ -181,7 +185,7 @@ const LoginScreen = ({ navigation }) => {
             navigation.navigate('DoctorRegistration');
           }
         } else {
-          navigation.navigate('HomeScreen', { userId: user.id });
+          navigation.navigate('HomeScreen', { userId: bioUserIdToSet });
         }
       }
     } catch (error) {

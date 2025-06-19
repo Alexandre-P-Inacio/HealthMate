@@ -62,13 +62,14 @@ const WelcomeScreen = ({ navigation }) => {
       }
 
       const user = users[0];
-      DataUser.setUserData(user);
+      const userIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
+      DataUser.setUserData({ ...user, id: userIdToSet });
 
       if (user.role === 'medic') {
         const { data: doctorData, error: doctorError } = await supabase
           .from('doctors')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', userIdToSet)
           .single();
 
         if (doctorError && doctorError.code !== 'PGRST116') {
@@ -82,7 +83,7 @@ const WelcomeScreen = ({ navigation }) => {
           navigation.navigate('DoctorRegistration');
         }
       } else {
-        navigation.navigate('HomeScreen', { userId: user.id });
+        navigation.navigate('HomeScreen', { userId: userIdToSet });
       }
     } catch (error) {
       console.error('Auto login error:', error);
@@ -115,13 +116,14 @@ const WelcomeScreen = ({ navigation }) => {
       }
 
       const user = users[0];
-      DataUser.setUserData(user);
+      const userIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
+      DataUser.setUserData({ ...user, id: userIdToSet });
 
       if (user.role === 'medic') {
         const { data: doctorData, error: doctorError } = await supabase
           .from('doctors')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', userIdToSet)
           .single();
 
         if (doctorError && doctorError.code !== 'PGRST116') {
@@ -135,7 +137,7 @@ const WelcomeScreen = ({ navigation }) => {
           navigation.navigate('DoctorRegistration');
         }
       } else {
-        navigation.navigate('HomeScreen', { userId: user.id });
+        navigation.navigate('HomeScreen', { userId: userIdToSet });
       }
     } catch (error) {
       console.error('Auto login error:', error);
