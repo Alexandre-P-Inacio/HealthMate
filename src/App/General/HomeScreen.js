@@ -1299,6 +1299,24 @@ const styles = StyleSheet.create({
   notificationButtonAll: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#e74c3c',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#6A8DFD',
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   scrollView: {
     flex: 1,
   },

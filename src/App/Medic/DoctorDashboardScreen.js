@@ -181,7 +181,7 @@ const DoctorDashboardScreen = ({ navigation }) => {
             ) : null}
           </View>
           {/* Action Row */}
-          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18, marginBottom: 10, gap: 24 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18, marginBottom: 10, gap: 18 }}>
             <TouchableOpacity onPress={() => navigation.navigate('AppointmentsScreen')} style={{ alignItems: 'center' }}>
               <Ionicons name="calendar-outline" size={28} color="#4a67e3" />
               <Text style={{ fontSize: 13, color: '#4a67e3', marginTop: 4 }}>Consultas</Text>

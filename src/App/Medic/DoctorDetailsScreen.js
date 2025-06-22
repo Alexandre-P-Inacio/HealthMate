@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../Components/Navbar';
 import DataUser from '../../../navigation/DataUser';
 import { DoctorAvailabilityService } from '../../services/DoctorAvailabilityService';
+import UnifiedChatService from '../../services/UnifiedChatService';
 import supabase from '../../../supabase';
 
 const WEEKDAYS = [
@@ -134,6 +135,42 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
     setIsFavorite(!isFavorite);
   };
 
+  const handleStartChat = async () => {
+    const currentUser = DataUser.getUserData();
+    if (!currentUser) {
+      Alert.alert('Erro', 'Você precisa estar logado para iniciar um chat');
+      return;
+    }
+
+    try {
+      // Verificar se o usuário pode conversar com este doutor
+      const permissionCheck = await UnifiedChatService.canUserChatWith(currentUser.id, doctor.user_id);
+      if (!permissionCheck.success) {
+        Alert.alert('Erro', permissionCheck.error);
+        return;
+      }
+
+      // Criar ou buscar conversa
+      const result = await UnifiedChatService.getOrCreateConversation(currentUser.id, doctor.user_id);
+      
+      if (result.success) {
+        // Navegar para a tela de chat
+        navigation.navigate('ChatScreen', {
+          conversationId: result.data.id,
+          otherUserId: doctor.user_id,
+          otherUserName: doctor.user?.fullname || 'Doutor',
+          otherUserImage: doctor.user?.pfpimg,
+          otherUserRole: 'doctor'
+        });
+      } else {
+        Alert.alert('Erro', 'Não foi possível iniciar o chat. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      Alert.alert('Erro', 'Erro ao iniciar chat');
+    }
+  };
+
   const profileImageSource = doctor.user?.pfpimg
     ? { uri: `data:image/png;base64,${doctor.user.pfpimg}` }
     : { uri: 'https://img.icons8.com/ios-filled/100/3498db/doctor-male.png' };
@@ -244,6 +281,13 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
               >
                 <Ionicons name="calendar-outline" size={20} color="#FFF" />
                 <Text style={styles.actionButtonText}>Solicitar Consulta</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={handleStartChat}
+              >
+                <Ionicons name="chatbubble-outline" size={20} color="#FFF" />
+                <Text style={styles.actionButtonText}>Chat</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.actionButton, styles.infoButton]}
@@ -424,6 +468,12 @@ const styles = StyleSheet.create({
      flex: 1,
      justifyContent: 'center',
      marginRight: 10,
+  },
+  chatButton: {
+    backgroundColor: '#28a745',
+    flex: 1,
+    justifyContent: 'center',
+    marginRight: 10,
   },
   infoButton: {
      backgroundColor: '#E8ECF4', // Light gray background

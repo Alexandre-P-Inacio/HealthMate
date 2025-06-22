@@ -27,6 +27,8 @@ import DoctorRegistrationScreen from './src/App/Medic/DoctorRegistrationScreen';
 import InformationScreen from './src/App/Profile/InformationScreen';
 import RequestAppointmentScreen from './src/App/Medic/RequestAppointmentScreen';
 import DoctorAvailabilityScreen from './src/App/Medic/DoctorAvailabilityScreen';
+import ChatListScreen from './src/App/General/ChatListScreen';
+import UnifiedChatScreen from './src/App/General/ChatScreen';
 
 
 const Stack = createStackNavigator();
@@ -70,6 +72,10 @@ const App = () => {
         <Stack.Screen name="Appointments" component={RequestAppointmentScreen} />
         <Stack.Screen name="RequestAppointmentScreen" component={RequestAppointmentScreen} />
         <Stack.Screen name="DoctorAvailability" component={DoctorAvailabilityScreen} />
+        
+        {/* Chat Screens */}
+        <Stack.Screen name="ChatListScreen" component={ChatListScreen} />
+        <Stack.Screen name="ChatScreen" component={UnifiedChatScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>
