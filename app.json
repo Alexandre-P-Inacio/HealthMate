@@ -10,12 +10,13 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#6A8DFD"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apinacio.healthmate",
       "buildNumber": "1.0.0",
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take photos for your profile and medical records.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select images for your profile and medical records.",
@@ -29,9 +30,14 @@
       }
     },
     "android": {
+      "minSdkVersion": 26,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "icon": "./assets/icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#6A8DFD",
+        "monochromeImage": "./assets/adaptive-icon.png"
       },
       "permissions": [
         "android.permission.CAMERA",
@@ -52,17 +58,29 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.health.READ_STEPS",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.health.READ_WEIGHT",
+        "android.permission.health.READ_HEIGHT",
+        "android.permission.health.READ_BODY_FAT",
         "android.permission.health.READ_HEART_RATE",
-        "android.permission.health.READ_SLEEP",
-        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_STEPS",
         "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_TOTAL_CALORIES_BURNED",
+        "android.permission.health.READ_BLOOD_PRESSURE",
         "android.permission.health.READ_OXYGEN_SATURATION",
         "android.permission.health.READ_BODY_TEMPERATURE",
-        "android.permission.health.READ_BLOOD_PRESSURE"
+        "android.permission.health.READ_SLEEP"
       ],
       "package": "com.apinacio.healthmate",
-      "versionCode": 1
+      "versionCode": 1,
+      "queries": [
+        {
+          "package": [
+            "com.google.android.apps.healthdata"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -70,12 +88,12 @@
     "plugins": [
       "expo-font",
       "react-native-ble-plx",
-      "react-native-health-connect",
+
       [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#ffffff",
+          "color": "#6A8DFD",
           "defaultChannel": "default"
         }
       ],
@@ -107,8 +125,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "4da7b4eb-0d16-4aeb-90fe-94a36e0cd618"
+        "projectId": "b04bdee9-92ac-4a6c-a6d3-82fe97e01b79"
       }
-    }
+    },
+    "owner": "teste234"
   }
 }

@@ -22,11 +22,17 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import supabase from '../../../supabase';
 import DataUser from '../../../navigation/DataUser';
-import BluetoothWearableService from '../../services/BluetoothWearableService';
-import BluetoothTroubleshooting from '../../services/BluetoothTroubleshooting';
-import AndroidPermissionsGuide from '../../services/AndroidPermissionsGuide';
-import AlternativeDataSources from '../../services/AlternativeDataSources';
+import HealthConnectService from '../../services/HealthConnectService';
 import { useFocusEffect } from '@react-navigation/native';
+// 1. Importando o módulo react-native-health-connect (mais estável)
+import {
+  initialize,
+  requestPermission,
+  readRecords,
+  getSdkStatus,
+  SdkAvailabilityStatus,
+  openHealthConnectSettings,
+} from 'react-native-health-connect';
 
 
 const { width } = Dimensions.get('window');
@@ -57,20 +63,15 @@ const MedicalDiaryScreen = ({ navigation }) => {
   const [selectedMedication, setSelectedMedication] = useState(null);
   const [medicationDetailsModalVisible, setMedicationDetailsModalVisible] = useState(false);
   
-  // Smartwatch Bluetooth states
-  const [smartwatchModalVisible, setSmartwatchModalVisible] = useState(false);
-  const [isGatheringData, setIsGatheringData] = useState(false);
-  const [connectedDevice, setConnectedDevice] = useState(null);
+  // Health Connect states
+  const [isLoadingHealthData, setIsLoadingHealthData] = useState(false);
   const [healthData, setHealthData] = useState(null);
-  const [availableDevices, setAvailableDevices] = useState([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isRealTimeMode, setIsRealTimeMode] = useState(false);
-  const realTimeIntervalRef = useRef(null);
-  const [savedHealthData, setSavedHealthData] = useState([]);
-  const [loadingSavedData, setLoadingSavedData] = useState(false);
-  const pulseAnimation = useRef(new Animated.Value(1)).current;
-  const [updateCount, setUpdateCount] = useState(0);
+  
+  // Estados para o modal de todos os dados do Health Connect
+  const [allHealthData, setAllHealthData] = useState(null);
+  const [loadingAllHealthData, setLoadingAllHealthData] = useState(false);
+  const [healthDataError, setHealthDataError] = useState(null);
+  const [healthConnectModalVisible, setHealthConnectModalVisible] = useState(false);
 
   useEffect(() => {
     const loadUserData = () => {
@@ -98,7 +99,6 @@ const MedicalDiaryScreen = ({ navigation }) => {
     fetchEntriesByDate(selectedDate);
     fetchConfirmedMedications(selectedDate);
     fetchPendingMedications(selectedDate);
-      fetchSavedHealthData(selectedDate);
     }
   }, [selectedDate, userId]);
 
@@ -205,34 +205,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
     }
   };
 
-  const fetchSavedHealthData = async (date) => {
-    try {
-      setLoadingSavedData(true);
-      const formattedDate = date.toISOString().split('T')[0];
-      
-      if (!userId) return;
 
-      const { data, error } = await supabase
-        .from('smartwatch_data')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('collected_at', `${formattedDate}T00:00:00.000Z`)
-        .lt('collected_at', `${formattedDate}T23:59:59.999Z`)
-        .order('collected_at', { ascending: false })
-        .limit(10); // Limit to last 10 entries of the day
-
-      if (error) {
-        console.error('Error fetching saved health data:', error);
-        return;
-      }
-
-      setSavedHealthData(data || []);
-    } catch (error) {
-      console.error('Error fetching saved health data:', error);
-    } finally {
-      setLoadingSavedData(false);
-    }
-  };
 
   const handleSaveEntry = async () => {
     try {
@@ -529,6 +502,253 @@ const MedicalDiaryScreen = ({ navigation }) => {
     setMedicationDetailsModalVisible(true);
   };
 
+  // 2. Função assíncrona para buscar TODOS os dados do Health Connect REAL
+  const fetchAllHealthConnectData = async () => {
+    try {
+      console.log('🏥 [Health Connect] Iniciando busca REAL com react-native-health-connect...');
+
+      // Verificar se é Android (Health Connect só funciona no Android)
+      if (Platform.OS !== 'android') {
+        throw new Error('Health Connect está disponível apenas no Android');
+      }
+
+      // PRIMEIRO: Verificar status do SDK
+      const sdkStatus = await getSdkStatus();
+      console.log('📱 [Health Connect] Status do SDK:', sdkStatus);
+      
+      if (sdkStatus !== SdkAvailabilityStatus.SDK_AVAILABLE) {
+        throw new Error('Health Connect não está disponível. Instale o Health Connect da Google Play Store.');
+      }
+
+      // SEGUNDO: Inicializar Health Connect com MÚLTIPLAS TENTATIVAS
+      console.log('🔄 [Health Connect] Inicializando...');
+      const initialized = await initialize();
+      if (!initialized) {
+        throw new Error('Falha ao inicializar Health Connect');
+      }
+
+      // AGUARDAR para garantir inicialização completa
+      console.log('⏱️ [Health Connect] Aguardando inicialização completa...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // TERCEIRO: Solicitar permissões AGRESSIVAMENTE para FORÇAR aparição
+      console.log('🔐 [Health Connect] FORÇANDO aparição no Health Connect...');
+      
+      const permissions = [
+        { accessType: 'read', recordType: 'Steps' },
+        { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
+        { accessType: 'read', recordType: 'HeartRate' },
+        { accessType: 'read', recordType: 'SleepSession' },
+        { accessType: 'read', recordType: 'Distance' },
+        { accessType: 'read', recordType: 'Weight' },
+        { accessType: 'read', recordType: 'BloodPressure' },
+        { accessType: 'read', recordType: 'Hydration' },
+      ];
+
+      // MÚLTIPLAS TENTATIVAS para forçar aparição
+      let grantedPermissions = [];
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (attempts < maxAttempts && (!grantedPermissions || grantedPermissions.length === 0)) {
+        attempts++;
+        console.log(`🎯 [Health Connect] Tentativa ${attempts}/${maxAttempts} - Forçando registro...`);
+        
+        try {
+          grantedPermissions = await requestPermission(permissions);
+          console.log(`✅ [Health Connect] Tentativa ${attempts} - Permissões:`, grantedPermissions);
+          
+          if (grantedPermissions && grantedPermissions.length > 0) {
+            break; // Sucesso!
+          }
+          
+          // Se não conseguiu, aguardar antes da próxima tentativa
+          if (attempts < maxAttempts) {
+            console.log(`⏳ [Health Connect] Aguardando ${attempts * 1000}ms antes da próxima tentativa...`);
+            await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+          }
+        } catch (permError) {
+          console.log(`⚠️ [Health Connect] Erro na tentativa ${attempts}:`, permError.message);
+          if (attempts === maxAttempts) {
+            throw permError;
+          }
+        }
+      }
+
+      console.log('🏁 [Health Connect] Permissões finais:', grantedPermissions);
+
+      if (!grantedPermissions || grantedPermissions.length === 0) {
+        // Abrir configurações automaticamente
+        console.log('🔧 [Health Connect] Abrindo configurações - app deve aparecer agora...');
+        await openHealthConnectSettings();
+        throw new Error('Nenhuma permissão concedida após múltiplas tentativas. As configurações do Health Connect foram abertas. O HealthMate deve aparecer na lista agora - configure as permissões e tente novamente.');
+      }
+
+      // QUARTO: Definir intervalo de tempo
+      const now = new Date();
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const timeRangeFilter = {
+        operator: 'between',
+        startTime: startOfDay.toISOString(),
+        endTime: now.toISOString(),
+      };
+
+      console.log('📅 [Health Connect] Buscando dados entre:', startOfDay.toLocaleDateString(), 'e', now.toLocaleTimeString());
+
+      // QUINTO: Buscar dados usando react-native-health-connect
+      const results = {};
+
+      // Buscar passos
+      try {
+        const stepsData = await readRecords('Steps', { timeRangeFilter });
+        results.steps = stepsData && stepsData.length > 0 ? {
+          value: stepsData.reduce((total, record) => total + (record.count || 0), 0)
+        } : null;
+        console.log('🚶 Passos encontrados:', results.steps?.value || 'Nenhum');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar passos:', error.message);
+        results.steps = null;
+      }
+
+      // Buscar calorias
+      try {
+        const caloriesData = await readRecords('ActiveCaloriesBurned', { timeRangeFilter });
+        results.calories = caloriesData && caloriesData.length > 0 ? {
+          value: caloriesData.reduce((total, record) => total + (record.energy?.inCalories || 0), 0)
+        } : null;
+        console.log('🔥 Calorias encontradas:', results.calories?.value || 'Nenhuma');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar calorias:', error.message);
+        results.calories = null;
+      }
+
+      // Buscar frequência cardíaca
+      try {
+        const heartRateData = await readRecords('HeartRate', { timeRangeFilter });
+        results.heartRate = heartRateData && heartRateData.length > 0 ? 
+          heartRateData.map(record => ({ value: record.beatsPerMinute })) : [];
+        console.log('❤️ Freq. cardíaca encontrada:', results.heartRate.length, 'registros');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar frequência cardíaca:', error.message);
+        results.heartRate = [];
+      }
+
+      // Buscar peso
+      try {
+        const weightData = await readRecords('Weight', { timeRangeFilter });
+        results.weight = weightData && weightData.length > 0 ? 
+          weightData.map(record => ({ value: record.weight?.inKilograms })) : [];
+        console.log('⚖️ Peso encontrado:', results.weight.length, 'registros');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar peso:', error.message);
+        results.weight = [];
+      }
+
+      // Buscar distância
+      try {
+        const distanceData = await readRecords('Distance', { timeRangeFilter });
+        results.distance = distanceData && distanceData.length > 0 ? {
+          value: distanceData.reduce((total, record) => total + (record.distance?.inMeters || 0), 0)
+        } : null;
+        console.log('🗺️ Distância encontrada:', results.distance?.value || 'Nenhuma');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar distância:', error.message);
+        results.distance = null;
+      }
+
+      // Buscar pressão arterial
+      try {
+        const bloodPressureData = await readRecords('BloodPressure', { timeRangeFilter });
+        results.bloodPressure = bloodPressureData && bloodPressureData.length > 0 ? 
+          bloodPressureData.map(record => ({ 
+            systolic: record.systolic?.inMillimetersOfMercury,
+            diastolic: record.diastolic?.inMillimetersOfMercury
+          })) : [];
+        console.log('💪 Pressão arterial encontrada:', results.bloodPressure.length, 'registros');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar pressão arterial:', error.message);
+        results.bloodPressure = [];
+      }
+
+      // Buscar hidratação
+      try {
+        const hydrationData = await readRecords('Hydration', { timeRangeFilter });
+        results.hydration = hydrationData && hydrationData.length > 0 ? {
+          value: hydrationData.reduce((total, record) => total + (record.volume?.inMilliliters || 0), 0)
+        } : null;
+        console.log('💧 Hidratação encontrada:', results.hydration?.value || 'Nenhuma');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar hidratação:', error.message);
+        results.hydration = null;
+      }
+
+      // Buscar sono
+      try {
+        const sleepData = await readRecords('SleepSession', { timeRangeFilter });
+        results.sleep = sleepData && sleepData.length > 0 ? 
+          sleepData.map(record => ({ 
+            duration: new Date(record.endTime) - new Date(record.startTime)
+          })) : [];
+        console.log('😴 Sono encontrado:', results.sleep.length, 'registros');
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar sono:', error.message);
+        results.sleep = [];
+      }
+
+      console.log('✅ [Health Connect] Busca REAL concluída com sucesso!');
+
+      // Retornar dados REAIS
+      return {
+        ...results,
+        fetchedAt: now.toISOString(),
+        date: startOfDay.toLocaleDateString('pt-BR'),
+      };
+
+    } catch (error) {
+      console.error('❌ [Health Connect] Erro ao buscar dados REAIS:', error);
+      throw error;
+    }
+  };
+
+  // 3. Handler para mostrar todos os dados do Health Connect  
+  const handleShowHealthData = async () => {
+    setLoadingAllHealthData(true);
+    setHealthDataError(null);
+    
+    try {
+      console.log('🔍 [Health Connect] Iniciando busca de todos os dados...');
+      const data = await fetchAllHealthConnectData();
+      setAllHealthData(data);
+      setHealthConnectModalVisible(true);
+      console.log('📊 [Health Connect] Dados obtidos e modal aberto');
+    } catch (error) {
+      console.error('❌ [Health Connect] Erro no handler:', error);
+      setHealthDataError(error.message);
+      
+      // Se o erro for de permissões, dar instruções específicas
+      if (error.message.includes('permiss')) {
+        Alert.alert(
+          '🔧 Configuração Necessária',
+          `O HealthMate ainda não aparece na lista do Health Connect.\n\n📋 SIGA ESTES PASSOS:\n\n1️⃣ As configurações do Health Connect foram abertas\n2️⃣ Se o "HealthMate" NÃO aparecer na lista:\n   • Feche o Health Connect\n   • Abra o HealthMate novamente\n   • Clique em "Ver Dados Completos" novamente\n\n3️⃣ Quando aparecer na lista:\n   • Toque em "HealthMate"\n   • Conceda TODAS as permissões\n   • Volte ao app e tente novamente`,
+          [
+            { text: 'Abrir Health Connect', onPress: () => openHealthConnectSettings() },
+            { text: 'OK' }
+          ]
+        );
+      } else {
+        Alert.alert(
+          '❌ Erro no Health Connect',
+          `${error.message}\n\nVerifique:\n• Health Connect está instalado\n• App foi reiniciado após a instalação`,
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      setLoadingAllHealthData(false);
+    }
+  };
+
   const renderMedication = ({ item }) => {
     let backgroundColor, statusText, statusColor, statusIcon;
     
@@ -589,464 +809,173 @@ const MedicalDiaryScreen = ({ navigation }) => {
     );
   };
 
-  const handleConnectDigitalScale = () => {
-    Alert.alert('Conectar Balança Digital', 'Simulando conexão com Balança Digital. Implemente a API aqui!');
-  };
-
-  const handleConnectHealthConnect = async () => {
-    setSmartwatchModalVisible(true);
-    
-    // Quick permission check when opening modal
+    const handleConnectDigitalScale = async () => {
     try {
-      console.log('🔧 Quick permission check...');
-      const permissionStatus = await BluetoothWearableService.checkPermissionStatus();
+      setIsLoadingHealthData(true);
+      console.log('🔵 Buscando dados de peso...');
       
-      if (!permissionStatus.allRequiredGranted) {
-        console.log('⚠️ Some required permissions are missing:', permissionStatus.required);
-        const missingRequired = Object.entries(permissionStatus.required || {})
-          .filter(([_, granted]) => !granted)
-          .map(([permission, _]) => permission.split('.').pop());
-        console.log('❌ Missing required permissions:', missingRequired);
-      } else {
-        console.log('✅ All required permissions are granted');
-      }
-      
-      // Log optional permissions status
-      if (permissionStatus.optional) {
-        const optionalStatus = Object.entries(permissionStatus.optional)
-          .map(([permission, granted]) => `${permission.split('.').pop()}: ${granted ? '✅' : '⚠️'}`)
-          .join(', ');
-        console.log('📋 Optional permissions:', optionalStatus);
-      }
-    } catch (error) {
-      console.log('⚠️ Could not check permissions:', error.message);
-    }
-  };
+      // Busca dados de peso usando o novo serviço
+      const result = await HealthConnectService.getWeightData(7); // Últimos 7 dias
 
-  const handlePermissionError = (error) => {
-    if (error.message.includes('permissions not granted')) {
-      const isAdvertiseOnly = error.message.includes('BLUETOOTH_ADVERTISE') && 
-                             !error.message.includes('BLUETOOTH_SCAN') && 
-                             !error.message.includes('BLUETOOTH_CONNECT') &&
-                             !error.message.includes('ACCESS_FINE_LOCATION');
-      
-      if (isAdvertiseOnly) {
+      if (result.success && result.data.length > 0) {
+        const latestWeight = result.latest;
+        
+        setHealthData({
+          type: 'weight',
+          weight: latestWeight.weight,
+          timestamp: latestWeight.timestamp,
+          source: latestWeight.source,
+          allReadings: result.data
+        });
+
         Alert.alert(
-          '📋 Permissão Opcional',
-          'A permissão BLUETOOTH_ADVERTISE é opcional para esta funcionalidade.\n\n📊 **Esta permissão permite:**\n• Fazer o telefone anunciar-se via Bluetooth\n• Não é necessária para conectar com wearables\n\n✅ **Você pode:**\n• Continuar sem esta permissão\n• Todas as funcionalidades principais funcionarão\n\n🔧 **Se quiser conceder:**\n1. Vá em Configurações > Apps > HealthMate > Permissões\n2. Ative "Bluetooth" se disponível',
+          '✅ Dados de Peso Obtidos!',
+          `📊 Dados reais do Health Connect\n\n⚖️ Peso: ${latestWeight.weight} kg\n📅 Data: ${new Date(latestWeight.timestamp).toLocaleString()}\n🔗 Fonte: ${latestWeight.source}\n📈 Total de registros: ${result.data.length}`,
+          [{ text: 'OK' }]
+        );
+      } else if (result.success && result.data.length === 0) {
+        Alert.alert(
+          '📊 Nenhum Dado de Peso',
+          `${result.message}\n\nPara adicionar dados:\n• Registre seu peso em apps como Google Fit, Samsung Health, FitDays\n• Use uma balança inteligente conectada\n• Sincronize os dados no Health Connect`,
           [
-            { text: 'Continuar Mesmo Assim', onPress: scanForWearables },
-            { text: 'Configurações', onPress: () => Linking.openSettings() },
-            { text: 'OK' }
+            { 
+              text: 'Abrir Health Connect', 
+              onPress: () => HealthConnectService.openSettings() 
+            },
+            { text: 'OK', style: 'cancel' }
           ]
         );
-      } else {
+      } else if (result.needsPermissions) {
+        const title = result.settingsOpened ? 
+          '🔧 Health Connect Configurado!' : 
+          '🔐 Permissões Necessárias';
+        
+        const message = result.settingsOpened ?
+          `${result.error}\n\n✅ As configurações do Health Connect foram abertas!\n\n📋 PASSOS IMPORTANTES:\n1. Procure "HealthMate" na lista de apps\n2. Se não aparecer, feche e abra o app novamente\n3. Conceda permissões para dados de PESO\n4. Conecte apps como Google Fit, Samsung Health` :
+          `${result.error}\n\nPara funcionar:\n• Abra as configurações do Health Connect\n• Procure o app "HealthMate" na lista\n• Permita acesso aos dados de peso\n• Conecte apps como Google Fit, Samsung Health, FitDays`;
+        
         Alert.alert(
-          '⚠️ Permissões Necessárias',
-          'Para conectar com wearables, precisamos de algumas permissões:\n\n📍 **Localização**: Necessária para escanear dispositivos Bluetooth\n📡 **Bluetooth**: Para conectar com seu wearable\n\n🔧 **Soluções disponíveis:**',
+          title,
+          message,
           [
-            { text: 'Configurar Manualmente', onPress: () => AndroidPermissionsGuide.showManualPermissionGuide() },
-            { text: 'Configurações', onPress: () => {
-              // Open app settings
-              Linking.openSettings();
-            }},
-            { text: 'Tentar Novamente', onPress: scanForWearables },
+            { 
+              text: 'Abrir Health Connect', 
+              onPress: () => HealthConnectService.openSettings(),
+              style: 'default'
+            },
+            { text: 'Tentar Novamente', onPress: () => handleConnectDigitalScale() },
             { text: 'Cancelar', style: 'cancel' }
           ]
         );
-      }
-    } else if (error.message.includes('Bluetooth is turned off')) {
+      } else {
       Alert.alert(
-        '📡 Bluetooth Desativado',
-        'O Bluetooth precisa estar ativado para conectar com wearables.\n\n🔧 **Como ativar:**\n1. Vá nas configurações do seu telefone\n2. Ative o Bluetooth\n3. Volte e tente novamente',
-        [
-          { text: 'Tentar Novamente', onPress: scanForWearables },
-          { text: 'OK' }
-        ]
-      );
-    } else {
-      Alert.alert(
-        '❌ Erro ao Buscar Wearables',
-        `${error.message}\n\n🔧 **Soluções:**\n• Verifique se o Bluetooth está ativo\n• Conceda todas as permissões solicitadas\n• Certifique-se que o wearable está ligado\n• Mantenha os dispositivos próximos\n• Reinicie o app se necessário`,
-        [
-          { text: 'Tentar Novamente', onPress: scanForWearables },
-          { text: 'OK' }
-        ]
-      );
-    }
-  };
-
-  const scanForWearables = async () => {
-    try {
-      setIsScanning(true);
-      setAvailableDevices([]);
-      
-      console.log('🔍 Buscando wearables para dados REAIS...');
-      
-      const wearables = await BluetoothWearableService.scanForWearableDevices();
-      setAvailableDevices(wearables);
-      
-      console.log(`✅ Encontrados ${wearables.length} wearables`);
-      
-      if (wearables.length === 0) {
-        Alert.alert(
-          '🔍 Nenhum Wearable Encontrado',
-          'Nenhum smartwatch ou wearable foi encontrado.\n\n🔗 **Para funcionar:**\n\n1. ⌚ Ligue seu smartwatch/wearable\n2. 📱 Certifique-se que o Bluetooth está ativo\n3. 🔄 Mantenha o dispositivo próximo (< 10m)\n4. 📍 Conceda permissões de localização\n5. 🔄 Tente novamente\n\n💡 **Nota:** Apenas dispositivos com serviços de saúde BLE são mostrados.',
-          [
-            { text: 'Dispositivos Incompatíveis?', onPress: () => AlternativeDataSources.showAllAlternatives() },
-            { text: 'Tentar Novamente', onPress: scanForWearables },
-            { text: 'OK' }
-          ]
+          '❌ Erro no Health Connect',
+          `${result.error}\n\nVerifique:\n• Health Connect está instalado\n• Permissões foram concedidas\n• Apps de saúde estão conectados`,
+        [{ text: 'OK' }]
         );
       }
-      
     } catch (error) {
-      console.error('❌ Erro ao buscar wearables:', error);
-      handlePermissionError(error);
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  const connectToWearable = async (deviceId, deviceName) => {
-    try {
-      setIsConnecting(true);
-      
-      console.log(`🔗 Conectando ao wearable: ${deviceName}`);
-      
-      Alert.alert(
-        '🔗 Conectando ao Wearable',
-        `Estabelecendo conexão BLE com:\n\n⌚ ${deviceName}\n\n🔄 Conectando via Bluetooth...\n📊 Preparando para coletar dados REAIS...\n⏳ Aguarde alguns segundos...`,
+      console.error('❌ Erro geral:', error);
+        Alert.alert(
+        '❌ Erro no Health Connect',
+        `Erro inesperado: ${error.message}`,
         [{ text: 'OK' }]
       );
-      
-      const result = await BluetoothWearableService.connectToDevice(deviceId, deviceName);
-      
-      if (result.success) {
-        setConnectedDevice(result.device);
-        console.log(`✅ Conectado ao wearable: ${deviceName}`);
-        
-        const healthServicesCount = result.healthServices?.length || 0;
-        const servicesMessage = healthServicesCount > 0 
-          ? `📊 Serviços de saúde: ${healthServicesCount} encontrados`
-          : `⚠️ Nenhum serviço de saúde padrão encontrado`;
-        
-        Alert.alert(
-          '✅ Wearable Conectado!',
-          `Conexão estabelecida com:\n\n⌚ ${deviceName}\n🔗 Status: CONECTADO\n📊 Fonte: WEARABLE REAL\n📋 Total de serviços: ${result.availableServices?.length || 0}\n${servicesMessage}\n\n🚀 Pronto para coletar dados!`,
-          [{ text: 'Coletar Dados!' }]
-        );
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro na conexão:', error);
-      
-      // Handle Huawei devices specifically
-      if (error.message.includes('HUAWEI_DEVICE_DETECTED')) {
-        Alert.alert(
-          '⌚ Dispositivo Huawei Detectado',
-          `${deviceName} é um smartwatch Huawei!\n\n❌ **LIMITAÇÃO TÉCNICA:**\nOs dispositivos Huawei Watch GT/GT2/GT3 usam protocolos proprietários fechados. A conexão direta via Bluetooth não é possível.\n\n✅ **SOLUÇÃO:**\nUse o botão "Alternativas" para ver como exportar seus dados do app Huawei Health.`,
-          [
-            { text: 'Ver Alternativas', onPress: () => AlternativeDataSources.showHuaweiExportGuide() },
-            { text: 'OK' }
-          ]
-        );
-      } else {
-        Alert.alert(
-          '❌ Falha na Conexão',
-          `Não foi possível conectar ao wearable:\n\n${error.message}\n\n🔧 Soluções:\n• Certifique-se que o wearable está ligado\n• Verifique se está próximo (menos de 10m)\n• Certifique-se que não está conectado a outro dispositivo\n• Tente reiniciar o Bluetooth`,
-          [{ text: 'Tentar Novamente', onPress: () => connectToWearable(deviceId, deviceName) }, { text: 'Cancelar' }]
-        );
-      }
     } finally {
-      setIsConnecting(false);
+      setIsLoadingHealthData(false);
     }
   };
 
-  const disconnectSmartwatch = async () => {
-    try {
-      await BluetoothWearableService.disconnect();
-      setConnectedDevice(null);
-      setHealthData(null);
-      stopRealTimeMode();
-      Alert.alert('Desconectado', 'Dispositivo desconectado com sucesso.');
-    } catch (error) {
-      console.error('❌ Erro ao desconectar:', error);
-      Alert.alert('Erro', 'Erro ao desconectar o dispositivo.');
-    }
-  };
+    
 
-  const gatherHealthData = async () => {
+    const handleConnectHealthConnect = async () => {
     try {
-      setIsGatheringData(true);
-      setHealthData(null);
+      setIsLoadingHealthData(true);
+      console.log('🔵 Buscando dados de saúde por categoria...');
       
-      console.log('📊 Coletando dados REAIS do wearable...');
-      
-      if (!connectedDevice) {
-        Alert.alert('❌ Erro', 'Nenhum wearable conectado');
-        return;
-      }
-      
-      // Coletar dados REAIS do wearable
-      const realHealthData = await BluetoothWearableService.readHealthData();
-      
-      if (realHealthData) {
-        setHealthData(realHealthData);
-        console.log('✅ Dados REAIS coletados:', realHealthData);
+      // Busca dados de saúde por categoria usando o novo serviço
+      const result = await HealthConnectService.getHealthDataByCategory(7); // Últimos 7 dias
+
+      if (result.success && result.availableCategories.length > 0) {
+        const data = result.data;
         
-        const dataKeys = Object.keys(realHealthData).filter(k => 
-          !['timestamp', 'deviceName', 'deviceBrand', 'dataSource'].includes(k)
-        );
+        setHealthData({
+          type: 'wearable',
+          heartRate: data.heartRate,
+          steps: data.steps,
+          calories: data.calories,
+          distance: data.distance,
+          bloodPressure: data.bloodPressure,
+          bloodOxygen: data.bloodOxygen,
+          bodyTemperature: data.bodyTemperature,
+          sleepData: data.sleepData,
+          timestamp: data.timestamp,
+          source: 'Health Connect - Todas as Apps',
+          availableCategories: result.availableCategories,
+          categories: result.categories
+        });
         
         Alert.alert(
-          '✅ Dados REAIS Coletados!', 
-          `Dados coletados diretamente do wearable:\n\n⌚ ${connectedDevice.name}\n📊 Fonte: WEARABLE REAL\n🔗 Dados: ${dataKeys.join(', ')}\n📊 Total: ${dataKeys.length} tipos de dados\n\n💾 Use os botões para salvar.`,
-          [{ text: 'Excelente!' }]
-        );
-      } else {
-        throw new Error('Nenhum dado foi coletado do wearable');
-      }
-    } catch (error) {
-      console.error('❌ Erro ao coletar dados reais:', error);
-      Alert.alert(
-        '❌ Falha na Coleta de Dados REAIS', 
-        `Não foi possível coletar dados REAIS do wearable:\n\n${error.message}\n\n🔧 Possíveis causas:\n• Wearable não suporta os serviços BLE padrão\n• Conexão BLE instável\n• Wearable requer autenticação específica\n• Dispositivo não está transmitindo dados no momento\n\n💡 Alguns wearables precisam de apps específicos da marca para funcionar completamente.`,
-        [
-          { text: 'Tentar Novamente', onPress: gatherHealthData },
-          { text: 'OK' }
-        ]
-      );
-    } finally {
-      setIsGatheringData(false);
-    }
-  };
-
-  const saveHealthDataToDatabase = async () => {
-    try {
-      if (!healthData) {
-        Alert.alert('Erro', 'Nenhum dado de saúde disponível para salvar');
-        return;
-      }
-
-      if (!userId) {
-        Alert.alert('Erro', 'Usuário não encontrado. Faça login novamente.');
-        return;
-      }
-
-      setIsGatheringData(true);
-      console.log('💾 Salvando dados na database...');
-
-      // Save to Supabase using BluetoothWearableService
-      const result = await BluetoothWearableService.saveHealthDataToSupabase(userId, healthData);
-
-      if (result.success) {
-        Alert.alert(
-          'Dados Salvos!',
-          `✅ Dados salvos com sucesso na database!\n\n📱 Dispositivo: ${connectedDevice?.name}\n🗄️ ID do Registro: ${result.data.id}\n📊 Dados salvos: ${Object.keys(healthData).filter(k => !['timestamp', 'deviceName', 'deviceBrand', 'dataSource'].includes(k)).length} tipos\n\nOs dados estão agora permanentemente armazenados.`,
+          '✅ Dados de Saúde por Categoria!',
+          `📊 Dados de todas as apps no Health Connect\n\n📈 Categorias encontradas: ${result.availableCategories.join(', ')}\n📅 Data: ${new Date().toLocaleDateString()}\n🔗 Fonte: Todas as apps conectadas\n\n${result.summary}`,
           [{ text: 'OK' }]
         );
-        console.log('✅ Dados salvos na database:', result.data);
+      } else if (result.success && result.availableCategories.length === 0) {
+      Alert.alert(
+          '📊 Nenhuma Categoria Disponível',
+          'O Health Connect não encontrou dados de saúde dos últimos 7 dias em nenhuma app.\n\nPara ter dados:\n• Use seu smartwatch/wearable\n• Registre atividades em qualquer app de saúde\n• Conecte apps ao Health Connect',
+          [
+            { 
+              text: 'Abrir Health Connect', 
+              onPress: () => HealthConnectService.openSettings() 
+            },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      } else if (result.needsPermissions) {
+        const title = result.settingsOpened ? 
+          '🔧 Health Connect Configurado!' : 
+          '🔐 Permissões Necessárias';
         
-        // Reload saved health data to show the new entry
-        fetchSavedHealthData(selectedDate);
+        const message = result.settingsOpened ?
+          `${result.error}\n\n✅ As configurações do Health Connect foram abertas!\n\n📋 PASSOS IMPORTANTES:\n1. Procure "HealthMate" na lista de apps\n2. Se não aparecer, feche e abra o app novamente\n3. Conceda permissões para TODOS os dados de saúde\n4. O app buscará dados de TODAS as apps conectadas` :
+          `${result.error}\n\nPara funcionar:\n• Abra as configurações do Health Connect\n• Procure o app "HealthMate" na lista\n• Permita acesso aos dados de saúde\n• O app vai buscar dados de TODAS as apps conectadas`;
+        
+        Alert.alert(
+          title,
+          message,
+          [
+            { 
+              text: 'Abrir Health Connect', 
+              onPress: () => HealthConnectService.openSettings(),
+              style: 'default'
+            },
+            { text: 'Tentar Novamente', onPress: () => handleConnectHealthConnect() },
+            { text: 'Cancelar', style: 'cancel' }
+          ]
+        );
       } else {
-        throw new Error(result.error);
+      Alert.alert(
+          '❌ Erro no Health Connect',
+          `${result.error}\n\nVerifique:\n• Health Connect está instalado\n• Permissões foram concedidas\n• Alguma app de saúde está conectada`,
+          [{ text: 'OK' }]
+        );
       }
     } catch (error) {
-      console.error('❌ Erro ao salvar na database:', error);
+      console.error('❌ Erro geral:', error);
       Alert.alert(
-        'Erro ao Salvar',
-        `Não foi possível salvar os dados na database:\n\n${error.message}\n\n🔧 Verifique se:\n• Você está conectado à internet\n• O dispositivo está conectado\n• Os dados foram coletados corretamente`
-      );
-    } finally {
-      setIsGatheringData(false);
-    }
-  };
-
-  const saveHealthDataToDiary = async () => {
-    try {
-      if (!healthData) {
-        Alert.alert('Erro', 'Nenhum dado de saúde disponível para salvar');
-        return;
-      }
-
-      // Create diary entry with health data
-      const healthSummary = `Dados do Smartwatch em Tempo Real:\n` +
-        `🔗 Dispositivo: ${connectedDevice?.name || 'Smartwatch'}\n` +
-        `👟 Passos: ${healthData.steps ? healthData.steps.toLocaleString() + ' passos' : 'N/A'}\n` +
-        `❤️ Frequência Cardíaca: ${healthData.heartRate ? healthData.heartRate + ' bpm' : 'N/A'}\n` +
-        `🔥 Calorias: ${healthData.calories ? healthData.calories + ' kcal' : 'N/A'}\n` +
-        `📏 Distância: ${healthData.distance ? healthData.distance + ' km' : 'N/A'}\n` +
-        `🩸 SpO2: ${healthData.bloodOxygen ? healthData.bloodOxygen + '%' : 'N/A'}\n` +
-        `🌡️ Temperatura: ${healthData.bodyTemperature ? healthData.bodyTemperature + '°C' : 'N/A'}\n` +
-        `🩺 Pressão: ${healthData.bloodPressure ? `${healthData.bloodPressure.systolic}/${healthData.bloodPressure.diastolic} mmHg` : 'N/A'}\n` +
-        `${healthData.stressLevel !== undefined ? `😰 Stress: ${healthData.stressLevel}/100\n` : ''}` +
-        `${healthData.batteryLevel ? `🔋 Bateria: ${healthData.batteryLevel}%\n` : ''}` +
-        `${healthData.sleepTime ? `😴 Sono: ${healthData.sleepTime}\n` : ''}` +
-        `⏰ Coletado: ${new Date(healthData.timestamp).toLocaleString()}`;
-
-      // Create new entry for diary
-      setNewEntry({
-        title: `Dados do Smartwatch - ${new Date().toLocaleDateString()}`,
-        description: healthSummary,
-        mood: 'normal',
-        symptoms: `Dados coletados via Bluetooth direto do ${healthData.deviceBrand || 'smartwatch'}`,
-        dailyNotes: `Dados coletados automaticamente em ${new Date().toLocaleString()}`
-      });
-
-      await handleSaveEntry();
-      
-      // Reload entries to show the new diary entry
-      fetchEntriesByDate(selectedDate);
-      
-      Alert.alert(
-        'Adicionado ao Diário!',
-        `✅ Dados do smartwatch adicionados ao seu diário médico!\n\n📖 Os dados aparecem agora na lista de anotações.`,
-        [{ text: 'OK', onPress: () => setSmartwatchModalVisible(false) }]
-      );
-    } catch (error) {
-      console.error('❌ Erro ao salvar no diário:', error);
-      Alert.alert(
-        'Erro ao Salvar',
-        `Não foi possível adicionar os dados ao diário:\n\n${error.message}`
-      );
-    }
-  };
-
-  const startRealTimeMode = async () => {
-    if (!connectedDevice) {
-      Alert.alert('Erro', 'Nenhum dispositivo conectado');
-      return;
-    }
-
-    try {
-      setIsRealTimeMode(true);
-      
-      // Start pulse animation
-      const startPulse = () => {
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnimation, {
-              toValue: 1.3,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnimation, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-      };
-      startPulse();
-      
-      // Get initial data if we don't have any
-      if (!healthData) {
-        console.log('📊 Coletando dados iniciais...');
-        const initialData = await BluetoothWearableService.readHealthData();
-        if (initialData) {
-          setHealthData(initialData);
-        }
-      }
-      
-      // Start real-time monitoring with callback
-      try {
-        await BluetoothWearableService.startRealTimeMonitoring((realtimeData) => {
-          console.log('📊 Dados em tempo real recebidos:', realtimeData);
-          setHealthData(prevData => ({
-            ...prevData,
-            ...realtimeData,
-            timestamp: realtimeData.timestamp
-          }));
-          setUpdateCount(prev => prev + 1);
-        });
-      } catch (monitorError) {
-        console.log('⚠️ Monitoramento em tempo real não disponível, usando polling...');
-        
-        // Fallback to periodic reading if real-time monitoring is not available
-        setUpdateCount(1);
-        realTimeIntervalRef.current = setInterval(async () => {
-          try {
-            console.log('🔄 Atualizando dados via polling...');
-            const newHealthData = await BluetoothWearableService.readHealthData();
-            if (newHealthData) {
-              setHealthData(newHealthData);
-              setUpdateCount(prev => prev + 1);
-            }
-          } catch (error) {
-            console.error('❌ Erro na atualização via polling:', error);
-            stopRealTimeMode();
-            Alert.alert(
-              '❌ Erro no Modo Tempo Real',
-              `Falha ao coletar dados em tempo real:\n\n${error.message}\n\n🔄 Modo tempo real foi interrompido.`,
+        '❌ Erro no Health Connect',
+        `Erro inesperado: ${error.message}`,
               [{ text: 'OK' }]
             );
-          }
-        }, 5000); // Poll every 5 seconds
-      }
-
-      Alert.alert(
-        'Modo Tempo Real Ativado!',
-        '🔄 Monitoramento em tempo real iniciado.\n\n💡 Os dados serão atualizados automaticamente conforme disponível.\n\n📊 Use os botões para salvar quando desejar.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('❌ Erro ao iniciar modo tempo real:', error);
-      Alert.alert('Erro', `Não foi possível iniciar o modo tempo real:\n\n${error.message}`);
-      setIsRealTimeMode(false);
+    } finally {
+      setIsLoadingHealthData(false);
     }
   };
 
-  const stopRealTimeMode = () => {
-    setIsRealTimeMode(false);
-    setUpdateCount(0);
-    
-    // Stop real-time monitoring
-    BluetoothWearableService.stopRealTimeMonitoring();
-    
-    // Stop polling interval if running
-    if (realTimeIntervalRef.current) {
-      clearInterval(realTimeIntervalRef.current);
-      realTimeIntervalRef.current = null;
-    }
-    
-    // Stop pulse animation
-    pulseAnimation.stopAnimation();
-    Animated.timing(pulseAnimation, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-    
-    Alert.alert('Modo Tempo Real Parado', 'O monitoramento automático foi interrompido.');
-  };
 
-  // Effect to cleanup interval when component unmounts or device disconnects
-  useEffect(() => {
-    return () => {
-      if (realTimeIntervalRef.current) {
-        clearInterval(realTimeIntervalRef.current);
-      }
-      // Cleanup Bluetooth connection on unmount
-      BluetoothWearableService.disconnect().catch(console.error);
-    };
-  }, []);
 
-  // Stop real time mode when device disconnects
-  useEffect(() => {
-    if (!connectedDevice && isRealTimeMode) {
-      stopRealTimeMode();
-    }
-  }, [connectedDevice, isRealTimeMode]);
 
-  const clearHealthData = () => {
-    setHealthData(null);
-    setUpdateCount(0);
-    stopRealTimeMode();
-    Alert.alert('Dados Limpos', 'Dados de saúde removidos da visualização.');
-  };
 
 
 
@@ -1071,49 +1000,72 @@ const MedicalDiaryScreen = ({ navigation }) => {
           <View style={{ width: 40 }} />
         </View>
         
+        <FlatList
+          data={entries}
+          renderItem={renderEntry}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={() => (
+            <View>
         {renderDateSelector()}
         
         <View style={styles.quickActionsContainer}>
-          <Text style={styles.sectionTitle}>Ações Rápidas & Dados de Saúde</Text>
+                <Text style={styles.sectionTitle}>Ações Rápidas</Text>
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
-              style={styles.actionButton}
+                    style={[styles.actionButton, isLoadingHealthData && styles.actionButtonDisabled]}
               onPress={handleConnectDigitalScale}
+                    disabled={isLoadingHealthData}
             >
+                    {isLoadingHealthData ? (
+                      <ActivityIndicator size="small" color="#4A67E3" />
+                    ) : (
               <FontAwesome5 name="weight" size={28} color="#4A67E3" />
-              <Text style={styles.actionButtonText}>Balança Digital</Text>
+                    )}
+                    <Text style={styles.actionButtonText}>
+                      {isLoadingHealthData ? 'Buscando...' : 'Balança Digital'}
+                    </Text>
+                    <Text style={styles.actionButtonSubtext}>Health Connect</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.actionButton,
-                connectedDevice && styles.actionButtonConnected
-              ]}
+                    style={[styles.actionButton, isLoadingHealthData && styles.actionButtonDisabled]}
               onPress={handleConnectHealthConnect}
+                    disabled={isLoadingHealthData}
             >
+                    {isLoadingHealthData ? (
+                      <ActivityIndicator size="small" color="#4A67E3" />
+                    ) : (
               <View style={styles.actionButtonContent}>
                 <Ionicons 
-                  name={connectedDevice ? "watch" : "fitness-outline"} 
+                          name="fitness-outline"
                   size={30} 
-                  color={connectedDevice ? "#2E7D32" : "#4A67E3"} 
+                          color="#4A67E3"
                 />
-                {connectedDevice && (
-                  <View style={styles.connectedIndicator}>
-                    <View style={styles.connectedDot} />
                   </View>
                 )}
-              </View>
-              <Text style={[
-                styles.actionButtonText,
-                connectedDevice && styles.actionButtonTextConnected
-              ]}>
-                Smartwatch
+                                        <Text style={styles.actionButtonText}>
+                      {isLoadingHealthData ? 'Buscando...' : 'Wearables'}
               </Text>
-              {connectedDevice && (
-                <Text style={styles.connectionStatus}>
-                  {connectedDevice.name}
-                </Text>
+                    <Text style={styles.actionButtonSubtext}>Health Connect</Text>
+            </TouchableOpacity>
+
+            {/* 3. Novo botão "Ver Dados do Health Connect" */}
+            <TouchableOpacity
+              style={[styles.actionButton, loadingAllHealthData && styles.actionButtonDisabled]}
+              onPress={handleShowHealthData}
+              disabled={loadingAllHealthData}
+            >
+              {loadingAllHealthData ? (
+                <ActivityIndicator size="small" color="#4A67E3" />
+              ) : (
+                <Ionicons name="analytics" size={28} color="#4A67E3" />
               )}
+              <Text style={styles.actionButtonText}>
+                {loadingAllHealthData ? 'Carregando...' : 'Ver Dados Completos'}
+              </Text>
+              <Text style={styles.actionButtonSubtext}>Health Connect</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1132,14 +1084,17 @@ const MedicalDiaryScreen = ({ navigation }) => {
               <Text style={styles.loadingStateText}>Carregando medicações...</Text>
             </View>
           ) : confirmedMedications.length > 0 || pendingMedications.length > 0 ? (
-            <FlatList
-              data={[...confirmedMedications, ...pendingMedications]}
-              renderItem={renderMedication}
-              keyExtractor={(item) => `med-${item.id}`}
+                  <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.medicationsList}
-            />
+                  >
+                    {[...confirmedMedications, ...pendingMedications].map((item) => (
+                      <View key={`med-${item.id}`}>
+                        {renderMedication({ item })}
+                      </View>
+                    ))}
+                  </ScrollView>
           ) : (
             <View style={styles.emptyStateContainer}>
               <Ionicons name="medical-outline" size={36} color="#6A8DFD" />
@@ -1148,111 +1103,139 @@ const MedicalDiaryScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Saved Health Data Section */}
-        <View style={styles.savedHealthSection}>
+              {/* Health Data Display Section */}
+              {healthData && (
+                <View style={styles.healthDataDisplaySection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Dados de Saúde Salvos</Text>
+                    <Text style={styles.sectionTitle}>
+                      {healthData.type === 'weight' ? 'Dados de Peso' : 'Dados de Saúde por Categoria'}
+                    </Text>
             <Text style={styles.sectionSubtitle}>
-              {savedHealthData.length} registro(s) na database
+                      {healthData.type === 'weight' 
+                        ? `Fonte: ${healthData.source} • ${new Date(healthData.timestamp).toLocaleString()}`
+                        : `${healthData.availableCategories?.length || 0} categorias encontradas • Todas as apps`
+                      }
             </Text>
           </View>
           
-          {loadingSavedData ? (
-            <View style={styles.loadingStateContainer}>
-              <ActivityIndicator size="small" color="#6A8DFD" />
-              <Text style={styles.loadingStateText}>Carregando dados de saúde...</Text>
+                  {healthData.type === 'weight' ? (
+                    <View style={styles.weightDataCard}>
+                      <View style={styles.weightDataHeader}>
+                        <FontAwesome5 name="weight" size={24} color="#4A67E3" />
+                        <Text style={styles.weightDataTitle}>Peso Atual</Text>
             </View>
-          ) : savedHealthData.length > 0 ? (
-            <FlatList
-              data={savedHealthData}
-              renderItem={({ item }) => (
-                <View style={styles.savedHealthCard}>
-                  <View style={styles.savedHealthHeader}>
-                    <View style={styles.deviceInfoContainer}>
-                      <Ionicons name="watch" size={20} color="#4A67E3" />
-                      <Text style={styles.deviceName}>{item.device_name || 'Smartwatch'}</Text>
-                      <Text style={styles.deviceBrand}>({item.device_brand || 'Unknown'})</Text>
-                    </View>
-                    <Text style={styles.collectedTime}>
-                      {new Date(item.collected_at).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
+                      <Text style={styles.weightDataValue}>{healthData.weight} kg</Text>
+                      <Text style={styles.weightDataTime}>
+                        Registrado em {new Date(healthData.timestamp).toLocaleString()}
                     </Text>
+                      {healthData.allReadings && healthData.allReadings.length > 1 && (
+                        <Text style={styles.weightDataExtra}>
+                          Total de {healthData.allReadings.length} registros hoje
+                        </Text>
+                      )}
                   </View>
-                  
-                  <View style={styles.savedHealthDataGrid}>
-                    {item.heart_rate && (
-                      <View style={styles.savedHealthDataItem}>
-                        <Ionicons name="heart" size={16} color="#E74C3C" />
-                        <Text style={styles.savedHealthDataValue}>{item.heart_rate}</Text>
-                        <Text style={styles.savedHealthDataLabel}>bpm</Text>
+                  ) : (
+                    <View style={styles.wearableDataGrid}>
+                      {healthData.heartRate && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="heart" size={20} color="#E74C3C" />
+                          <Text style={styles.healthDataLabel}>Freq. Cardíaca</Text>
+                          <Text style={styles.healthDataValue}>{healthData.heartRate} bpm</Text>
+                        </View>
+                      )}
+                      
+                      {healthData.steps && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="walk" size={20} color="#3498DB" />
+                          <Text style={styles.healthDataLabel}>Passos</Text>
+                          <Text style={styles.healthDataValue}>{healthData.steps.toLocaleString()}</Text>
                       </View>
                     )}
                     
-                    {item.steps && (
-                      <View style={styles.savedHealthDataItem}>
-                        <Ionicons name="walk" size={16} color="#3498DB" />
-                        <Text style={styles.savedHealthDataValue}>{item.steps.toLocaleString()}</Text>
-                        <Text style={styles.savedHealthDataLabel}>passos</Text>
+                      {healthData.calories && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="flame" size={20} color="#E67E22" />
+                          <Text style={styles.healthDataLabel}>Calorias</Text>
+                          <Text style={styles.healthDataValue}>{healthData.calories}</Text>
                       </View>
                     )}
                     
-                    {item.calories && (
-                      <View style={styles.savedHealthDataItem}>
-                        <Ionicons name="flame" size={16} color="#E67E22" />
-                        <Text style={styles.savedHealthDataValue}>{item.calories}</Text>
-                        <Text style={styles.savedHealthDataLabel}>kcal</Text>
+                      {healthData.distance && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="map" size={20} color="#27AE60" />
+                          <Text style={styles.healthDataLabel}>Distância</Text>
+                          <Text style={styles.healthDataValue}>{healthData.distance} km</Text>
                       </View>
                     )}
                     
-                    {item.blood_oxygen && (
-                      <View style={styles.savedHealthDataItem}>
-                        <Ionicons name="water" size={16} color="#9B59B6" />
-                        <Text style={styles.savedHealthDataValue}>{item.blood_oxygen}%</Text>
-                        <Text style={styles.savedHealthDataLabel}>SpO2</Text>
+                      {healthData.bloodOxygen && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="water" size={20} color="#9B59B6" />
+                          <Text style={styles.healthDataLabel}>SpO2</Text>
+                          <Text style={styles.healthDataValue}>{healthData.bloodOxygen}%</Text>
                       </View>
                     )}
-                  </View>
+                      
+                      {healthData.bodyTemperature && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="thermometer" size={20} color="#FF6B6B" />
+                          <Text style={styles.healthDataLabel}>Temperatura</Text>
+                          <Text style={styles.healthDataValue}>{healthData.bodyTemperature}°C</Text>
                 </View>
               )}
-              keyExtractor={(item) => item.id.toString()}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.savedHealthList}
-            />
-          ) : (
-            <View style={styles.emptyStateContainer}>
-              <Ionicons name="fitness-outline" size={36} color="#6A8DFD" />
-              <Text style={styles.emptyStateText}>
-                Nenhum dado de saúde salvo para esta data.
-              </Text>
-              <Text style={styles.emptyStateSubtext}>
-                Use o smartwatch para coletar e salvar dados na database.
+                      
+                      {healthData.bloodPressure && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="fitness" size={20} color="#E91E63" />
+                          <Text style={styles.healthDataLabel}>Pressão</Text>
+                          <Text style={styles.healthDataValue}>
+                            {healthData.bloodPressure.systolic}/{healthData.bloodPressure.diastolic}
               </Text>
             </View>
           )}
-        </View>
 
-        <View style={styles.notesSection}>
+                      {healthData.sleepData && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="moon" size={20} color="#8B5A3C" />
+                          <Text style={styles.healthDataLabel}>Sono</Text>
+                          <Text style={styles.healthDataValue}>{healthData.sleepData.duration}h</Text>
+        </View>
+                      )}
+                      
+                      {healthData.stressLevel !== undefined && (
+                        <View style={styles.healthDataCard}>
+                          <Ionicons name="pulse" size={20} color="#FF9800" />
+                          <Text style={styles.healthDataLabel}>Stress</Text>
+                          <Text style={styles.healthDataValue}>{healthData.stressLevel}/100</Text>
+        </View>
+                      )}
+                    </View>
+                  )}
+                  
+                  <TouchableOpacity
+                    style={styles.clearHealthDataButton}
+                    onPress={() => setHealthData(null)}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#666" />
+                    <Text style={styles.clearHealthDataText}>Limpar Dados</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Minhas Anotações</Text>
             <Text style={styles.sectionSubtitle}>
               {entries.length} anotação(ões) para este dia
             </Text>
           </View>
-
-          {loading ? (
+            </View>
+          )}
+          ListEmptyComponent={() => (
+            loading ? (
             <View style={styles.loadingStateContainer}>
               <ActivityIndicator size="large" color="#6A8DFD" />
             </View>
           ) : (
-            <FlatList
-              data={entries}
-              renderItem={renderEntry}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={styles.notesListContent}
-              ListEmptyComponent={
                 <View style={styles.emptyStateContainer}>
                   <Ionicons name="document-text-outline" size={36} color="#6A8DFD" />
                   <Text style={styles.emptyStateText}>Nenhuma anotação para esta data.</Text>
@@ -1274,10 +1257,9 @@ const MedicalDiaryScreen = ({ navigation }) => {
                     <Text style={styles.addNoteButtonText}>Adicionar Anotação</Text>
                   </TouchableOpacity>
                 </View>
-              }
-            />
+            )
           )}
-        </View>
+        />
 
         <TouchableOpacity
           style={styles.floatingAddButton}
@@ -1295,6 +1277,185 @@ const MedicalDiaryScreen = ({ navigation }) => {
         >
           <Ionicons name="add" size={30} color="#FFF" />
         </TouchableOpacity>
+
+        {/* 4. Modal para exibir todos os dados do Health Connect */}
+        <Modal
+          visible={healthConnectModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setHealthConnectModalVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>📊 Dados do Health Connect</Text>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => setHealthConnectModalVisible(false)}
+                >
+                  <Ionicons name="close" size={26} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              {allHealthData && (
+                <Text style={styles.modalSubtitle}>
+                  Data: {allHealthData.date} • Atualizado em: {new Date(allHealthData.fetchedAt).toLocaleTimeString()}
+                </Text>
+              )}
+
+              <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                {healthDataError ? (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="warning" size={32} color="#E74C3C" />
+                    <Text style={styles.errorText}>Erro: {healthDataError}</Text>
+                  </View>
+                ) : allHealthData ? (
+                  <View style={styles.healthDataContainer}>
+                    {/* Passos */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <Ionicons name="walk" size={24} color="#3498DB" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Passos</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.steps?.value ? allHealthData.steps.value.toLocaleString() : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Calorias */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <Ionicons name="flame" size={24} color="#E67E22" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Calorias</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.calories?.value ? `${Math.round(allHealthData.calories.value)} kcal` : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Frequência Cardíaca */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <Ionicons name="heart" size={24} color="#E74C3C" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Frequência Cardíaca</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.heartRate?.length > 0 ? `${allHealthData.heartRate[allHealthData.heartRate.length - 1]?.value || '--'} bpm` : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Distância */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <Ionicons name="map" size={24} color="#27AE60" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Distância</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.distance?.value ? `${(allHealthData.distance.value / 1000).toFixed(2)} km` : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Peso */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <FontAwesome5 name="weight" size={20} color="#9B59B6" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Peso</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.weight?.length > 0 ? `${allHealthData.weight[allHealthData.weight.length - 1]?.value || '--'} kg` : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Pressão Arterial */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <Ionicons name="fitness" size={24} color="#E91E63" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Pressão Arterial</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.bloodPressure?.length > 0 ? 
+                            `${allHealthData.bloodPressure[allHealthData.bloodPressure.length - 1]?.systolic || '--'}/${allHealthData.bloodPressure[allHealthData.bloodPressure.length - 1]?.diastolic || '--'} mmHg` 
+                            : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Hidratação */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <Ionicons name="water" size={24} color="#3498DB" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Hidratação</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.hydration?.value ? `${(allHealthData.hydration.value / 1000).toFixed(1)} L` : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Sono */}
+                    <View style={styles.healthDataItem}>
+                      <View style={styles.healthDataIcon}>
+                        <Ionicons name="moon" size={24} color="#8B5A3C" />
+                      </View>
+                      <View style={styles.healthDataInfo}>
+                        <Text style={styles.healthDataLabel}>Sono</Text>
+                        <Text style={styles.healthDataValue}>
+                          {allHealthData.sleep?.length > 0 ? 
+                            `${((allHealthData.sleep[allHealthData.sleep.length - 1]?.duration || 0) / 3600000).toFixed(1)}h` 
+                            : 'Sem dados'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Informação sobre fontes */}
+                    <View style={styles.sourcesInfo}>
+                      <Text style={styles.sourcesInfoText}>
+                        💡 Dados obtidos do Health Connect. Para ter mais informações, conecte apps como Samsung Health, Google Fit ou seu smartwatch ao Health Connect.
+                      </Text>
+                    </View>
+
+                    {/* Botão para atualizar dados */}
+                    <TouchableOpacity
+                      style={[styles.refreshDataButton, loadingAllHealthData && styles.refreshDataButtonDisabled]}
+                      onPress={handleShowHealthData}
+                      disabled={loadingAllHealthData}
+                    >
+                      {loadingAllHealthData ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <Ionicons name="refresh" size={20} color="#FFF" />
+                      )}
+                      <Text style={styles.refreshDataButtonText}>
+                        {loadingAllHealthData ? 'Atualizando...' : 'Atualizar Dados'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.noDataContainer}>
+                    <Ionicons name="analytics-outline" size={48} color="#BDC3C7" />
+                    <Text style={styles.noDataText}>Nenhum dado disponível</Text>
+                    <Text style={styles.noDataSubtext}>
+                      Clique no botão "Ver Dados Completos" para buscar informações do Health Connect
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
         <Modal
           visible={medicationDetailsModalVisible}
@@ -1484,446 +1645,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
           </View>
         </Modal>
 
-        {/* Health Data Modal */}
-        <Modal
-          visible={smartwatchModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setSmartwatchModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHandle} />
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Dispositivos Bluetooth</Text>
-                <View style={styles.modalHeaderButtons}>
-                  <TouchableOpacity
-                    style={styles.helpButton}
-                    onPress={() => BluetoothTroubleshooting.showFullTroubleshootingGuide()}
-                  >
-                    <Ionicons name="help-circle-outline" size={24} color="#6A8DFD" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.closeButton}
-                    onPress={() => setSmartwatchModalVisible(false)}
-                  >
-                    <Ionicons name="close" size={26} color="#666" />
-                  </TouchableOpacity>
-                </View>
-              </View>
 
-              <ScrollView style={styles.modalScroll}>
-                {!connectedDevice ? (
-                  <>
-                    <View style={styles.scanSection}>
-                      <View style={styles.bluetoothHeader}>
-                        <Ionicons name="bluetooth" size={48} color="#4A67E3" />
-                        <Text style={styles.bluetoothTitle}>Wearables para Dados REAIS</Text>
-                                              <Text style={styles.bluetoothSubtitle}>
-                        ⌚ APENAS WEARABLES com protocolos BLE padrão{'\n\n'}
-                        🟢 DADOS REAIS do seu dispositivo{'\n'}
-                        📊 SEM SIMULAÇÕES - apenas dados genuínos{'\n\n'}
-                        💡 Precisa de permissões de Localização + Bluetooth
-                      </Text>
-                      
-                      <View style={styles.incompatibleTip}>
-                        <Ionicons name="warning" size={20} color="#FF5722" />
-                        <Text style={styles.incompatibleTipText}>
-                          ⚠️ Huawei Watch GT/GT2/GT3, Apple Watch e Fitbit não funcionam com BLE direto. Use o botão "Alternativas" abaixo.
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.permissionTip}>
-                        <Ionicons name="information-circle" size={20} color="#FF9800" />
-                        <Text style={styles.permissionTipText}>
-                          Se não encontrar dispositivos, verifique se concedeu todas as permissões solicitadas
-                        </Text>
-                      </View>
-                      </View>
-                      
-                      <View style={styles.scanButtonsContainer}>
-                        <TouchableOpacity
-                          style={[styles.scanButton, isScanning && styles.scanButtonDisabled]}
-                          onPress={scanForWearables}
-                          disabled={isScanning}
-                        >
-                          {isScanning ? (
-                            <>
-                              <ActivityIndicator size="small" color="#FFF" />
-                              <Text style={styles.scanButtonText}>Procurando...</Text>
-                            </>
-                          ) : (
-                            <>
-                              <Ionicons name="search" size={20} color="#FFF" />
-                              <Text style={styles.scanButtonText}>Buscar Wearables</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity
-                          style={styles.testButton}
-                          onPress={async () => {
-                            try {
-                              await BluetoothWearableService.initialize();
-                              Alert.alert('✅ Teste OK', 'Permissões e Bluetooth estão funcionando corretamente!');
-                            } catch (error) {
-                              handlePermissionError(error);
-                            }
-                          }}
-                        >
-                          <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                          <Text style={styles.testButtonText}>Testar</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity
-                          style={styles.setupButton}
-                          onPress={() => AndroidPermissionsGuide.showFullSetupGuide()}
-                        >
-                          <Ionicons name="settings" size={16} color="#FF9800" />
-                          <Text style={styles.setupButtonText}>Configurar</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity
-                          style={styles.alternativesButton}
-                          onPress={() => AlternativeDataSources.showAllAlternatives()}
-                        >
-                          <Ionicons name="cloud-upload" size={16} color="#9C27B0" />
-                          <Text style={styles.alternativesButtonText}>Alternativas</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    {availableDevices.length > 0 && (
-                      <View style={styles.devicesSection}>
-                        <Text style={styles.devicesTitle}>Wearables Encontrados ({availableDevices.length})</Text>
-                        <Text style={styles.devicesSubtitle}>Apenas smartwatches e wearables para dados reais</Text>
-                                                 {availableDevices.map((device) => {
-                           // Use watch icon for wearables, special handling for Huawei
-                           let deviceIcon = "watch";
-                           let deviceColor = "#4CAF50";
-                           let isHuawei = device.brand === 'Huawei';
-                           let deviceStyle = styles.connectedDeviceItem;
-                           
-                           if (isHuawei) {
-                             deviceIcon = "warning";
-                             deviceColor = "#FF9800";
-                             deviceStyle = [styles.connectedDeviceItem, styles.huaweiDeviceItem];
-                           }
-                           
-                           return (
-                             <TouchableOpacity
-                               key={device.id}
-                               style={deviceStyle}
-                               onPress={() => {
-                                 if (isHuawei) {
-                                   Alert.alert(
-                                     '⌚ Dispositivo Huawei Detectado',
-                                     `${device.name} é um smartwatch Huawei!\n\n❌ **NÃO É POSSÍVEL CONECTAR:**\nDispositivos Huawei usam protocolos proprietários fechados.\n\n✅ **SOLUÇÃO:**\nExporte seus dados do app Huawei Health e compartilhe conosco.`,
-                                     [
-                                       { text: 'Como Exportar?', onPress: () => AlternativeDataSources.showHuaweiExportGuide() },
-                                       { text: 'OK' }
-                                     ]
-                                   );
-                                 } else {
-                                   connectToWearable(device.id, device.name);
-                                 }
-                               }}
-                               disabled={isConnecting}
-                             >
-                               <View style={styles.deviceInfo}>
-                                 <View style={styles.deviceIconContainer}>
-                                   <Ionicons 
-                                     name={deviceIcon} 
-                                     size={24} 
-                                     color={deviceColor} 
-                                   />
-                                   <View style={[styles.connectedBadge, isHuawei && styles.huaweiBadge]}>
-                                     <Ionicons 
-                                       name={isHuawei ? "close" : "fitness"} 
-                                       size={10} 
-                                       color="#FFF" 
-                                     />
-                                   </View>
-                                 </View>
-                                 <View style={styles.deviceDetails}>
-                                   <Text style={[styles.deviceName, isHuawei && styles.huaweiDeviceName]}>
-                                     {device.name}
-                                   </Text>
-                                   <Text style={styles.deviceBrand}>
-                                     {device.brand} • RSSI: {device.rssi}dBm
-                                   </Text>
-                                   <Text style={[styles.deviceSignal, isHuawei && styles.huaweiDeviceSignal]}>
-                                     {isHuawei 
-                                       ? '❌ Protocolos proprietários - Não conectável' 
-                                       : `${device.serviceUUIDs?.length || 0} serviços • ${device.isConnectable ? 'Conectável' : 'Não conectável'}`
-                                     }
-                                   </Text>
-                                 </View>
-                               </View>
-                               {isConnecting ? (
-                                 <ActivityIndicator size="small" color="#4A67E3" />
-                               ) : (
-                                 <Ionicons 
-                                   name={isHuawei ? "information-circle" : "chevron-forward"} 
-                                   size={20} 
-                                   color={isHuawei ? "#FF9800" : "#4A67E3"} 
-                                 />
-                               )}
-                             </TouchableOpacity>
-                           );
-                         })}
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  <View style={styles.connectedSection}>
-                    <View style={styles.connectedHeader}>
-                      <Ionicons name="checkmark-circle" size={48} color="#4CAF50" />
-                      <Text style={styles.connectedTitle}>Conectado!</Text>
-                      <Text style={styles.connectedDevice}>
-                        {connectedDevice.name}
-                        {connectedDevice.connectionType === 'HEALTH_KIT' && (
-                          <Text style={styles.healthKitBadge}> via Health Kit</Text>
-                        )}
-                      </Text>
-                      {connectedDevice.connectionType === 'HEALTH_KIT' && (
-                        <Text style={styles.healthKitSubtext}>
-                          📱 Dados do app Huawei Health • Real device: {connectedDevice.realDeviceName}
-                        </Text>
-                      )}
-                    </View>
-
-                    <View style={styles.actionButtons}>
-                      {!isRealTimeMode ? (
-                        <>
-                          <TouchableOpacity
-                            style={[styles.actionButton, styles.gatherDataButton]}
-                            onPress={gatherHealthData}
-                            disabled={isGatheringData}
-                          >
-                            {isGatheringData ? (
-                              <>
-                                <ActivityIndicator size="small" color="#FFF" />
-                                <Text style={styles.actionButtonText}>Coletando...</Text>
-                              </>
-                            ) : (
-                              <>
-                                <Ionicons name="analytics" size={20} color="#FFF" />
-                                <Text style={styles.actionButtonText}>Coletar Dados</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.actionButton, { backgroundColor: '#FF9800' }]}
-                            onPress={startRealTimeMode}
-                          >
-                            <Ionicons name="play" size={20} color="#FFF" />
-                            <Text style={styles.actionButtonText}>Modo Tempo Real</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.actionButton, { backgroundColor: '#F44336' }]}
-                          onPress={stopRealTimeMode}
-                        >
-                          <Ionicons name="stop" size={20} color="#FFF" />
-                          <Text style={styles.actionButtonText}>Parar Tempo Real</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.disconnectButton]}
-                        onPress={disconnectSmartwatch}
-                      >
-                        <Ionicons name="bluetooth-outline" size={20} color="#FFF" />
-                        <Text style={styles.actionButtonText}>Desconectar</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {healthData && (
-                      <>
-                        <View style={styles.healthDataSection}>
-                          <View style={styles.healthDataHeader}>
-                            <Text style={styles.healthDataTitle}>
-                              Dados em Tempo Real {isRealTimeMode && `🔄 (${updateCount} updates)`}
-                            </Text>
-                            {isRealTimeMode && (
-                              <View style={styles.realTimeBadge}>
-                                <Animated.View 
-                                  style={[
-                                    styles.pulseDot,
-                                    { transform: [{ scale: pulseAnimation }] }
-                                  ]} 
-                                />
-                                <Text style={styles.realTimeBadgeText}>LIVE</Text>
-                              </View>
-                            )}
-                          </View>
-                          
-                          <View style={styles.healthDataGrid}>
-                            {healthData.heartRate && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="heart" size={20} color="#E74C3C" />
-                                <Text style={styles.healthDataLabel}>Freq. Cardíaca</Text>
-                                <Text style={styles.healthDataValue}>{healthData.heartRate} bpm</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.steps && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="walk" size={20} color="#3498DB" />
-                                <Text style={styles.healthDataLabel}>Passos</Text>
-                                <Text style={styles.healthDataValue}>{healthData.steps.toLocaleString()}</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.calories && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="flame" size={20} color="#E67E22" />
-                                <Text style={styles.healthDataLabel}>Calorias</Text>
-                                <Text style={styles.healthDataValue}>{healthData.calories}</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.distance && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="map" size={20} color="#27AE60" />
-                                <Text style={styles.healthDataLabel}>Distância</Text>
-                                <Text style={styles.healthDataValue}>{healthData.distance} km</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.bloodOxygen && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="water" size={20} color="#9B59B6" />
-                                <Text style={styles.healthDataLabel}>SpO2</Text>
-                                <Text style={styles.healthDataValue}>{healthData.bloodOxygen}%</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.bodyTemperature && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="thermometer" size={20} color="#FF6B6B" />
-                                <Text style={styles.healthDataLabel}>Temperatura</Text>
-                                <Text style={styles.healthDataValue}>{healthData.bodyTemperature}°C</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.bloodPressure && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="fitness" size={20} color="#E91E63" />
-                                <Text style={styles.healthDataLabel}>Pressão</Text>
-                                <Text style={styles.healthDataValue}>
-                                  {healthData.bloodPressure.systolic}/{healthData.bloodPressure.diastolic}
-                                </Text>
-                              </View>
-                            )}
-                            
-                            {healthData.stressLevel !== undefined && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="pulse" size={20} color="#FF9800" />
-                                <Text style={styles.healthDataLabel}>Stress</Text>
-                                <Text style={styles.healthDataValue}>{healthData.stressLevel}/100</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.batteryLevel && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="battery-half" size={20} color="#4CAF50" />
-                                <Text style={styles.healthDataLabel}>Bateria</Text>
-                                <Text style={styles.healthDataValue}>{healthData.batteryLevel}%</Text>
-                              </View>
-                            )}
-                            
-                            {healthData.sleepTime && (
-                              <View style={[
-                                styles.healthDataItem,
-                                isRealTimeMode && styles.healthDataItemRealTime
-                              ]}>
-                                <Ionicons name="moon" size={20} color="#8E44AD" />
-                                <Text style={styles.healthDataLabel}>Sono</Text>
-                                <Text style={styles.healthDataValue}>{healthData.sleepTime}</Text>
-                              </View>
-                            )}
-                          </View>
-                          
-                          <Text style={styles.lastUpdateText}>
-                            Última atualização: {new Date(healthData.timestamp).toLocaleString()}
-                          </Text>
-                        </View>
-
-                        {/* Save Options */}
-                        <View style={styles.saveOptionsSection}>
-                          <Text style={styles.saveOptionsTitle}>Opções de Salvamento</Text>
-                          <View style={styles.saveOptionsGrid}>
-                            <TouchableOpacity
-                              style={[styles.saveOptionButton, { backgroundColor: '#2196F3' }]}
-                              onPress={saveHealthDataToDatabase}
-                              disabled={isGatheringData}
-                            >
-                              {isGatheringData ? (
-                                <ActivityIndicator size="small" color="#FFF" />
-                              ) : (
-                                <Ionicons name="server" size={24} color="#FFF" />
-                              )}
-                              <Text style={styles.saveOptionButtonText}>Salvar na Database</Text>
-                              <Text style={styles.saveOptionSubtext}>Armazenamento permanente</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={[styles.saveOptionButton, { backgroundColor: '#4CAF50' }]}
-                              onPress={saveHealthDataToDiary}
-                            >
-                              <Ionicons name="book" size={24} color="#FFF" />
-                              <Text style={styles.saveOptionButtonText}>Adicionar ao Diário</Text>
-                              <Text style={styles.saveOptionSubtext}>Visualização no histórico</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.clearDataButton]}
-                          onPress={clearHealthData}
-                        >
-                          <Ionicons name="trash" size={20} color="#FFF" />
-                          <Text style={styles.actionButtonText}>Limpar Dados</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -2047,6 +1769,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  actionButtonSubtext: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#6A8DFD',
+    marginTop: 4,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
   actionButtonTextConnected: {
     color: '#2E7D32',
     fontWeight: 'bold',
@@ -2087,6 +1820,107 @@ const styles = StyleSheet.create({
   medicationCardTime: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   medicationCardTimeText: { fontSize: 12, color: '#888', marginLeft: 8 },
   medicationCardNotes: { fontSize: 14, color: '#888', marginTop: 4 },
+
+  // Health Data Display Styles
+  healthDataDisplaySection: {
+    marginTop: 25,
+    marginHorizontal: 20,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  weightDataCard: {
+    backgroundColor: '#F8F9FF',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  weightDataHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  weightDataTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4A67E3',
+    marginLeft: 10,
+  },
+  weightDataValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  weightDataTime: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  weightDataExtra: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 5,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  wearableDataGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 15,
+  },
+  healthDataCard: {
+    backgroundColor: '#F8F9FF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    width: '48%',
+    minHeight: 100,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E8ECF4',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  healthDataLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  healthDataValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  clearHealthDataButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+  },
+  clearHealthDataText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 5,
+  },
 
   notesSection: { flex: 1, marginTop: 25, marginHorizontal: 20, marginBottom: 100 },
   notesListContent: { paddingVertical: 10, paddingBottom: 20 },
@@ -2213,686 +2047,128 @@ const styles = StyleSheet.create({
   pendingBadge: { backgroundColor: '#f0f3ff' },
   titleTimeContainer: { flex: 1 },
 
-  // Smartwatch Modal Styles
-  scanSection: {
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#F8F9FF',
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  scanTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  scanSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  scanButtonsContainer: {
-    flexDirection: 'column',
-    gap: 12,
-    alignItems: 'stretch',
-  },
-  scanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#6A8DFD',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
-    gap: 8,
-    justifyContent: 'center',
-  },
-  scanButtonDisabled: {
-    backgroundColor: '#9BB5FF',
-  },
-  scanButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  testButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F8F0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 25,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
-  },
-  testButtonText: {
-    color: '#4CAF50',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  setupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 25,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#FF9800',
-  },
-  setupButtonText: {
-    color: '#FF9800',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  alternativesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3E5F5',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 25,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#9C27B0',
-  },
-  alternativesButtonText: {
-    color: '#9C27B0',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  devicesSection: {
-    marginBottom: 20,
-  },
-  devicesTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  devicesSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-    fontStyle: 'italic',
-  },
-  deviceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // 5. Estilos para o modal de dados do Health Connect
+  healthDataContainer: {
     backgroundColor: '#FFF',
+  },
+  healthDataItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FF',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E8ECF4',
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6A8DFD',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  healthDataIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 1,
   },
-  pairedDeviceItem: {
-    backgroundColor: '#F8FFF8',
-    borderColor: '#4CAF50',
-    borderWidth: 1.5,
-  },
-  deviceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  healthDataInfo: {
     flex: 1,
   },
-  deviceIconContainer: {
-    position: 'relative',
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pairedIndicator: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  smartwatchBadge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  smartwatchBadgeText: {
-    fontSize: 8,
-    color: '#FFF',
-    fontWeight: 'bold',
-  },
-  smartwatchDeviceItem: {
-    backgroundColor: '#F0F8F0',
-    borderColor: '#4CAF50',
-    borderWidth: 2,
-  },
-  smartwatchDeviceName: {
-    color: '#2E7D32',
-    fontWeight: 'bold',
-  },
-  connectedDeviceItem: {
-    backgroundColor: '#E8F5E8',
-    borderColor: '#4CAF50',
-    borderWidth: 2,
-  },
-  connectedBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  huaweiBadge: {
-    backgroundColor: '#FF9800',
-  },
-  huaweiDeviceItem: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#FF9800',
-    borderWidth: 2,
-  },
-  huaweiDeviceName: {
-    color: '#E65100',
-    fontWeight: 'bold',
-  },
-  huaweiDeviceSignal: {
-    color: '#E65100',
+  healthDataLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
     fontWeight: '500',
   },
-  pairedBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FF9800',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  connectionStatusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: '#E8ECF4',
-    marginLeft: 8,
-  },
-  connectedStatusBadge: {
-    backgroundColor: '#E8F5E8',
-  },
-  pairedStatusBadge: {
-    backgroundColor: '#FFF3E0',
-  },
-  connectionStatusText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  deviceDetails: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  deviceNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginBottom: 4,
-  },
-  deviceName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginRight: 8,
-  },
-  pairedDeviceName: {
-    color: '#2E7D32',
-  },
-  pairedBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginRight: 4,
-  },
-  pairedBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  deviceSignal: {
-    fontSize: 12,
-    color: '#666',
-  },
-  connectedSection: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  connectedHeader: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  connectedTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  connectedDevice: {
-    fontSize: 16,
-    color: '#666',
-  },
-  healthKitBadge: {
-    fontSize: 14,
-    color: '#4CAF50',
-    fontWeight: 'bold',
-  },
-  healthKitSubtext: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  actionButtons: {
-    width: '100%',
-    gap: 12,
-    marginBottom: 30,
-  },
-  gatherDataButton: {
-    backgroundColor: '#4CAF50',
-    marginBottom: 12,
-  },
-  clearDataButton: {
-    backgroundColor: '#FF6B6B',
-    marginBottom: 20,
-  },
-  disconnectButton: {
-    backgroundColor: '#F44336',
-  },
-  bluetoothHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  bluetoothTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 15,
-    marginBottom: 8,
-  },
-  bluetoothSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  permissionTip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 15,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF9800',
-  },
-  permissionTipText: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#E65100',
-    lineHeight: 18,
-  },
-  incompatibleTip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 15,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF5722',
-  },
-  incompatibleTipText: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#C62828',
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  deviceBrand: {
-    fontSize: 14,
-    color: '#666',
-  },
-  deviceSignal: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  healthConnectSection: {
-    padding: 20,
-  },
-  healthConnectHeader: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  healthConnectTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  healthConnectSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  actionButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  healthDataSection: {
-    width: '100%',
-    backgroundColor: '#F8F9FF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-  },
-  healthDataHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  healthDataTitle: {
+  healthDataValue: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    flex: 1,
   },
-  realTimeBadge: {
-    flexDirection: 'row',
+  errorContainer: {
     alignItems: 'center',
-    backgroundColor: '#FF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    padding: 32,
+    backgroundColor: '#FFEBEE',
     borderRadius: 12,
-    gap: 4,
+    marginVertical: 16,
   },
-  realTimeBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFF',
-    // Add animation here if needed
-  },
-  healthDataGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  healthDataItem: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    width: '48%',
-    minHeight: 100,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E8ECF4',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  healthDataItemRealTime: {
-    borderColor: '#4CAF50',
-    borderWidth: 2,
-    backgroundColor: '#F8FFF8',
-  },
-  healthDataLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 8,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  healthDataValue: {
+  errorText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    color: '#E74C3C',
     textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 22,
   },
-  lastUpdateText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
+  noDataContainer: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#F8F9FF',
+    borderRadius: 12,
+    marginVertical: 16,
+  },
+  noDataText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#BDC3C7',
     marginTop: 16,
-    fontStyle: 'italic',
+    marginBottom: 8,
   },
-  saveOptionsSection: {
-    width: '100%',
-    backgroundColor: '#FFF',
+  noDataSubtext: {
+    fontSize: 14,
+    color: '#95A5A6',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  sourcesInfo: {
+    backgroundColor: '#E8F5E8',
+    padding: 16,
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E8ECF4',
-  },
-  saveOptionsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    marginTop: 20,
     marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  sourcesInfoText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    lineHeight: 20,
     textAlign: 'center',
   },
-  saveOptionsGrid: {
+  refreshDataButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  saveOptionButton: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 100,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  saveOptionButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  saveOptionSubtext: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  savedHealthSection: {
-    marginTop: 25,
-    marginHorizontal: 20,
-  },
-  savedHealthList: {
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-  },
-  savedHealthCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginRight: 15,
+    backgroundColor: '#6A8DFD',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginBottom: 16,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 3,
-    borderWidth: 1,
-    borderColor: '#E8ECF4',
-    width: 280,
-    minHeight: 120,
   },
-  savedHealthHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  refreshDataButtonDisabled: {
+    opacity: 0.6,
   },
-  deviceInfoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  deviceName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
-  },
-  deviceBrand: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  collectedTime: {
-    fontSize: 12,
-    color: '#888',
-    fontWeight: '500',
-  },
-  savedHealthDataGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  savedHealthDataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FF',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
-    minWidth: 80,
-    gap: 4,
-  },
-  savedHealthDataValue: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  savedHealthDataLabel: {
-    fontSize: 11,
-    color: '#666',
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 5,
-    lineHeight: 18,
-  },
-  troubleshootSection: {
-    backgroundColor: '#FFF8E1',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
-  },
-  troubleshootTitle: {
+  refreshDataButtonText: {
+    color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#E65100',
-    marginBottom: 12,
+    marginLeft: 8,
   },
-  troubleshootText: {
-    fontSize: 14,
-    color: '#BF360C',
-    lineHeight: 20,
-    marginBottom: 15,
-  },
-  troubleshootBold: {
-    fontWeight: 'bold',
-    color: '#D32F2F',
-  },
-  troubleshootActions: {
-    flexDirection: 'row',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  troubleshootButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#6A8DFD',
-    flex: 1,
-    minWidth: 140,
-  },
-  mockButton: {
-    borderColor: '#4CAF50',
-  },
-  troubleshootButtonText: {
-    fontSize: 14,
-    color: '#6A8DFD',
-    fontWeight: '600',
-    marginLeft: 6,
-    textAlign: 'center',
-    flex: 1,
-  },
+
+
 });
 
 export default MedicalDiaryScreen;
