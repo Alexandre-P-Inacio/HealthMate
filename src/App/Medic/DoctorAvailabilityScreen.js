@@ -44,38 +44,73 @@ const useDoctorAvailability = () => {
   const fetchedOnce = useRef(false);
 
   useEffect(() => {
-    if (!fetchedOnce.current) {
-      fetchAvailability();
-      fetchedOnce.current = true;
-    }
+    const loadAvailability = async () => {
+      if (!fetchedOnce.current) {
+        console.log('🚀 Initializing Doctor Availability screen...');
+        await fetchAvailability();
+        fetchedOnce.current = true;
+      }
+    };
+    
+    loadAvailability();
   }, []);
 
   const fetchAvailability = async () => {
     setLoading(true);
     try {
+      console.log('🔍 Fetching doctor availability from database...');
       const result = await DoctorAvailabilityService.getMyAvailability();
-      if (result.success) {
-        const schedule = { ...defaultSchedule };
-        const recurring = result.data.filter(a => a.is_recurring && a.start_time && a.end_time);
+      
+      if (result.success && result.data && result.data.length > 0) {
+        console.log('✅ Found existing availability data:', result.data);
         
-        recurring.forEach(slot => {
+        // Start with all days disabled
+        const schedule = { ...defaultSchedule };
+        
+        // Filter for recurring availability slots that have valid times
+        const recurringSlots = result.data.filter(slot => 
+          slot.is_recurring && 
+          slot.start_time && 
+          slot.end_time &&
+          slot.is_available
+        );
+        
+        console.log('📅 Processing recurring slots:', recurringSlots);
+        
+        // Process each recurring slot
+        recurringSlots.forEach(slot => {
           const dayKey = WEEKDAYS.find(d => d.idx === slot.day_of_week)?.key;
           if (dayKey) {
+            const startTime = slot.start_time.substring(0, 5); // Extract HH:MM
+            const endTime = slot.end_time.substring(0, 5);     // Extract HH:MM
+            
             schedule[dayKey] = {
-              start: slot.start_time ? slot.start_time.substring(0,5) : '',
-              end: slot.end_time ? slot.end_time.substring(0,5) : '',
+              start: startTime,
+              end: endTime,
               enabled: true
             };
+            
+            console.log(`✅ Set ${dayKey}: ${startTime} - ${endTime}`);
           }
         });
+        
+        // Log final schedule state
+        const enabledDays = Object.keys(schedule).filter(day => schedule[day].enabled);
+        const disabledDays = Object.keys(schedule).filter(day => !schedule[day].enabled);
+        
+        console.log('📊 Final schedule summary:');
+        console.log('  - Enabled days:', enabledDays);
+        console.log('  - Disabled days:', disabledDays);
+        
         setWeeklySchedule(schedule);
       } else {
+        console.log('📭 No existing availability found, using default empty schedule');
         setWeeklySchedule(defaultSchedule);
-        console.error('Error fetching availability:', result.error);
       }
     } catch (err) {
+      console.error('❌ Error fetching availability:', err);
       setWeeklySchedule(defaultSchedule);
-      console.error('Unexpected error fetching availability:', err);
+      Alert.alert('Error', 'Failed to load your availability. Please try again.');
     }
     setLoading(false);
   };
@@ -90,35 +125,68 @@ const useDoctorAvailability = () => {
         return;
       }
 
-      // Delete all existing recurring slots
+      console.log('💾 Starting to save availability...');
+      console.log('Current schedule:', weeklySchedule);
+
+      // Get current availability from database
       const result = await DoctorAvailabilityService.getAvailabilityByDoctorId(currentUser.id);
+      
       if (result.success) {
+        // Delete all existing recurring slots
         const existing = result.data.filter(a => a.is_recurring);
+        console.log(`🗑️ Deleting ${existing.length} existing recurring slots...`);
+        
         for (const slot of existing) {
           const del = await DoctorAvailabilityService.deleteAvailability(slot.id);
-          if (!del.success) throw new Error(del.error || 'Error deleting availability.');
+          if (!del.success) {
+            console.error('Failed to delete slot:', slot.id, del.error);
+            throw new Error(del.error || 'Error deleting existing availability.');
+          }
         }
+        console.log('✅ Successfully deleted all existing slots');
       }
 
-      // Insert new slots for enabled days
+      // Count enabled days and prepare to save
+      const enabledDays = Object.keys(weeklySchedule).filter(key => weeklySchedule[key].enabled);
+      console.log(`💾 Saving ${enabledDays.length} enabled days:`, enabledDays);
+
+      // Insert new slots for enabled days only
+      let savedCount = 0;
       for (const { key, idx } of WEEKDAYS) {
         const daySchedule = weeklySchedule[key];
+        
         if (daySchedule.enabled && daySchedule.start && daySchedule.end) {
-          const add = await DoctorAvailabilityService.addAvailability({
+          const availabilityData = {
             day_of_week: idx,
             start_time: daySchedule.start + ':00',
             end_time: daySchedule.end + ':00',
             is_recurring: true,
             is_available: true
-          });
-          if (!add.success) throw new Error(add.error || 'Error adding availability.');
+          };
+          
+          console.log(`💾 Saving ${key}:`, availabilityData);
+          
+          const add = await DoctorAvailabilityService.addAvailability(availabilityData);
+          if (!add.success) {
+            console.error(`Failed to save ${key}:`, add.error);
+            throw new Error(add.error || `Error adding availability for ${key}.`);
+          }
+          savedCount++;
+          console.log(`✅ Successfully saved ${key}`);
+        } else {
+          console.log(`⏭️ Skipping ${key} (disabled or incomplete)`);
         }
       }
 
+      console.log(`🎉 Successfully saved ${savedCount} days of availability`);
       setLoading(false);
-      showToast('Availability saved successfully!');
-      fetchAvailability();
+      showToast(`Availability saved! ${savedCount} days configured.`);
+      
+      // Refresh data from database to ensure UI is in sync
+      await fetchAvailability();
+      
     } catch (err) {
+      console.error('❌ Error saving availability:', err);
       setLoading(false);
       Alert.alert('Error', err.message || 'Unexpected error saving availability.');
     }
