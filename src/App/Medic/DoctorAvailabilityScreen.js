@@ -199,54 +199,54 @@ const DayCard = ({ dayKey, label, schedule, onSelectHour, onClear, onOpenCustom 
         <Ionicons name="close-circle" size={22} color="#e74c3c" />
       </TouchableOpacity>
     </View>
-    <View style={styles.row}>
+    
+    {/* Start Time Row */}
+    <View style={styles.timeRow}>
       <Text style={styles.timeLabel}>Start:</Text>
-      <View style={styles.scrollWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContainer}
-          style={styles.scrollView}
-        >
-          {HOURS.map(h => (
-            <TimeChip
-              key={h}
-              label={h}
-              selected={schedule.start === h}
-              onPress={() => onSelectHour(dayKey, 'start', h)}
-            />
-          ))}
-          <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'start')}>
-            <Ionicons name="add-circle" size={20} color="#fff" />
-            <Text style={styles.customChipText}>Custom</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
     </View>
-    <View style={styles.row}>
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={true}
+      style={styles.timeScrollView}
+      contentContainerStyle={styles.timeScrollContent}
+    >
+      {HOURS.map(h => (
+        <TimeChip
+          key={h}
+          label={h}
+          selected={schedule.start === h}
+          onPress={() => onSelectHour(dayKey, 'start', h)}
+        />
+      ))}
+      <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'start')}>
+        <Ionicons name="add-circle" size={20} color="#fff" />
+        <Text style={styles.customChipText}>Custom</Text>
+      </TouchableOpacity>
+    </ScrollView>
+    
+    {/* End Time Row */}
+    <View style={styles.timeRow}>
       <Text style={styles.timeLabel}>End:</Text>
-      <View style={styles.scrollWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContainer}
-          style={styles.scrollView}
-        >
-          {HOURS.map(h => (
-            <TimeChip
-              key={h}
-              label={h}
-              selected={schedule.end === h}
-              onPress={() => onSelectHour(dayKey, 'end', h)}
-            />
-          ))}
-          <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'end')}>
-            <Ionicons name="add-circle" size={20} color="#fff" />
-            <Text style={styles.customChipText}>Custom</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
     </View>
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={true}
+      style={styles.timeScrollView}
+      contentContainerStyle={styles.timeScrollContent}
+    >
+      {HOURS.map(h => (
+        <TimeChip
+          key={h}
+          label={h}
+          selected={schedule.end === h}
+          onPress={() => onSelectHour(dayKey, 'end', h)}
+        />
+      ))}
+      <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'end')}>
+        <Ionicons name="add-circle" size={20} color="#fff" />
+        <Text style={styles.customChipText}>Custom</Text>
+      </TouchableOpacity>
+    </ScrollView>
   </View>
 );
 
@@ -362,53 +362,60 @@ const styles = StyleSheet.create({
     color: '#3498db', 
     letterSpacing: 0.5 
   },
-  row: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginBottom: 10 
+  timeRow: {
+    marginBottom: 8,
   },
   timeLabel: { 
     fontSize: 16, 
     color: '#555', 
-    marginRight: 8, 
-    width: 54, 
-    fontWeight: 'bold' 
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
-  scrollWrapper: {
-    flex: 1,
+  timeScrollView: {
+    height: 60,
+    marginBottom: 15,
   },
-  scrollView: {
-    height: 50,
-  },
-  scrollContainer: {
+  timeScrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 20,
-    paddingLeft: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   hourChip: { 
     backgroundColor: '#eaf3ff', 
-    borderRadius: 20, 
-    paddingVertical: 8, 
-    paddingHorizontal: 16, 
-    marginRight: 10, 
+    borderRadius: 25, 
+    paddingVertical: 10, 
+    paddingHorizontal: 18, 
+    marginRight: 12, 
     borderWidth: 1, 
     borderColor: '#e0e7ef',
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 70,
+    height: 45,
   },
-  selectedChip: { backgroundColor: '#3498db', borderColor: '#3498db' },
-  chipText: { color: '#3498db', fontWeight: 'bold', fontSize: 16 },
-  selectedChipText: { color: '#fff' },
+  selectedChip: { 
+    backgroundColor: '#3498db', 
+    borderColor: '#3498db' 
+  },
+  chipText: { 
+    color: '#3498db', 
+    fontWeight: 'bold', 
+    fontSize: 16 
+  },
+  selectedChipText: { 
+    color: '#fff' 
+  },
   customChip: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     backgroundColor: '#6c47ff', 
-    borderRadius: 20, 
-    paddingVertical: 8, 
-    paddingHorizontal: 14, 
-    marginRight: 10,
-    marginLeft: 5,
+    borderRadius: 25, 
+    paddingVertical: 10, 
+    paddingHorizontal: 16, 
+    marginRight: 12,
+    height: 45,
+    minWidth: 100,
   },
   customChipText: { 
     color: '#fff', 
