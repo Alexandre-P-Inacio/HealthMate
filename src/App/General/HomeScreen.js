@@ -208,11 +208,12 @@ const HomeScreen = () => {
       
       const result = await SamsungHealthService.getRawHealthDataForDisplay();
       
-      // Load water and workout data from AsyncStorage
+      // Load water, workout, and sleep data from AsyncStorage
       const today = new Date().toISOString().split('T')[0];
       let waterIntake = 0;
       let workoutCalories = 0;
       let workoutMinutes = 0;
+      let localSleepHours = 0;
       
       try {
         // Get today's water intake
@@ -229,6 +230,17 @@ const HomeScreen = () => {
           workoutCalories = todayWorkouts.reduce((sum, w) => sum + (w.calories || 0), 0);
           workoutMinutes = todayWorkouts.reduce((sum, w) => sum + w.duration, 0);
         }
+        
+        // Get today's sleep data
+        const savedSleepData = await AsyncStorage.getItem('sleep_data');
+        if (savedSleepData) {
+          const sleepHistory = JSON.parse(savedSleepData);
+          const todaySleep = sleepHistory.find(entry => entry.date === today);
+          if (todaySleep) {
+            localSleepHours = todaySleep.duration;
+            console.log(`😴 [HomeScreen] Found local sleep data for today: ${localSleepHours}h`);
+          }
+        }
       } catch (error) {
         console.error('Error loading local health data:', error);
       }
@@ -242,6 +254,7 @@ const HomeScreen = () => {
             ...result.summary,
             water: waterIntake > 0 ? waterIntake : result.summary.water,
             calories: result.summary.calories + workoutCalories,
+            sleep: localSleepHours > 0 ? localSleepHours : result.summary.sleep,
             workoutMinutes: workoutMinutes
           };
           
@@ -260,7 +273,7 @@ const HomeScreen = () => {
             steps: 0,
             heartRate: 0,
             calories: workoutCalories,
-            sleep: 0,
+            sleep: localSleepHours,
             water: waterIntake,
             distance: 0,
             oxygen: 0,
@@ -280,7 +293,7 @@ const HomeScreen = () => {
           steps: 0,
           heartRate: 0,
           calories: workoutCalories,
-          sleep: 0,
+          sleep: localSleepHours,
           water: waterIntake,
           distance: 0,
           oxygen: 0,
@@ -291,6 +304,49 @@ const HomeScreen = () => {
     } catch (error) {
       console.error('❌ [HomeScreen] General error:', error);
       setHealthConnectionStatus('error');
+      // Still show local data even if there's a general error
+      const today = new Date().toISOString().split('T')[0];
+      let fallbackSleep = 0;
+      let fallbackWater = 0;
+      let fallbackCalories = 0;
+      let fallbackWorkoutMinutes = 0;
+      
+      try {
+        // Try to get local data as fallback
+        const savedSleepData = await AsyncStorage.getItem('sleep_data');
+        if (savedSleepData) {
+          const sleepHistory = JSON.parse(savedSleepData);
+          const todaySleep = sleepHistory.find(entry => entry.date === today);
+          if (todaySleep) fallbackSleep = todaySleep.duration;
+        }
+        
+        const todayWaterIntake = await AsyncStorage.getItem(`water_intake_${today}`);
+        if (todayWaterIntake) {
+          fallbackWater = parseInt(todayWaterIntake) / 1000;
+        }
+        
+        const savedWorkouts = await AsyncStorage.getItem('workout_history');
+        if (savedWorkouts) {
+          const workoutHistory = JSON.parse(savedWorkouts);
+          const todayWorkouts = workoutHistory.filter(workout => workout.date === today);
+          fallbackCalories = todayWorkouts.reduce((sum, w) => sum + (w.calories || 0), 0);
+          fallbackWorkoutMinutes = todayWorkouts.reduce((sum, w) => sum + w.duration, 0);
+        }
+      } catch (fallbackError) {
+        console.error('Error loading fallback data:', fallbackError);
+      }
+      
+      setHealthStats({
+        steps: 0,
+        heartRate: 0,
+        calories: fallbackCalories,
+        sleep: fallbackSleep,
+        water: fallbackWater,
+        distance: 0,
+        oxygen: 0,
+        workoutMinutes: fallbackWorkoutMinutes
+      });
+      
       Alert.alert('Error', 'Unexpected error fetching data');
     } finally {
       setIsLoadingHealth(false);
