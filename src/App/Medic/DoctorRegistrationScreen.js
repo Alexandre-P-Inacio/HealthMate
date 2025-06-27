@@ -191,35 +191,29 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
                 <Text style={styles.label}>
                   Name <Text style={styles.requiredAsterisk}>*</Text>
                 </Text>
-                <View style={{ position: 'relative' }}>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.name}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
-                    placeholder="Enter doctor's full name"
-                    placeholderTextColor="#9ca3af"
-                  />
-                  <Ionicons name="person" size={20} style={styles.inputIcon} />
-                </View>
+                <TextInput
+                  style={styles.input}
+                  value={formData.name}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter doctor's full name"
+                  placeholderTextColor="#9ca3af"
+                />
               </View>
 
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Specialization</Text>
-                <View style={{ position: 'relative' }}>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.specialization}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, specialization: text }))}
-                    placeholder="e.g., Cardiology, Pediatrics, General Medicine"
-                    placeholderTextColor="#9ca3af"
-                  />
-                  <Ionicons name="medical" size={20} style={styles.inputIcon} />
-                </View>
+                <TextInput
+                  style={styles.input}
+                  value={formData.specialization}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, specialization: text }))}
+                  placeholder="e.g., Cardiology, Pediatrics, General Medicine"
+                  placeholderTextColor="#9ca3af"
+                />
                 <Text style={styles.inputHelper}>Your area of medical expertise</Text>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={[styles.inputContainer, { flex: 1 }]}>
+              <View style={styles.rowContainer}>
+                <View style={styles.halfInput}>
                   <Text style={styles.label}>Age</Text>
                   <TextInput
                     style={styles.input}
@@ -232,7 +226,7 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
                   <Text style={styles.inputHelper}>Minimum 25 years</Text>
                 </View>
 
-                <View style={[styles.inputContainer, { flex: 1 }]}>
+                <View style={styles.halfInput}>
                   <Text style={styles.label}>Years of Experience</Text>
                   <TextInput
                     style={styles.input}
@@ -295,18 +289,15 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
               </Text>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>Default Appointment Duration</Text>
-                <View style={{ position: 'relative' }}>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.appointment_duration_minutes}
-                    onChangeText={text => setFormData(prev => ({ ...prev, appointment_duration_minutes: text.replace(/[^0-9]/g, '') }))}
-                    placeholder="60"
-                    keyboardType="numeric"
-                    placeholderTextColor="#9ca3af"
-                  />
-                  <Ionicons name="timer" size={20} style={styles.inputIcon} />
-                </View>
+                <Text style={styles.label}>Default Appointment Duration (minutes)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.appointment_duration_minutes}
+                  onChangeText={text => setFormData(prev => ({ ...prev, appointment_duration_minutes: text.replace(/[^0-9]/g, '') }))}
+                  placeholder="60"
+                  keyboardType="numeric"
+                  placeholderTextColor="#9ca3af"
+                />
                 <Text style={styles.inputHelper}>Standard consultation time in minutes (typically 30-90 minutes)</Text>
               </View>
             </View>
@@ -320,12 +311,12 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
               {isLoading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <View style={styles.submitButtonContent}>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
                   <Text style={styles.submitButtonText}>
                     {isEditing ? 'Update Profile' : 'Complete Registration'}
                   </Text>
-                </>
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -447,6 +438,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+    marginLeft: 8,
   },
   // Additional enhanced styles
   inputIcon: {
@@ -493,6 +485,19 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'right',
     marginTop: 4,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  halfInput: {
+    width: '48%',
+  },
+  submitButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
