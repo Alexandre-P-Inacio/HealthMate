@@ -185,6 +185,11 @@ const useDoctorAvailability = () => {
       // Refresh data from database to ensure UI is in sync
       await fetchAvailability();
       
+      // Navigate back to doctor dashboard after successful save
+      setTimeout(() => {
+        navigation.goBack();
+      }, 1500); // Give user time to see the success message
+      
     } catch (err) {
       console.error('❌ Error saving availability:', err);
       setLoading(false);
