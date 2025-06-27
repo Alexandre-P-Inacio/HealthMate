@@ -1316,14 +1316,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
                 <Text style={styles.sectionTitle}>Quick Actions</Text>
           
           {/* Botão temporário para debug de medicamentos */}
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#E74C3C' }]}
-            onPress={debugMedicationData}
-          >
-            <Ionicons name="bug-outline" size={28} color="#FFF" />
-            <Text style={[styles.actionButtonText, { color: '#FFF' }]}>Fix Medications</Text>
-            <Text style={[styles.actionButtonSubtext, { color: '#FFF' }]}>Create test data</Text>
-          </TouchableOpacity>
+
           
           <View style={styles.quickActionsGrid}>
         <TouchableOpacity

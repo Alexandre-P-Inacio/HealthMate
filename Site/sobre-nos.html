@@ -409,6 +409,25 @@
             pointer-events: none;
         }
 
+        .supporter-photo {
+            width: min(120px, 30vw);
+            height: min(120px, 30vw);
+            border: 3px solid var(--border-subtle);
+            border-radius: 50%;
+            object-fit: cover;
+            margin: 0 auto 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
+            display: block;
+        }
+
+        .supporter-photo:hover {
+            border-color: var(--primary);
+            transform: scale(1.05);
+            box-shadow: var(--shadow-lg);
+        }
+
         .supporter-image {
             width: min(120px, 30vw);
             height: min(120px, 30vw);
@@ -455,13 +474,7 @@
             font-size: clamp(1rem, 2.5vw, 1.1rem);
             color: var(--primary);
             font-weight: 500;
-            margin-bottom: 1rem;
-        }
-
-        .supporter-description {
-            font-size: clamp(0.85rem, 2vw, 0.95rem);
-            color: var(--text-secondary);
-            line-height: 1.6;
+            margin-bottom: 0.5rem;
         }
 
         .project-info {
@@ -626,7 +639,7 @@
 
         @media (min-width: 768px) {
             .supporters-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
         }
 
@@ -640,7 +653,9 @@
             }
 
             .supporters-grid {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(3, 1fr);
+                max-width: 900px;
+                margin: 3rem auto 0;
             }
         }
 
@@ -749,50 +764,26 @@
             <p class="supporters-subtitle">Agradeço profundamente a estas pessoas que contribuíram para tornar o HealthMate uma realidade</p>
             <div class="supporters-grid">
                 <div class="supporter-card animate-on-scroll">
-                    <div class="supporter-image">
-                        <i class="fas fa-user"></i>
-                        <div class="placeholder-text">Apoiador 1</div>
-                    </div>
+                    <img src="assets/Captura de ecrã 2025-06-27 234955.png" alt="André" class="supporter-photo">
                     <div class="supporter-info">
-                        <h4>Nome do Apoiador</h4>
-                        <p class="supporter-role">Função/Contribuição</p>
-                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
+                        <h4>André</h4>
+                        <p class="supporter-role">Apoiou no desenvolvimento</p>
                     </div>
                 </div>
 
                 <div class="supporter-card animate-on-scroll">
-                    <div class="supporter-image">
-                        <i class="fas fa-user"></i>
-                        <div class="placeholder-text">Apoiador 2</div>
-                    </div>
+                    <img src="assets/Captura de ecrã 2025-06-27 235119.png" alt="Bernardo" class="supporter-photo">
                     <div class="supporter-info">
-                        <h4>Nome do Apoiador</h4>
-                        <p class="supporter-role">Função/Contribuição</p>
-                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
+                        <h4>Bernardo</h4>
+                        <p class="supporter-role">Apoiou no desenvolvimento</p>
                     </div>
                 </div>
 
                 <div class="supporter-card animate-on-scroll">
-                    <div class="supporter-image">
-                        <i class="fas fa-user"></i>
-                        <div class="placeholder-text">Apoiador 3</div>
-                    </div>
+                    <img src="assets/Captura de ecrã 2025-06-27 235228.png" alt="Bruno (mini)" class="supporter-photo">
                     <div class="supporter-info">
-                        <h4>Nome do Apoiador</h4>
-                        <p class="supporter-role">Função/Contribuição</p>
-                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
-                    </div>
-                </div>
-
-                <div class="supporter-card animate-on-scroll">
-                    <div class="supporter-image">
-                        <i class="fas fa-user"></i>
-                        <div class="placeholder-text">Apoiador 4</div>
-                    </div>
-                    <div class="supporter-info">
-                        <h4>Nome do Apoiador</h4>
-                        <p class="supporter-role">Função/Contribuição</p>
-                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
+                        <h4>Bruno (mini)</h4>
+                        <p class="supporter-role">Apoiou no desenvolvimento</p>
                     </div>
                 </div>
             </div>
