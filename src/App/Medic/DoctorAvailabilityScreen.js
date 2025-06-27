@@ -141,7 +141,7 @@ const useDoctorAvailability = (navigation) => {
           if (!del.success) {
             console.error('Failed to delete slot:', slot.id, del.error);
             throw new Error(del.error || 'Error deleting existing availability.');
-          }
+        }
         }
         console.log('✅ Successfully deleted all existing slots');
       }
@@ -402,7 +402,7 @@ const DayCard = ({ dayKey, label, schedule, onToggle, onSelectHour, onOpenCustom
             onPress={() => selectTime('end')}
             disabled={!schedule.enabled}
           />
-        </View>
+    </View>
       )}
 
       <TimePickerModal />
