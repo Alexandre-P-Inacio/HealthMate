@@ -179,99 +179,136 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
           </Text>
         </View>
 
-        <ScrollView style={styles.scrollView}>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.form}>
-            {/* Name Input - Required */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Name *</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.name}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
-                placeholder="Enter doctor's name"
-                placeholderTextColor="#999"
-              />
+            {/* Personal Information Section */}
+            <View style={styles.formSection}>
+              <Text style={styles.sectionTitle}>
+                <Ionicons name="person-outline" size={18} color="#3b82f6" /> Personal Information
+              </Text>
+              
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  Name <Text style={styles.requiredAsterisk}>*</Text>
+                </Text>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.name}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+                    placeholder="Enter doctor's full name"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <Ionicons name="person" size={20} style={styles.inputIcon} />
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Specialization</Text>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.specialization}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, specialization: text }))}
+                    placeholder="e.g., Cardiology, Pediatrics, General Medicine"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <Ionicons name="medical" size={20} style={styles.inputIcon} />
+                </View>
+                <Text style={styles.inputHelper}>Your area of medical expertise</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.inputContainer, { flex: 1 }]}>
+                  <Text style={styles.label}>Age</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.age}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, age: text.replace(/[^0-9]/g, '') }))}
+                    placeholder="25+"
+                    keyboardType="numeric"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <Text style={styles.inputHelper}>Minimum 25 years</Text>
+                </View>
+
+                <View style={[styles.inputContainer, { flex: 1 }]}>
+                  <Text style={styles.label}>Years of Experience</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.years_experience}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, years_experience: text.replace(/[^0-9]/g, '') }))}
+                    placeholder="0+"
+                    keyboardType="numeric"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <Text style={styles.inputHelper}>Professional experience</Text>
+                </View>
+              </View>
             </View>
 
-            {/* Specialization Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Specialization</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.specialization}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, specialization: text }))}
-                placeholder="Enter specialization"
-                placeholderTextColor="#999"
-              />
+            {/* Professional Details Section */}
+            <View style={styles.formSection}>
+              <Text style={styles.sectionTitle}>
+                <Ionicons name="briefcase-outline" size={18} color="#3b82f6" /> Professional Details
+              </Text>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Professional Description</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.description}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                  placeholder="Tell patients about your background, approach to medicine, and what makes you unique as a healthcare provider..."
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+                <Text style={styles.characterCount}>
+                  {formData.description.length}/500 characters
+                </Text>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Work Description</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.work_description}
+                  onChangeText={text => setFormData(prev => ({ ...prev, work_description: text }))}
+                  placeholder="Describe the type of care you provide, your clinical focus, or any specialized services you offer..."
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+                <Text style={styles.characterCount}>
+                  {formData.work_description.length}/300 characters
+                </Text>
+              </View>
             </View>
 
-            {/* Age Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Age</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.age}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, age: text }))}
-                placeholder="Enter age"
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-              />
-            </View>
+            {/* Practice Settings Section */}
+            <View style={styles.formSection}>
+              <Text style={styles.sectionTitle}>
+                <Ionicons name="time-outline" size={18} color="#3b82f6" /> Practice Settings
+              </Text>
 
-            {/* Years of Experience Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Years of Experience</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.years_experience}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, years_experience: text }))}
-                placeholder="Enter years of experience"
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-              />
-            </View>
-
-            {/* Description Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
-                placeholder="Enter description"
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
-            {/* Appointment Duration Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Appointment Duration (minutes)</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.appointment_duration_minutes}
-                onChangeText={text => setFormData(prev => ({ ...prev, appointment_duration_minutes: text.replace(/[^0-9]/g, '') }))}
-                placeholder="Ex: 60"
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-              />
-            </View>
-
-            {/* Work Description Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Work Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.work_description}
-                onChangeText={text => setFormData(prev => ({ ...prev, work_description: text }))}
-                placeholder="Describe your work or type of care provided"
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Default Appointment Duration</Text>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.appointment_duration_minutes}
+                    onChangeText={text => setFormData(prev => ({ ...prev, appointment_duration_minutes: text.replace(/[^0-9]/g, '') }))}
+                    placeholder="60"
+                    keyboardType="numeric"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <Ionicons name="timer" size={20} style={styles.inputIcon} />
+                </View>
+                <Text style={styles.inputHelper}>Standard consultation time in minutes (typically 30-90 minutes)</Text>
+              </View>
             </View>
 
             {/* Submit Button */}
@@ -280,9 +317,16 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
               onPress={handleSubmit}
               disabled={isLoading}
             >
-              <Text style={styles.submitButtonText}>
-                {isLoading ? 'Saving...' : isEditing ? 'Update Doctor' : 'Register Doctor'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.submitButtonText}>
+                    {isEditing ? 'Update Profile' : 'Complete Registration'}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -294,78 +338,161 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8fafc',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     paddingTop: Platform.OS === 'ios' ? 50 : 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#e2e8f0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   backButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginLeft: 16,
-    color: '#333',
+    color: '#1e293b',
+    letterSpacing: 0.5,
   },
   scrollView: {
     flex: 1,
   },
   form: {
-    padding: 16,
+    padding: 20,
+    paddingBottom: 100,
   },
   inputContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    color: '#333',
+    color: '#374151',
     marginBottom: 8,
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   input: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
-    color: '#333',
+    color: '#1f2937',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    transition: 'all 0.2s ease',
+  },
+  inputFocused: {
+    borderColor: '#3b82f6',
+    borderWidth: 2,
+    elevation: 2,
+    shadowOpacity: 0.1,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
+    paddingTop: 14,
   },
   submitButton: {
-    backgroundColor: '#1a237e',
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: '#3b82f6',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 32,
+    elevation: 3,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   submitButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
+    elevation: 1,
+    shadowOpacity: 0.1,
   },
   submitButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  // Additional enhanced styles
+  inputIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 50,
+    color: '#9ca3af',
+  },
+  requiredAsterisk: {
+    color: '#ef4444',
+    fontSize: 16,
+  },
+  inputWithIcon: {
+    paddingRight: 45,
+  },
+  formSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingBottom: 8,
+  },
+  inputHelper: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  characterCount: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textAlign: 'right',
+    marginTop: 4,
   },
 });
 

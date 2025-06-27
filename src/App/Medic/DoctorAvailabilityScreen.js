@@ -36,7 +36,7 @@ function showToast(msg) {
   else Alert.alert(msg);
 }
 
-const useDoctorAvailability = () => {
+const useDoctorAvailability = (navigation) => {
   const [weeklySchedule, setWeeklySchedule] = useState(defaultSchedule);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState({ visible: false, day: null, type: null });
@@ -415,7 +415,7 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
     weeklySchedule, loading, modal, customTime,
     saveAvailability, handleSelectHour, openCustomModal, setCustomTime, setModal, 
     saveCustomHour, toggleDay, copyToAllDays
-  } = useDoctorAvailability();
+  } = useDoctorAvailability(navigation);
 
   const enabledDaysCount = Object.values(weeklySchedule).filter(day => day.enabled).length;
 

@@ -384,77 +384,84 @@ const WorkoutTrackerScreen = ({ navigation }) => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Log New Workout</Text>
             
-            {/* Workout Type Selection */}
-            <Text style={styles.fieldLabel}>Workout Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typesContainer}>
-              {workoutTypes.map(type => (
-                <TouchableOpacity
-                  key={type.id}
-                  style={[
-                    styles.typeButton,
-                    { backgroundColor: type.color },
-                    newWorkout.type === type.id && styles.selectedType
-                  ]}
-                  onPress={() => setNewWorkout({ ...newWorkout, type: type.id })}
-                >
-                  <Text style={styles.typeEmoji}>{type.emoji}</Text>
-                  <Text style={styles.typeText}>{type.name}</Text>
-                </TouchableOpacity>
-              ))}
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+              {/* Workout Type Selection */}
+              <Text style={styles.fieldLabel}>Workout Type</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.typesContainer}
+                contentContainerStyle={styles.typesContent}
+              >
+                {workoutTypes.map(type => (
+                  <TouchableOpacity
+                    key={type.id}
+                    style={[
+                      styles.typeButton,
+                      { backgroundColor: type.color },
+                      newWorkout.type === type.id && styles.selectedType
+                    ]}
+                    onPress={() => setNewWorkout({ ...newWorkout, type: type.id })}
+                  >
+                    <Text style={styles.typeEmoji}>{type.emoji}</Text>
+                    <Text style={styles.typeText}>{type.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              {/* Duration Input */}
+              <Text style={styles.fieldLabel}>Duration (minutes)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 30"
+                value={newWorkout.duration}
+                onChangeText={(text) => setNewWorkout({ ...newWorkout, duration: text })}
+                keyboardType="numeric"
+              />
+              
+              {/* Intensity Selection */}
+              <Text style={styles.fieldLabel}>Intensity Level</Text>
+              <View style={styles.intensityContainer}>
+                {intensityLevels.map(level => (
+                  <TouchableOpacity
+                    key={level.id}
+                    style={[
+                      styles.intensityButton,
+                      { borderColor: level.color },
+                      newWorkout.intensity === level.id && { backgroundColor: level.color }
+                    ]}
+                    onPress={() => setNewWorkout({ ...newWorkout, intensity: level.id })}
+                  >
+                    <Text style={[
+                      styles.intensityButtonText,
+                      newWorkout.intensity === level.id && { color: '#fff' }
+                    ]}>
+                      {level.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              {/* Calories Input */}
+              <Text style={styles.fieldLabel}>Calories (optional - auto-estimated if empty)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 200"
+                value={newWorkout.calories}
+                onChangeText={(text) => setNewWorkout({ ...newWorkout, calories: text })}
+                keyboardType="numeric"
+              />
+              
+              {/* Notes Input */}
+              <Text style={styles.fieldLabel}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.input, styles.notesInput]}
+                placeholder="How did it feel? Any achievements?"
+                value={newWorkout.notes}
+                onChangeText={(text) => setNewWorkout({ ...newWorkout, notes: text })}
+                multiline
+              />
             </ScrollView>
-            
-            {/* Duration Input */}
-            <Text style={styles.fieldLabel}>Duration (minutes)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 30"
-              value={newWorkout.duration}
-              onChangeText={(text) => setNewWorkout({ ...newWorkout, duration: text })}
-              keyboardType="numeric"
-            />
-            
-            {/* Intensity Selection */}
-            <Text style={styles.fieldLabel}>Intensity Level</Text>
-            <View style={styles.intensityContainer}>
-              {intensityLevels.map(level => (
-                <TouchableOpacity
-                  key={level.id}
-                  style={[
-                    styles.intensityButton,
-                    { borderColor: level.color },
-                    newWorkout.intensity === level.id && { backgroundColor: level.color }
-                  ]}
-                  onPress={() => setNewWorkout({ ...newWorkout, intensity: level.id })}
-                >
-                  <Text style={[
-                    styles.intensityButtonText,
-                    newWorkout.intensity === level.id && { color: '#fff' }
-                  ]}>
-                    {level.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            
-            {/* Calories Input */}
-            <Text style={styles.fieldLabel}>Calories (optional - auto-estimated if empty)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 200"
-              value={newWorkout.calories}
-              onChangeText={(text) => setNewWorkout({ ...newWorkout, calories: text })}
-              keyboardType="numeric"
-            />
-            
-            {/* Notes Input */}
-            <Text style={styles.fieldLabel}>Notes (optional)</Text>
-            <TextInput
-              style={[styles.input, styles.notesInput]}
-              placeholder="How did it feel? Any achievements?"
-              value={newWorkout.notes}
-              onChangeText={(text) => setNewWorkout({ ...newWorkout, notes: text })}
-              multiline
-            />
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -723,6 +730,7 @@ const styles = StyleSheet.create({
     padding: 25,
     width: width - 40,
     maxHeight: '90%',
+    paddingBottom: 30,
   },
   modalTitle: {
     fontSize: 20,
@@ -730,6 +738,9 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
     marginBottom: 20,
+  },
+  modalScrollView: {
+    maxHeight: 400,
   },
   fieldLabel: {
     fontSize: 16,
@@ -739,15 +750,22 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   typesContainer: {
-    marginBottom: 10,
+    marginBottom: 15,
+    height: 100,
+  },
+  typesContent: {
+    paddingHorizontal: 5,
+    alignItems: 'center',
   },
   typeButton: {
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 15,
     borderRadius: 12,
     marginRight: 10,
     minWidth: 80,
+    height: 85,
   },
   selectedType: {
     borderWidth: 3,
