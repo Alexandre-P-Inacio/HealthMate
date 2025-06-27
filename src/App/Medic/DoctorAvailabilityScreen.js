@@ -9,13 +9,13 @@ const HOURS = [
   '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
 ];
 const WEEKDAYS = [
-  { key: 'monday', label: 'Segunda', idx: 1 },
-  { key: 'tuesday', label: 'Terça', idx: 2 },
-  { key: 'wednesday', label: 'Quarta', idx: 3 },
-  { key: 'thursday', label: 'Quinta', idx: 4 },
-  { key: 'friday', label: 'Sexta', idx: 5 },
-  { key: 'saturday', label: 'Sábado', idx: 6 },
-  { key: 'sunday', label: 'Domingo', idx: 0 },
+  { key: 'monday', label: 'Monday', idx: 1 },
+  { key: 'tuesday', label: 'Tuesday', idx: 2 },
+  { key: 'wednesday', label: 'Wednesday', idx: 3 },
+  { key: 'thursday', label: 'Thursday', idx: 4 },
+  { key: 'friday', label: 'Friday', idx: 5 },
+  { key: 'saturday', label: 'Saturday', idx: 6 },
+  { key: 'sunday', label: 'Sunday', idx: 0 },
 ];
 const defaultSchedule = {
   monday: { start: '08:00', end: '18:00' },
@@ -82,8 +82,8 @@ const useDoctorAvailability = () => {
           saturday: { start: '', end: '' },
           sunday: { start: '', end: '' }
         });
-        Alert.alert('Erro', result.error || 'Não foi possível carregar a disponibilidade.');
-        console.error('Erro ao buscar disponibilidade:', result.error);
+        Alert.alert('Error', result.error || 'Could not load availability.');
+        console.error('Error fetching availability:', result.error);
       }
     } catch (err) {
       setWeeklySchedule({
@@ -95,8 +95,8 @@ const useDoctorAvailability = () => {
         saturday: { start: '', end: '' },
         sunday: { start: '', end: '' }
       });
-      Alert.alert('Erro', err.message || 'Erro inesperado');
-      console.error('Erro inesperado ao buscar disponibilidade:', err);
+      Alert.alert('Error', err.message || 'Unexpected error');
+      console.error('Unexpected error fetching availability:', err);
     }
     setLoading(false);
   };
@@ -107,7 +107,7 @@ const useDoctorAvailability = () => {
       const currentUser = DataUser.getUserData();
       if (!currentUser || !currentUser.id) {
         setLoading(false);
-        Alert.alert('Erro', 'Usuário não logado. Por favor, faça login novamente.');
+        Alert.alert('Error', 'User not logged in. Please log in again.');
         return;
       }
       // Delete all existing recurring slots
@@ -116,10 +116,10 @@ const useDoctorAvailability = () => {
         const existing = result.data.filter(a => a.is_recurring);
         for (const slot of existing) {
           const del = await DoctorAvailabilityService.deleteAvailability(slot.id);
-          if (!del.success) throw new Error(del.error || 'Erro ao deletar disponibilidade.');
+          if (!del.success) throw new Error(del.error || 'Error deleting availability.');
         }
       } else {
-        throw new Error(result.error || 'Erro ao buscar disponibilidade.');
+        throw new Error(result.error || 'Error fetching availability.');
       }
       // Insert new slots
       for (const { key, idx } of WEEKDAYS) {
@@ -132,15 +132,15 @@ const useDoctorAvailability = () => {
             is_recurring: true,
             is_available: true
           });
-          if (!add.success) throw new Error(add.error || 'Erro ao adicionar disponibilidade.');
+          if (!add.success) throw new Error(add.error || 'Error adding availability.');
         }
       }
       setLoading(false);
-      showToast('Disponibilidade salva com sucesso!');
+      showToast('Availability saved successfully!');
       fetchAvailability();
     } catch (err) {
       setLoading(false);
-      Alert.alert('Erro', err.message || 'Erro inesperado ao salvar disponibilidade.');
+      Alert.alert('Error', err.message || 'Unexpected error saving availability.');
     }
   };
 
@@ -165,7 +165,7 @@ const useDoctorAvailability = () => {
 
   const saveCustomHour = () => {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(customTime)) {
-      showToast('Formato inválido. Use HH:MM, ex: 08:30');
+      showToast('Invalid format. Use HH:MM, e.g.: 08:30');
       return;
     }
     setWeeklySchedule(prev => ({
@@ -200,8 +200,13 @@ const DayCard = ({ dayKey, label, schedule, onSelectHour, onClear, onOpenCustom 
       </TouchableOpacity>
     </View>
     <View style={styles.row}>
-      <Text style={styles.timeLabel}>Início:</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <Text style={styles.timeLabel}>Start:</Text>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContainer}
+        style={styles.scrollView}
+      >
         {HOURS.map(h => (
           <TimeChip
             key={h}
@@ -212,13 +217,18 @@ const DayCard = ({ dayKey, label, schedule, onSelectHour, onClear, onOpenCustom 
         ))}
         <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'start')}>
           <Ionicons name="add-circle" size={20} color="#fff" />
-          <Text style={styles.customChipText}>Personalizar</Text>
+          <Text style={styles.customChipText}>Custom</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
     <View style={styles.row}>
-      <Text style={styles.timeLabel}>Fim:</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <Text style={styles.timeLabel}>End:</Text>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContainer}
+        style={styles.scrollView}
+      >
         {HOURS.map(h => (
           <TimeChip
             key={h}
@@ -229,7 +239,7 @@ const DayCard = ({ dayKey, label, schedule, onSelectHour, onClear, onOpenCustom 
         ))}
         <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'end')}>
           <Ionicons name="add-circle" size={20} color="#fff" />
-          <Text style={styles.customChipText}>Personalizar</Text>
+          <Text style={styles.customChipText}>Custom</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -249,11 +259,14 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
           <Ionicons name="arrow-back" size={26} color="#3498db" />
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>Disponibilidade Semanal</Text>
-          <Text style={styles.headerSubtitle}>Defina os horários em que você estará disponível para consultas.</Text>
+          <Text style={styles.headerTitle}>Weekly Availability</Text>
+          <Text style={styles.headerSubtitle}>Set the hours you'll be available for appointments.</Text>
         </View>
       </View>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        style={styles.mainScrollView}
+      >
         {WEEKDAYS.map(({ key, label }) => (
           <DayCard
             key={key}
@@ -268,7 +281,7 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
       </ScrollView>
       <TouchableOpacity style={styles.saveButton} onPress={saveAvailability} disabled={loading}>
         {loading ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark-circle" size={22} color="#fff" style={{ marginRight: 8 }} />}
-        <Text style={styles.saveButtonText}>Salvar Disponibilidade</Text>
+        <Text style={styles.saveButtonText}>Save Availability</Text>
       </TouchableOpacity>
       <Modal
         visible={modal.visible}
@@ -278,8 +291,8 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Personalizar Horário</Text>
-            <Text style={styles.modalLabel}>{modal.type === 'start' ? 'Início' : 'Fim'} (HH:MM)</Text>
+            <Text style={styles.modalTitle}>Custom Time</Text>
+            <Text style={styles.modalLabel}>{modal.type === 'start' ? 'Start' : 'End'} (HH:MM)</Text>
             <TextInput
               style={styles.modalInput}
               value={customTime}
@@ -290,10 +303,10 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
             />
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setModal({ visible: false, day: null, type: null })}>
-                <Text style={styles.modalBtnCancelText}>Cancelar</Text>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalBtnSave} onPress={saveCustomHour}>
-                <Text style={styles.modalBtnSaveText}>Salvar</Text>
+                <Text style={styles.modalBtnSaveText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -305,34 +318,192 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f6fc' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 18, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e3e9f2', elevation: 2 },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: 18, 
+    backgroundColor: '#fff', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#e3e9f2', 
+    elevation: 2 
+  },
   backButton: { marginRight: 16 },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#3498db', letterSpacing: 1 },
   headerSubtitle: { fontSize: 15, color: '#555', marginTop: 2, marginBottom: 2 },
-  scrollContent: { padding: 18, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 18, padding: 18, marginBottom: 22, shadowColor: '#3498db', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 10, elevation: 3 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#3498db', letterSpacing: 0.5 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  timeLabel: { fontSize: 16, color: '#555', marginRight: 8, minWidth: 54, fontWeight: 'bold' },
-  hourChip: { backgroundColor: '#eaf3ff', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 16, marginRight: 8, marginBottom: 4, borderWidth: 1, borderColor: '#e0e7ef' },
+  mainScrollView: { flex: 1 },
+  scrollContent: { 
+    padding: 18, 
+    paddingBottom: 120 // Extra space for save button
+  },
+  card: { 
+    backgroundColor: '#fff', 
+    borderRadius: 18, 
+    padding: 18, 
+    marginBottom: 22, 
+    shadowColor: '#3498db', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.10, 
+    shadowRadius: 10, 
+    elevation: 3 
+  },
+  cardHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 12 
+  },
+  cardTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: '#3498db', 
+    letterSpacing: 0.5 
+  },
+  row: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 10 
+  },
+  timeLabel: { 
+    fontSize: 16, 
+    color: '#555', 
+    marginRight: 8, 
+    minWidth: 54, 
+    fontWeight: 'bold' 
+  },
+  scrollView: {
+    flex: 1,
+    maxHeight: 50, // Fixed height for horizontal scroll
+  },
+  scrollContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 16, // Extra padding at the end
+  },
+  hourChip: { 
+    backgroundColor: '#eaf3ff', 
+    borderRadius: 20, 
+    paddingVertical: 7, 
+    paddingHorizontal: 16, 
+    marginRight: 8, 
+    borderWidth: 1, 
+    borderColor: '#e0e7ef',
+    minWidth: 60, // Fixed minimum width for consistency
+    alignItems: 'center'
+  },
   selectedChip: { backgroundColor: '#3498db', borderColor: '#3498db' },
   chipText: { color: '#3498db', fontWeight: 'bold', fontSize: 16 },
   selectedChipText: { color: '#fff' },
-  customChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6c47ff', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 14, marginRight: 8, marginBottom: 4 },
-  customChipText: { color: '#fff', fontWeight: 'bold', fontSize: 15, marginLeft: 4 },
-  saveButton: { flexDirection: 'row', backgroundColor: '#3498db', padding: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 10, marginBottom: 30, shadowColor: '#3498db', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2 },
-  saveButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginLeft: 4, letterSpacing: 0.5 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', borderRadius: 18, padding: 24, width: 320, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 5 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#3498db', marginBottom: 18 },
-  modalLabel: { fontSize: 15, color: '#555', alignSelf: 'flex-start', marginTop: 8 },
-  modalInput: { borderWidth: 1, borderColor: '#e0e7ef', borderRadius: 8, padding: 10, fontSize: 16, width: '100%', marginTop: 4, backgroundColor: '#f7fafd', color: '#333' },
-  modalActions: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 22 },
-  modalBtnCancel: { flex: 1, backgroundColor: '#e3e9f2', padding: 12, borderRadius: 8, alignItems: 'center', marginRight: 8 },
-  modalBtnCancelText: { color: '#555', fontWeight: 'bold', fontSize: 16 },
-  modalBtnSave: { flex: 1, backgroundColor: '#3498db', padding: 12, borderRadius: 8, alignItems: 'center', marginLeft: 8 },
-  modalBtnSaveText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  customChip: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#6c47ff', 
+    borderRadius: 20, 
+    paddingVertical: 7, 
+    paddingHorizontal: 14, 
+    marginRight: 16, // Extra margin for better spacing
+    minWidth: 100 // Minimum width for custom button
+  },
+  customChipText: { 
+    color: '#fff', 
+    fontWeight: 'bold', 
+    fontSize: 15, 
+    marginLeft: 4 
+  },
+  saveButton: { 
+    flexDirection: 'row', 
+    backgroundColor: '#3498db', 
+    padding: 18, 
+    borderRadius: 12, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginHorizontal: 18,
+    marginBottom: 30, 
+    shadowColor: '#3498db', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.12, 
+    shadowRadius: 8, 
+    elevation: 2 
+  },
+  saveButtonText: { 
+    color: '#fff', 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    marginLeft: 4, 
+    letterSpacing: 0.5 
+  },
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.18)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  modalContent: { 
+    backgroundColor: '#fff', 
+    borderRadius: 18, 
+    padding: 24, 
+    width: 320, 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.15, 
+    shadowRadius: 10, 
+    elevation: 5 
+  },
+  modalTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#3498db', 
+    marginBottom: 18 
+  },
+  modalLabel: { 
+    fontSize: 15, 
+    color: '#555', 
+    alignSelf: 'flex-start', 
+    marginTop: 8 
+  },
+  modalInput: { 
+    borderWidth: 1, 
+    borderColor: '#e0e7ef', 
+    borderRadius: 8, 
+    padding: 10, 
+    fontSize: 16, 
+    width: '100%', 
+    marginTop: 4, 
+    backgroundColor: '#f7fafd', 
+    color: '#333' 
+  },
+  modalActions: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    width: '100%', 
+    marginTop: 22 
+  },
+  modalBtnCancel: { 
+    flex: 1, 
+    backgroundColor: '#e3e9f2', 
+    padding: 12, 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    marginRight: 8 
+  },
+  modalBtnCancelText: { 
+    color: '#555', 
+    fontWeight: 'bold', 
+    fontSize: 16 
+  },
+  modalBtnSave: { 
+    flex: 1, 
+    backgroundColor: '#3498db', 
+    padding: 12, 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    marginLeft: 8 
+  },
+  modalBtnSaveText: { 
+    color: '#fff', 
+    fontWeight: 'bold', 
+    fontSize: 16 
+  },
 });
 
 export default DoctorAvailabilityScreen; 

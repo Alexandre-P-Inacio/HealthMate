@@ -405,9 +405,9 @@ const AppointmentsScreen = ({ navigation }) => {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Escolha nova data e horário</Text>
+            <Text style={styles.modalTitle}>Choose new date and time</Text>
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Data</Text>
+                              <Text style={styles.label}>Date</Text>
               <TouchableOpacity
                 style={styles.dateTimeButton}
                 onPress={() => setShowDatePicker(true)}
@@ -431,9 +431,9 @@ const AppointmentsScreen = ({ navigation }) => {
               )}
             </View>
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Horário disponível</Text>
+              <Text style={styles.label}>Available time</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {availableSlots.length === 0 && <Text style={{ color: '#888' }}>Nenhum horário disponível</Text>}
+                                  {availableSlots.length === 0 && <Text style={{ color: '#888' }}>No available time slots</Text>}
                 {availableSlots.map(slot => (
                   <TouchableOpacity
                     key={slot.toISOString()}
@@ -483,19 +483,19 @@ const AppointmentsScreen = ({ navigation }) => {
                   setSelectedSlot(null);
                 }}
               >
-                <Text style={{ color: '#4A67E3', fontWeight: 'bold', fontSize: 16 }}>Cancelar</Text>
+                <Text style={{ color: '#4A67E3', fontWeight: 'bold', fontSize: 16 }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
                 onPress={() => {
                   if (!selectedSlot) {
-                    Alert.alert('Selecione um horário disponível!');
+                    Alert.alert('Please select an available time slot!');
                     return;
                   }
                   handleRequestNewDate(selectedAppointment?.id, selectedAppointment?.doctor_id, selectedSlot);
                 }}
               >
-                <Text style={styles.buttonText}>Confirmar</Text>
+                <Text style={styles.buttonText}>Confirm</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1053,7 +1053,7 @@ const AppointmentsScreen = ({ navigation }) => {
             <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={28} color="#4a67e3" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 22, fontWeight: '700', color: '#222' }}>Consultas</Text>
+            <Text style={{ fontSize: 22, fontWeight: '700', color: '#222' }}>Appointments</Text>
           </View>
           {isMedic && userDoctorData && (
             <TouchableOpacity style={{ marginLeft: 8 }} onPress={() => navigation.navigate('RequestAppointmentScreen', { doctor: userDoctorData })}>
@@ -1088,13 +1088,13 @@ const AppointmentsScreen = ({ navigation }) => {
           ) : appointments.length === 0 ? (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <Ionicons name="calendar-outline" size={64} color="#bdc3c7" />
-              <Text style={{ color: '#aaa', fontSize: 16, marginTop: 10 }}>Nenhuma consulta encontrada.</Text>
+              <Text style={{ color: '#aaa', fontSize: 16, marginTop: 10 }}>No appointments found.</Text>
           </View>
         ) : (
           <FlatList
             data={appointments}
             keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 30 }}
+              contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 120 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               renderItem={renderAppointmentItem}
             />

@@ -209,7 +209,10 @@ const SleepTrackerScreen = () => {
         </TouchableOpacity>
       </LinearGradient>
 
-      <ScrollView style={styles.container}>
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         {/* Today's Sleep Card */}
         <View style={styles.todayCard}>
           <View style={styles.cardHeader}>
