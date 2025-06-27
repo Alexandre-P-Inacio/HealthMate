@@ -5,9 +5,12 @@ import { DoctorAvailabilityService } from '../../services/DoctorAvailabilityServ
 import DataUser from '../../../navigation/DataUser';
 
 const HOURS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
-  '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
+  '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', 
+  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
+  '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'
 ];
+
 const WEEKDAYS = [
   { key: 'monday', label: 'Monday', idx: 1 },
   { key: 'tuesday', label: 'Tuesday', idx: 2 },
@@ -17,14 +20,15 @@ const WEEKDAYS = [
   { key: 'saturday', label: 'Saturday', idx: 6 },
   { key: 'sunday', label: 'Sunday', idx: 0 },
 ];
+
 const defaultSchedule = {
-  monday: { start: '08:00', end: '18:00' },
-  tuesday: { start: '08:00', end: '18:00' },
-  wednesday: { start: '08:00', end: '18:00' },
-  thursday: { start: '08:00', end: '18:00' },
-  friday: { start: '08:00', end: '18:00' },
-  saturday: { start: '', end: '' },
-  sunday: { start: '', end: '' }
+  monday: { start: '', end: '', enabled: false },
+  tuesday: { start: '', end: '', enabled: false },
+  wednesday: { start: '', end: '', enabled: false },
+  thursday: { start: '', end: '', enabled: false },
+  friday: { start: '', end: '', enabled: false },
+  saturday: { start: '', end: '', enabled: false },
+  sunday: { start: '', end: '', enabled: false }
 };
 
 function showToast(msg) {
@@ -51,51 +55,26 @@ const useDoctorAvailability = () => {
     try {
       const result = await DoctorAvailabilityService.getMyAvailability();
       if (result.success) {
-        const blankSchedule = {
-          monday: { start: '', end: '' },
-          tuesday: { start: '', end: '' },
-          wednesday: { start: '', end: '' },
-          thursday: { start: '', end: '' },
-          friday: { start: '', end: '' },
-          saturday: { start: '', end: '' },
-          sunday: { start: '', end: '' }
-        };
+        const schedule = { ...defaultSchedule };
         const recurring = result.data.filter(a => a.is_recurring && a.start_time && a.end_time);
-        const schedule = { ...blankSchedule };
+        
         recurring.forEach(slot => {
           const dayKey = WEEKDAYS.find(d => d.idx === slot.day_of_week)?.key;
           if (dayKey) {
             schedule[dayKey] = {
               start: slot.start_time ? slot.start_time.substring(0,5) : '',
-              end: slot.end_time ? slot.end_time.substring(0,5) : ''
+              end: slot.end_time ? slot.end_time.substring(0,5) : '',
+              enabled: true
             };
           }
         });
         setWeeklySchedule(schedule);
       } else {
-        setWeeklySchedule({
-          monday: { start: '', end: '' },
-          tuesday: { start: '', end: '' },
-          wednesday: { start: '', end: '' },
-          thursday: { start: '', end: '' },
-          friday: { start: '', end: '' },
-          saturday: { start: '', end: '' },
-          sunday: { start: '', end: '' }
-        });
-        Alert.alert('Error', result.error || 'Could not load availability.');
+        setWeeklySchedule(defaultSchedule);
         console.error('Error fetching availability:', result.error);
       }
     } catch (err) {
-      setWeeklySchedule({
-        monday: { start: '', end: '' },
-        tuesday: { start: '', end: '' },
-        wednesday: { start: '', end: '' },
-        thursday: { start: '', end: '' },
-        friday: { start: '', end: '' },
-        saturday: { start: '', end: '' },
-        sunday: { start: '', end: '' }
-      });
-      Alert.alert('Error', err.message || 'Unexpected error');
+      setWeeklySchedule(defaultSchedule);
       console.error('Unexpected error fetching availability:', err);
     }
     setLoading(false);
@@ -110,6 +89,7 @@ const useDoctorAvailability = () => {
         Alert.alert('Error', 'User not logged in. Please log in again.');
         return;
       }
+
       // Delete all existing recurring slots
       const result = await DoctorAvailabilityService.getAvailabilityByDoctorId(currentUser.id);
       if (result.success) {
@@ -118,23 +98,23 @@ const useDoctorAvailability = () => {
           const del = await DoctorAvailabilityService.deleteAvailability(slot.id);
           if (!del.success) throw new Error(del.error || 'Error deleting availability.');
         }
-      } else {
-        throw new Error(result.error || 'Error fetching availability.');
       }
-      // Insert new slots
+
+      // Insert new slots for enabled days
       for (const { key, idx } of WEEKDAYS) {
-        const { start, end } = weeklySchedule[key];
-        if (start && end) {
+        const daySchedule = weeklySchedule[key];
+        if (daySchedule.enabled && daySchedule.start && daySchedule.end) {
           const add = await DoctorAvailabilityService.addAvailability({
             day_of_week: idx,
-            start_time: start + ':00',
-            end_time: end + ':00',
+            start_time: daySchedule.start + ':00',
+            end_time: daySchedule.end + ':00',
             is_recurring: true,
             is_available: true
           });
           if (!add.success) throw new Error(add.error || 'Error adding availability.');
         }
       }
+
       setLoading(false);
       showToast('Availability saved successfully!');
       fetchAvailability();
@@ -144,17 +124,22 @@ const useDoctorAvailability = () => {
     }
   };
 
+  const toggleDay = (day) => {
+    setWeeklySchedule(prev => ({
+      ...prev,
+      [day]: { 
+        ...prev[day], 
+        enabled: !prev[day].enabled,
+        start: prev[day].enabled ? '' : '09:00',
+        end: prev[day].enabled ? '' : '17:00'
+      }
+    }));
+  };
+
   const handleSelectHour = (day, type, hour) => {
     setWeeklySchedule(prev => ({
       ...prev,
       [day]: { ...prev[day], [type]: hour }
-    }));
-  };
-
-  const handleClearDay = (day) => {
-    setWeeklySchedule(prev => ({
-      ...prev,
-      [day]: { start: '', end: '' }
     }));
   };
 
@@ -175,86 +160,191 @@ const useDoctorAvailability = () => {
     setModal({ visible: false, day: null, type: null });
   };
 
+  const copyToAllDays = (sourceDay) => {
+    const sourceSchedule = weeklySchedule[sourceDay];
+    if (!sourceSchedule.enabled) return;
+
+    Alert.alert(
+      'Copy Schedule',
+      `Copy ${sourceDay}'s schedule (${sourceSchedule.start} - ${sourceSchedule.end}) to all other days?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Copy',
+          onPress: () => {
+            setWeeklySchedule(prev => {
+              const updated = { ...prev };
+              Object.keys(updated).forEach(day => {
+                if (day !== sourceDay) {
+                  updated[day] = {
+                    start: sourceSchedule.start,
+                    end: sourceSchedule.end,
+                    enabled: true
+                  };
+                }
+              });
+              return updated;
+            });
+          }
+        }
+      ]
+    );
+  };
+
   return {
-    weeklySchedule, setWeeklySchedule, loading, modal, setModal, customTime, setCustomTime,
-    fetchAvailability, saveAvailability, handleSelectHour, handleClearDay, openCustomModal, saveCustomHour
+    weeklySchedule, loading, modal, customTime,
+    saveAvailability, handleSelectHour, openCustomModal, setCustomTime, setModal, 
+    saveCustomHour, toggleDay, copyToAllDays
   };
 };
 
-const TimeChip = ({ label, selected, onPress }) => (
-  <TouchableOpacity
-    style={[styles.hourChip, selected && styles.selectedChip]}
+const TimeSelector = ({ label, value, onPress, disabled }) => (
+  <TouchableOpacity 
+    style={[styles.timeSelector, disabled && styles.timeSelectorDisabled]} 
     onPress={onPress}
-    activeOpacity={0.7}
+    disabled={disabled}
   >
-    <Text style={[styles.chipText, selected && styles.selectedChipText]}>{label}</Text>
+    <Text style={[styles.timeSelectorLabel, disabled && styles.timeSelectorLabelDisabled]}>
+      {label}
+    </Text>
+    <View style={styles.timeSelectorValue}>
+      <Text style={[styles.timeSelectorText, disabled && styles.timeSelectorTextDisabled]}>
+        {value || 'Select'}
+      </Text>
+      <Ionicons 
+        name="chevron-down" 
+        size={20} 
+        color={disabled ? '#ccc' : '#3498db'} 
+      />
+    </View>
   </TouchableOpacity>
 );
 
-const DayCard = ({ dayKey, label, schedule, onSelectHour, onClear, onOpenCustom }) => (
-  <View style={styles.card}>
-    <View style={styles.cardHeader}>
-      <Text style={styles.cardTitle}>{label}</Text>
-      <TouchableOpacity onPress={() => onClear(dayKey)}>
-        <Ionicons name="close-circle" size={22} color="#e74c3c" />
-      </TouchableOpacity>
-    </View>
-    
-    {/* Start Time Row */}
-    <View style={styles.timeRow}>
-      <Text style={styles.timeLabel}>Start:</Text>
-    </View>
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={true}
-      style={styles.timeScrollView}
-      contentContainerStyle={styles.timeScrollContent}
+const DayCard = ({ dayKey, label, schedule, onToggle, onSelectHour, onOpenCustom, onCopyToAll }) => {
+  const [showTimeModal, setShowTimeModal] = useState({ visible: false, type: null });
+
+  const selectTime = (type) => {
+    setShowTimeModal({ visible: true, type });
+  };
+
+  const TimePickerModal = () => (
+    <Modal
+      visible={showTimeModal.visible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowTimeModal({ visible: false, type: null })}
     >
-      {HOURS.map(h => (
-        <TimeChip
-          key={h}
-          label={h}
-          selected={schedule.start === h}
-          onPress={() => onSelectHour(dayKey, 'start', h)}
-        />
-      ))}
-      <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'start')}>
-        <Ionicons name="add-circle" size={20} color="#fff" />
-        <Text style={styles.customChipText}>Custom</Text>
-      </TouchableOpacity>
-    </ScrollView>
-    
-    {/* End Time Row */}
-    <View style={styles.timeRow}>
-      <Text style={styles.timeLabel}>End:</Text>
+      <View style={styles.modalOverlay}>
+        <View style={styles.timeModalContent}>
+          <View style={styles.timeModalHeader}>
+            <Text style={styles.timeModalTitle}>
+              Select {showTimeModal.type === 'start' ? 'Start' : 'End'} Time
+            </Text>
+            <TouchableOpacity onPress={() => setShowTimeModal({ visible: false, type: null })}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.timeOptionsContainer} showsVerticalScrollIndicator={false}>
+            {HOURS.map(hour => (
+              <TouchableOpacity
+                key={hour}
+                style={[
+                  styles.timeOption,
+                  schedule[showTimeModal.type] === hour && styles.timeOptionSelected
+                ]}
+                onPress={() => {
+                  onSelectHour(dayKey, showTimeModal.type, hour);
+                  setShowTimeModal({ visible: false, type: null });
+                }}
+              >
+                <Text style={[
+                  styles.timeOptionText,
+                  schedule[showTimeModal.type] === hour && styles.timeOptionTextSelected
+                ]}>
+                  {hour}
+                </Text>
+                {schedule[showTimeModal.type] === hour && (
+                  <Ionicons name="checkmark" size={20} color="#fff" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity 
+            style={styles.customTimeButton}
+            onPress={() => {
+              setShowTimeModal({ visible: false, type: null });
+              onOpenCustom(dayKey, showTimeModal.type);
+            }}
+          >
+            <Ionicons name="create-outline" size={20} color="#6c47ff" />
+            <Text style={styles.customTimeButtonText}>Enter Custom Time</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  return (
+    <View style={styles.dayCard}>
+      <View style={styles.dayHeader}>
+        <View style={styles.dayTitleContainer}>
+          <TouchableOpacity
+            style={[styles.dayToggle, schedule.enabled && styles.dayToggleActive]}
+            onPress={() => onToggle(dayKey)}
+          >
+            <Ionicons 
+              name={schedule.enabled ? "checkmark" : "add"} 
+              size={20} 
+              color={schedule.enabled ? "#fff" : "#3498db"} 
+            />
+          </TouchableOpacity>
+          <Text style={[styles.dayTitle, !schedule.enabled && styles.dayTitleDisabled]}>
+            {label}
+          </Text>
+        </View>
+        {schedule.enabled && (
+          <TouchableOpacity
+            style={styles.copyButton}
+            onPress={() => onCopyToAll(dayKey)}
+          >
+            <Ionicons name="copy-outline" size={18} color="#6c47ff" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {schedule.enabled && (
+        <View style={styles.timeContainer}>
+          <TimeSelector
+            label="Start Time"
+            value={schedule.start}
+            onPress={() => selectTime('start')}
+            disabled={!schedule.enabled}
+          />
+          <View style={styles.timeSeparator}>
+            <Text style={styles.timeSeparatorText}>to</Text>
+          </View>
+          <TimeSelector
+            label="End Time"
+            value={schedule.end}
+            onPress={() => selectTime('end')}
+            disabled={!schedule.enabled}
+          />
+        </View>
+      )}
+
+      <TimePickerModal />
     </View>
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={true}
-      style={styles.timeScrollView}
-      contentContainerStyle={styles.timeScrollContent}
-    >
-      {HOURS.map(h => (
-        <TimeChip
-          key={h}
-          label={h}
-          selected={schedule.end === h}
-          onPress={() => onSelectHour(dayKey, 'end', h)}
-        />
-      ))}
-      <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'end')}>
-        <Ionicons name="add-circle" size={20} color="#fff" />
-        <Text style={styles.customChipText}>Custom</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  </View>
-);
+  );
+};
 
 const DoctorAvailabilityScreen = ({ navigation }) => {
   const {
     weeklySchedule, loading, modal, customTime,
-    saveAvailability, handleSelectHour, handleClearDay, openCustomModal, setCustomTime, setModal, saveCustomHour
+    saveAvailability, handleSelectHour, openCustomModal, setCustomTime, setModal, 
+    saveCustomHour, toggleDay, copyToAllDays
   } = useDoctorAvailability();
+
+  const enabledDaysCount = Object.values(weeklySchedule).filter(day => day.enabled).length;
 
   return (
     <View style={styles.container}>
@@ -262,14 +352,18 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={26} color="#3498db" />
         </TouchableOpacity>
-        <View>
+        <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Weekly Availability</Text>
-          <Text style={styles.headerSubtitle}>Set the hours you'll be available for appointments.</Text>
+          <Text style={styles.headerSubtitle}>
+            {enabledDaysCount} day{enabledDaysCount !== 1 ? 's' : ''} configured
+          </Text>
         </View>
       </View>
+
       <ScrollView 
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        style={styles.mainScrollView}
+        showsVerticalScrollIndicator={false}
       >
         {WEEKDAYS.map(({ key, label }) => (
           <DayCard
@@ -277,16 +371,32 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
             dayKey={key}
             label={label}
             schedule={weeklySchedule[key]}
+            onToggle={toggleDay}
             onSelectHour={handleSelectHour}
-            onClear={handleClearDay}
             onOpenCustom={openCustomModal}
+            onCopyToAll={copyToAllDays}
           />
         ))}
       </ScrollView>
-      <TouchableOpacity style={styles.saveButton} onPress={saveAvailability} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark-circle" size={22} color="#fff" style={{ marginRight: 8 }} />}
-        <Text style={styles.saveButtonText}>Save Availability</Text>
-      </TouchableOpacity>
+
+      <View style={styles.footer}>
+        <TouchableOpacity 
+          style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
+          onPress={saveAvailability} 
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={22} color="#fff" />
+              <Text style={styles.saveButtonText}>Save Availability</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Custom Time Modal */}
       <Modal
         visible={modal.visible}
         transparent
@@ -296,17 +406,22 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Custom Time</Text>
-            <Text style={styles.modalLabel}>{modal.type === 'start' ? 'Start' : 'End'} (HH:MM)</Text>
+            <Text style={styles.modalLabel}>
+              {modal.type === 'start' ? 'Start' : 'End'} Time (HH:MM)
+            </Text>
             <TextInput
               style={styles.modalInput}
               value={customTime}
               onChangeText={setCustomTime}
-              placeholder="08:00"
+              placeholder="08:30"
               keyboardType="numeric"
               maxLength={5}
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setModal({ visible: false, day: null, type: null })}>
+              <TouchableOpacity 
+                style={styles.modalBtnCancel} 
+                onPress={() => setModal({ visible: false, day: null, type: null })}
+              >
                 <Text style={styles.modalBtnCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalBtnSave} onPress={saveCustomHour}>
@@ -321,202 +436,293 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f2f6fc' },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 18, 
-    backgroundColor: '#fff', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#e3e9f2', 
-    elevation: 2 
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
   },
-  backButton: { marginRight: 16 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#3498db', letterSpacing: 1 },
-  headerSubtitle: { fontSize: 15, color: '#555', marginTop: 2, marginBottom: 2 },
-  mainScrollView: { flex: 1 },
-  scrollContent: { 
-    padding: 18, 
-    paddingBottom: 120 // Extra space for save button
-  },
-  card: { 
-    backgroundColor: '#fff', 
-    borderRadius: 18, 
-    padding: 18, 
-    marginBottom: 22, 
-    shadowColor: '#3498db', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.10, 
-    shadowRadius: 10, 
-    elevation: 3 
-  },
-  cardHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 12 
-  },
-  cardTitle: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: '#3498db', 
-    letterSpacing: 0.5 
-  },
-  timeRow: {
-    marginBottom: 8,
-  },
-  timeLabel: { 
-    fontSize: 16, 
-    color: '#555', 
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  timeScrollView: {
-    height: 60,
-    marginBottom: 15,
-  },
-  timeScrollContent: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
-  hourChip: { 
-    backgroundColor: '#eaf3ff', 
-    borderRadius: 25, 
-    paddingVertical: 10, 
-    paddingHorizontal: 18, 
-    marginRight: 12, 
-    borderWidth: 1, 
-    borderColor: '#e0e7ef',
+  backButton: {
+    marginRight: 16,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  dayCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  dayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dayTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dayToggle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#3498db',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 70,
-    height: 45,
-  },
-  selectedChip: { 
-    backgroundColor: '#3498db', 
-    borderColor: '#3498db' 
-  },
-  chipText: { 
-    color: '#3498db', 
-    fontWeight: 'bold', 
-    fontSize: 16 
-  },
-  selectedChipText: { 
-    color: '#fff' 
-  },
-  customChip: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#6c47ff', 
-    borderRadius: 25, 
-    paddingVertical: 10, 
-    paddingHorizontal: 16, 
     marginRight: 12,
-    height: 45,
-    minWidth: 100,
   },
-  customChipText: { 
-    color: '#fff', 
-    fontWeight: 'bold', 
-    fontSize: 15, 
-    marginLeft: 4 
+  dayToggleActive: {
+    backgroundColor: '#3498db',
   },
-  saveButton: { 
-    flexDirection: 'row', 
-    backgroundColor: '#3498db', 
-    padding: 18, 
-    borderRadius: 12, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginHorizontal: 18,
-    marginBottom: 30, 
-    shadowColor: '#3498db', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.12, 
-    shadowRadius: 8, 
-    elevation: 2 
+  dayTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
   },
-  saveButtonText: { 
-    color: '#fff', 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    marginLeft: 4, 
-    letterSpacing: 0.5 
+  dayTitleDisabled: {
+    color: '#94a3b8',
   },
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.18)', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  copyButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
   },
-  modalContent: { 
-    backgroundColor: '#fff', 
-    borderRadius: 18, 
-    padding: 24, 
-    width: 320, 
-    alignItems: 'center', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.15, 
-    shadowRadius: 10, 
-    elevation: 5 
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  modalTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#3498db', 
-    marginBottom: 18 
+  timeSelector: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  modalLabel: { 
-    fontSize: 15, 
-    color: '#555', 
-    alignSelf: 'flex-start', 
-    marginTop: 8 
+  timeSelectorDisabled: {
+    opacity: 0.5,
   },
-  modalInput: { 
-    borderWidth: 1, 
-    borderColor: '#e0e7ef', 
-    borderRadius: 8, 
-    padding: 10, 
-    fontSize: 16, 
-    width: '100%', 
-    marginTop: 4, 
-    backgroundColor: '#f7fafd', 
-    color: '#333' 
+  timeSelectorLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 4,
+    fontWeight: '500',
   },
-  modalActions: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    width: '100%', 
-    marginTop: 22 
+  timeSelectorLabelDisabled: {
+    color: '#cbd5e1',
   },
-  modalBtnCancel: { 
-    flex: 1, 
-    backgroundColor: '#e3e9f2', 
-    padding: 12, 
-    borderRadius: 8, 
-    alignItems: 'center', 
-    marginRight: 8 
+  timeSelectorValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  modalBtnCancelText: { 
-    color: '#555', 
-    fontWeight: 'bold', 
-    fontSize: 16 
+  timeSelectorText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1e293b',
   },
-  modalBtnSave: { 
-    flex: 1, 
-    backgroundColor: '#3498db', 
-    padding: 12, 
-    borderRadius: 8, 
-    alignItems: 'center', 
-    marginLeft: 8 
+  timeSelectorTextDisabled: {
+    color: '#cbd5e1',
   },
-  modalBtnSaveText: { 
-    color: '#fff', 
-    fontWeight: 'bold', 
-    fontSize: 16 
+  timeSeparator: {
+    marginHorizontal: 12,
+    alignItems: 'center',
+  },
+  timeSeparatorText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  footer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  saveButton: {
+    backgroundColor: '#3498db',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#3498db',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: '85%',
+    maxHeight: '70%',
+    elevation: 5,
+  },
+  timeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  timeModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  timeOptionsContainer: {
+    maxHeight: 300,
+  },
+  timeOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  timeOptionSelected: {
+    backgroundColor: '#3498db',
+  },
+  timeOptionText: {
+    fontSize: 16,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  timeOptionTextSelected: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  customTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  customTimeButtonText: {
+    fontSize: 16,
+    color: '#6c47ff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 8,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 24,
+    backgroundColor: '#f8fafc',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalBtnCancel: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  modalBtnCancelText: {
+    color: '#64748b',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  modalBtnSave: {
+    flex: 1,
+    backgroundColor: '#3498db',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  modalBtnSaveText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 
