@@ -201,47 +201,51 @@ const DayCard = ({ dayKey, label, schedule, onSelectHour, onClear, onOpenCustom 
     </View>
     <View style={styles.row}>
       <Text style={styles.timeLabel}>Start:</Text>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContainer}
-        style={styles.scrollView}
-      >
-        {HOURS.map(h => (
-          <TimeChip
-            key={h}
-            label={h}
-            selected={schedule.start === h}
-            onPress={() => onSelectHour(dayKey, 'start', h)}
-          />
-        ))}
-        <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'start')}>
-          <Ionicons name="add-circle" size={20} color="#fff" />
-          <Text style={styles.customChipText}>Custom</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <View style={styles.scrollWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContainer}
+          style={styles.scrollView}
+        >
+          {HOURS.map(h => (
+            <TimeChip
+              key={h}
+              label={h}
+              selected={schedule.start === h}
+              onPress={() => onSelectHour(dayKey, 'start', h)}
+            />
+          ))}
+          <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'start')}>
+            <Ionicons name="add-circle" size={20} color="#fff" />
+            <Text style={styles.customChipText}>Custom</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
     </View>
     <View style={styles.row}>
       <Text style={styles.timeLabel}>End:</Text>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContainer}
-        style={styles.scrollView}
-      >
-        {HOURS.map(h => (
-          <TimeChip
-            key={h}
-            label={h}
-            selected={schedule.end === h}
-            onPress={() => onSelectHour(dayKey, 'end', h)}
-          />
-        ))}
-        <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'end')}>
-          <Ionicons name="add-circle" size={20} color="#fff" />
-          <Text style={styles.customChipText}>Custom</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <View style={styles.scrollWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContainer}
+          style={styles.scrollView}
+        >
+          {HOURS.map(h => (
+            <TimeChip
+              key={h}
+              label={h}
+              selected={schedule.end === h}
+              onPress={() => onSelectHour(dayKey, 'end', h)}
+            />
+          ))}
+          <TouchableOpacity style={styles.customChip} onPress={() => onOpenCustom(dayKey, 'end')}>
+            <Ionicons name="add-circle" size={20} color="#fff" />
+            <Text style={styles.customChipText}>Custom</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
     </View>
   </View>
 );
@@ -370,14 +374,18 @@ const styles = StyleSheet.create({
     minWidth: 54, 
     fontWeight: 'bold' 
   },
+  scrollWrapper: {
+    flex: 1,
+    height: 50,
+  },
   scrollView: {
     flex: 1,
-    maxHeight: 50, // Fixed height for horizontal scroll
   },
   scrollContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingRight: 16, // Extra padding at the end
+    minHeight: 50,
   },
   hourChip: { 
     backgroundColor: '#eaf3ff', 
