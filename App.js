@@ -33,6 +33,8 @@ import WeightTrackerScreen from './src/App/Health/WeightTrackerScreen';
 import BloodPressureScreen from './src/App/Health/BloodPressureScreen';
 import BloodSugarScreen from './src/App/Health/BloodSugarScreen';
 import HeartRateScreen from './src/App/Health/HeartRateScreen';
+import VitalsHistoryScreen from './src/App/Health/VitalsHistoryScreen';
+import BodyCompositionHistoryScreen from './src/App/Health/BodyCompositionHistoryScreen';
 
 // Medical & Appointments
 import DoctorsScreen from './src/App/Medic/DoctorsScreen';
@@ -157,6 +159,8 @@ const App = () => {
           <Stack.Screen name="BloodPressure" component={BloodPressureScreen} />
           <Stack.Screen name="BloodSugar" component={BloodSugarScreen} />
           <Stack.Screen name="HeartRate" component={HeartRateScreen} />
+          <Stack.Screen name="VitalsHistoryScreen" component={VitalsHistoryScreen} />
+          <Stack.Screen name="BodyCompositionHistoryScreen" component={BodyCompositionHistoryScreen} />
 
           {/* Medical & Appointments */}
           <Stack.Screen name="DoctorsScreen" component={DoctorsScreen} />

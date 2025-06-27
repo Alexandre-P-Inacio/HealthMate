@@ -124,7 +124,23 @@ export class AppointmentService {
 
       let query = supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          *,
+          users:user_id (
+            id,
+            fullname,
+            email
+          ),
+          doctors:doctor_id (
+            id,
+            name,
+            specialization,
+            user_id,
+            user:user_id (
+              fullname
+            )
+          )
+        `)
         .eq('doctor_id', parsedDoctorId)
         .order('appointment_datetime', { ascending: true });
 
@@ -145,9 +161,19 @@ export class AppointmentService {
       const { data: appointments, error } = await query;
       if (error) throw error;
 
+      // Process appointments to ensure user data is available
+      const processedAppointments = appointments.map(appointment => {
+        // Ensure users data is properly structured
+        if (appointment.users && !appointment.users.fullname && appointment.users.email) {
+          appointment.users.fullname = appointment.users.email.split('@')[0];
+        }
+        
+        return appointment;
+      });
+
       return {
         success: true,
-        data: appointments
+        data: processedAppointments
       };
     } catch (error) {
       console.error('Error fetching doctor appointments:', error);
@@ -168,7 +194,23 @@ export class AppointmentService {
 
       let query = supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          *,
+          users:user_id (
+            id,
+            fullname,
+            email
+          ),
+          doctors:doctor_id (
+            id,
+            name,
+            specialization,
+            user_id,
+            user:user_id (
+              fullname
+            )
+          )
+        `)
         .eq('user_id', parsedUserId)
         .order('appointment_datetime', { ascending: true });
 
@@ -179,9 +221,24 @@ export class AppointmentService {
       const { data: appointments, error } = await query;
       if (error) throw error;
 
+      // Process appointments to ensure doctor data is available
+      const processedAppointments = appointments.map(appointment => {
+        // Ensure doctors data is properly structured
+        if (appointment.doctors) {
+          // If doctor has a user relation, use that fullname, otherwise use doctor name
+          if (appointment.doctors.user && appointment.doctors.user.fullname) {
+            appointment.doctors.fullname = appointment.doctors.user.fullname;
+          } else if (appointment.doctors.name) {
+            appointment.doctors.fullname = appointment.doctors.name;
+          }
+        }
+        
+        return appointment;
+      });
+
       return {
         success: true,
-        data: appointments
+        data: processedAppointments
       };
     } catch (error) {
       console.error('Error fetching user appointments:', error);

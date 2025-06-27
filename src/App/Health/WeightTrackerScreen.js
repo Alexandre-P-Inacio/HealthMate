@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -8,51 +8,202 @@ import HealthConnectService from '../../services/HealthConnectTypeScript';
 const WeightTrackerScreen = () => {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [healthData, setHealthData] = useState(null);
+  const [healthResponses, setHealthResponses] = useState(null);
 
-  const fetchDigitalScaleData = async () => {
+  const fetchAllHealthData = async () => {
     setLoading(true);
-    setHealthData(null);
+    console.log('🚀 [Fetch] Iniciando busca de dados da balança digital...');
+    
     try {
-      const [weightRes, heightRes, bodyFatRes, leanBodyMassRes, bodyWaterMassRes, boneMassRes, bmrRes, heartRateRes] = await Promise.all([
-        HealthConnectService.getWeightData(7),
-        HealthConnectService.getHeightData(7),
-        HealthConnectService.getBodyFatData(7),
-        HealthConnectService.getLeanBodyMassData(7),
-        HealthConnectService.getBodyWaterMassData(7),
-        HealthConnectService.getBoneMassData(7),
-        HealthConnectService.getBasalMetabolicRateData(7),
-        HealthConnectService.getHeartRateData ? HealthConnectService.getHeartRateData(7) : { latest: null, data: [] },
-      ]);
+      const promises = [
+        HealthConnectService.getWeightData(),
+        HealthConnectService.getBodyFatData(),
+        HealthConnectService.getLeanBodyMassData(),
+        HealthConnectService.getBodyWaterMassData(),
+        HealthConnectService.getBoneMassData(),
+        HealthConnectService.getBasalMetabolicRateData(),
+        // Removed getHeightData() - permission error
+      ];
 
-      // Função utilitária para extrair o valor mais recente de cada métrica
-      const getLatestValue = (res, path) => {
-        if (!res || !res.latest) return null;
-        try {
-          return path.split('.').reduce((obj, key) => (obj && obj[key] !== undefined ? obj[key] : null), res.latest);
-        } catch {
-          return null;
-        }
+      const results = await Promise.allSettled(promises);
+      
+      // Process and extract data properly
+      const responses = {
+        weightRes: null,
+        bodyFatRes: null,
+        leanBodyMassRes: null,
+        bodyWaterMassRes: null,
+        boneMassRes: null,
+        bmrRes: null,
       };
 
-      setHealthData({
-        weight: getLatestValue(weightRes, 'weight.inKilograms'),
-        height: getLatestValue(heightRes, 'height.inMeters'),
-        bodyFat: getLatestValue(bodyFatRes, 'percentage'),
-        leanBodyMass: getLatestValue(leanBodyMassRes, 'mass.inKilograms'),
-        bodyWaterMass: getLatestValue(bodyWaterMassRes, 'mass.inKilograms'),
-        boneMass: getLatestValue(boneMassRes, 'mass.inKilograms'),
-        bmr: getLatestValue(bmrRes, 'basalMetabolicRate.inKilocaloriesPerDay'),
-        heartRate: getLatestValue(heartRateRes, 'beatsPerMinute'),
+      const labels = ['Weight', 'BodyFat', 'LeanBodyMass', 'BodyWaterMass', 'BoneMass', 'BMR'];
+      
+      results.forEach((result, index) => {
+        const label = labels[index];
+        console.log(`📊 [${label}] Status: ${result.status}`);
+        
+        if (result.status === 'fulfilled') {
+          const data = result.value;
+          console.log(`✅ [${label}] Raw response:`, JSON.stringify(data, null, 2));
+          
+          // Extract the actual records array
+          let extractedData = null;
+          if (data && data.records) {
+            extractedData = { data: data.records };
+            console.log(`🔍 [${label}] Extracted ${data.records.length} records from .records`);
+          } else if (data && Array.isArray(data)) {
+            extractedData = { data: data };
+            console.log(`🔍 [${label}] Using direct array with ${data.length} items`);
+          } else if (data && data.data && Array.isArray(data.data)) {
+            extractedData = { data: data.data };
+            console.log(`🔍 [${label}] Using .data array with ${data.data.length} items`);
+          } else {
+            extractedData = { data: [] };
+            console.log(`⚠️ [${label}] No recognizable data structure, using empty array`);
+          }
+          
+          // Store in responses
+          switch (index) {
+            case 0: responses.weightRes = extractedData; break;
+            case 1: responses.bodyFatRes = extractedData; break;
+            case 2: responses.leanBodyMassRes = extractedData; break;
+            case 3: responses.bodyWaterMassRes = extractedData; break;
+            case 4: responses.boneMassRes = extractedData; break;
+            case 5: responses.bmrRes = extractedData; break;
+          }
+        } else {
+          console.log(`❌ [${label}] Error:`, result.reason);
+        }
       });
-      setModalVisible(true);
+
+      console.log('🎯 [Fetch] Processamento concluído. Salvando respostas...');
+      setHealthResponses(responses);
+      
+      // Log final structure
+      Object.keys(responses).forEach(key => {
+        if (responses[key] && responses[key].data) {
+          console.log(`📋 [Final] ${key}: ${responses[key].data.length} registros`);
+        }
+      });
+      
     } catch (error) {
-      Alert.alert('Erro', error.message || 'Erro ao buscar dados da balança digital');
+      console.error('❌ [Fetch] Erro geral:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Helper para formatar data/hora
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
+  // Create table rows from actual data
+  const createTableRows = () => {
+    if (!healthResponses) return [];
+
+    let allRows = [];
+    
+    console.log('🔍 [Tabela] Criando linhas da tabela...');
+    
+    // Weight data
+    if (healthResponses.weightRes && healthResponses.weightRes.data) {
+      healthResponses.weightRes.data.forEach(item => {
+        if (item.weight && item.weight.inKilograms) {
+          allRows.push({
+            date: item.time,
+            metric: 'Peso',
+            value: item.weight.inKilograms.toFixed(2),
+            unit: 'kg'
+          });
+        }
+      });
+    }
+    
+    // Body fat data
+    if (healthResponses.bodyFatRes && healthResponses.bodyFatRes.data) {
+      healthResponses.bodyFatRes.data.forEach(item => {
+        if (item.percentage) {
+          allRows.push({
+            date: item.time,
+            metric: 'Gordura corporal',
+            value: item.percentage.toFixed(1),
+            unit: '%'
+          });
+        }
+      });
+    }
+    
+    // Bone mass data
+    if (healthResponses.boneMassRes && healthResponses.boneMassRes.data) {
+      healthResponses.boneMassRes.data.forEach(item => {
+        if (item.mass && item.mass.inKilograms) {
+          allRows.push({
+            date: item.time,
+            metric: 'Massa óssea',
+            value: item.mass.inKilograms.toFixed(2),
+            unit: 'kg'
+          });
+        }
+      });
+    }
+    
+    // BMR data
+    if (healthResponses.bmrRes && healthResponses.bmrRes.data) {
+      healthResponses.bmrRes.data.forEach(item => {
+        if (item.basalMetabolicRate && item.basalMetabolicRate.inKilocaloriesPerDay) {
+          allRows.push({
+            date: item.time,
+            metric: 'Taxa metabólica basal',
+            value: item.basalMetabolicRate.inKilocaloriesPerDay.toFixed(0),
+            unit: 'kcal/dia'
+          });
+        }
+      });
+    }
+    
+    // Lean body mass data
+    if (healthResponses.leanBodyMassRes && healthResponses.leanBodyMassRes.data) {
+      healthResponses.leanBodyMassRes.data.forEach(item => {
+        if (item.mass && item.mass.inKilograms) {
+          allRows.push({
+            date: item.time,
+            metric: 'Massa corporal magra',
+            value: item.mass.inKilograms.toFixed(2),
+            unit: 'kg'
+          });
+        }
+      });
+    }
+    
+    // Body water mass data
+    if (healthResponses.bodyWaterMassRes && healthResponses.bodyWaterMassRes.data) {
+      healthResponses.bodyWaterMassRes.data.forEach(item => {
+        if (item.mass && item.mass.inKilograms) {
+          allRows.push({
+            date: item.time,
+            metric: 'Massa de água corporal',
+            value: item.mass.inKilograms.toFixed(2),
+            unit: 'kg'
+          });
+        }
+      });
+    }
+
+    console.log(`🎯 [Tabela] ${allRows.length} registros criados para a tabela`);
+    
+    // Sort by date descending
+    return allRows.sort((a, b) => new Date(b.date) - new Date(a.date));
+  };
+
+  const tableRows = createTableRows();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -63,115 +214,154 @@ const WeightTrackerScreen = () => {
         <Text style={styles.headerTitle}>Weight Tracker</Text>
         <View style={styles.placeholder} />
       </LinearGradient>
-      <ScrollView style={styles.container} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
-        <View style={styles.comingSoonContainer}>
-          <Ionicons name="scale" size={80} color="#66BB6A" />
-          <Text style={styles.comingSoonTitle}>Weight Tracker</Text>
-          <Text style={styles.comingSoonText}>Monitor your weight changes and track your progress.</Text>
-          <Text style={styles.comingSoonSubtext}>
-            ⚖️ Weight logging{"\n"}📈 Progress charts{"\n"}🎯 Weight goals
-          </Text>
-          <TouchableOpacity style={styles.fetchButton} onPress={fetchDigitalScaleData} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="cloud-download-outline" size={22} color="#fff" />
-                <Text style={styles.fetchButtonText}>Buscar dados da balança digital</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>📊 Dados da Balança Digital</Text>
-            {healthData ? (
-              <View style={styles.tableContainer}>
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.tableCell, styles.headerCell]}>Métrica</Text>
-                  <Text style={[styles.tableCell, styles.headerCell]}>Valor</Text>
-                  <Text style={[styles.tableCell, styles.headerCell]}>Unidade</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Peso</Text>
-                  <Text style={styles.tableCell}>{healthData.weight ? healthData.weight.toFixed(2) : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>kg</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Altura</Text>
-                  <Text style={styles.tableCell}>{healthData.height ? healthData.height.toFixed(2) : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>m</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Gordura corporal</Text>
-                  <Text style={styles.tableCell}>{healthData.bodyFat ? healthData.bodyFat.toFixed(1) : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>%</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Massa corporal magra</Text>
-                  <Text style={styles.tableCell}>{healthData.leanBodyMass ? healthData.leanBodyMass.toFixed(2) : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>kg</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Massa de água corporal</Text>
-                  <Text style={styles.tableCell}>{healthData.bodyWaterMass ? healthData.bodyWaterMass.toFixed(2) : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>kg</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Massa óssea</Text>
-                  <Text style={styles.tableCell}>{healthData.boneMass ? healthData.boneMass.toFixed(2) : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>kg</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Taxa metabólica basal</Text>
-                  <Text style={styles.tableCell}>{healthData.bmr ? healthData.bmr.toFixed(0) : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>kcal/dia</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <Text style={styles.tableCell}>Ritmo cardíaco</Text>
-                  <Text style={styles.tableCell}>{healthData.heartRate ? healthData.heartRate : 'Sem dados'}</Text>
-                  <Text style={styles.tableCell}>bpm</Text>
-                </View>
-              </View>
-            ) : (
-              <ActivityIndicator color="#6A8DFD" />
-            )}
-            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
-              <Ionicons name="close" size={24} color="#fff" />
-              <Text style={styles.closeButtonText}>Fechar</Text>
+      
+      <ScrollView style={styles.container}>
+        <View style={styles.contentContainer}>
+          <View style={styles.headerSection}>
+            <Ionicons name="scale" size={60} color="#66BB6A" />
+            <Text style={styles.title}>Dados da Balança Digital</Text>
+            <Text style={styles.subtitle}>Todos os dados de composição corporal do Health Connect</Text>
+            
+            <TouchableOpacity style={styles.fetchButton} onPress={fetchAllHealthData} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="cloud-download-outline" size={22} color="#fff" />
+                  <Text style={styles.fetchButtonText}>Buscar dados da balança digital</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
+
+          {healthResponses && (
+            <View style={styles.tableContainer}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableCell, styles.headerCell]}>Data/Hora</Text>
+                <Text style={[styles.tableCell, styles.headerCell]}>Métrica</Text>
+                <Text style={[styles.tableCell, styles.headerCell]}>Valor</Text>
+                <Text style={[styles.tableCell, styles.headerCell]}>Unidade</Text>
+              </View>
+              
+              {tableRows.length > 0 ? (
+                tableRows.map((row, idx) => (
+                  <View style={styles.tableRow} key={idx}>
+                    <Text style={styles.tableCell}>{formatDate(row.date)}</Text>
+                    <Text style={styles.tableCell}>{row.metric}</Text>
+                    <Text style={styles.tableCell}>{row.value}</Text>
+                    <Text style={styles.tableCell}>{row.unit}</Text>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.tableRow}>
+                  <Text style={styles.tableCell}>-</Text>
+                  <Text style={styles.tableCell}>Sem dados disponíveis</Text>
+                  <Text style={styles.tableCell}>-</Text>
+                  <Text style={styles.tableCell}>-</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
-      </Modal>
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#6A8DFD' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, paddingTop: 50 },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center' },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 20, 
+    paddingVertical: 15, 
+    paddingTop: 50 
+  },
+  backButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
   placeholder: { width: 40 },
   container: { flex: 1, backgroundColor: '#F5F6FA' },
-  comingSoonContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30, backgroundColor: '#fff', margin: 20, borderRadius: 20, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  comingSoonTitle: { fontSize: 28, fontWeight: 'bold', color: '#2D3142', marginTop: 20, marginBottom: 15 },
-  comingSoonText: { fontSize: 16, color: '#666', textAlign: 'center', lineHeight: 24, marginBottom: 20 },
-  comingSoonSubtext: { fontSize: 16, color: '#66BB6A', textAlign: 'center', lineHeight: 28 },
-  fetchButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6A8DFD', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, marginTop: 24 },
-  fetchButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', borderRadius: 20, padding: 28, width: '85%', alignItems: 'center', elevation: 8 },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#2D3142', marginBottom: 18 },
-  tableContainer: { width: '100%', marginTop: 10, marginBottom: 10, backgroundColor: '#F8F9FF', borderRadius: 10, overflow: 'hidden' },
-  tableHeader: { flexDirection: 'row', backgroundColor: '#6A8DFD' },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
-  tableCell: { flex: 1, padding: 10, textAlign: 'center', color: '#333' },
-  headerCell: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  closeButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6A8DFD', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 25, marginTop: 24 },
-  closeButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
+  contentContainer: { 
+    padding: 20 
+  },
+  headerSection: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  title: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: '#2D3142', 
+    marginTop: 15, 
+    marginBottom: 8 
+  },
+  subtitle: { 
+    fontSize: 14, 
+    color: '#666', 
+    textAlign: 'center', 
+    marginBottom: 20 
+  },
+  fetchButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#6A8DFD', 
+    paddingHorizontal: 20, 
+    paddingVertical: 12, 
+    borderRadius: 25 
+  },
+  fetchButtonText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    marginLeft: 10 
+  },
+  tableContainer: { 
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  tableHeader: { 
+    flexDirection: 'row', 
+    backgroundColor: '#6A8DFD' 
+  },
+  tableRow: { 
+    flexDirection: 'row', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#E0E0E0' 
+  },
+  tableCell: { 
+    flex: 1, 
+    padding: 12, 
+    textAlign: 'center', 
+    color: '#333', 
+    fontSize: 13 
+  },
+  headerCell: { 
+    color: '#fff', 
+    fontWeight: 'bold', 
+    fontSize: 14 
+  },
 });
 
 export default WeightTrackerScreen; 

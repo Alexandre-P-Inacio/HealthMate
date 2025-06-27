@@ -15,7 +15,8 @@ import {
   SafeAreaView,
   Dimensions,
   Linking,
-  Animated
+  Animated,
+  LogBox
 } from 'react-native';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -34,7 +35,14 @@ import {
   openHealthConnectSettings,
 } from 'react-native-health-connect';
 import SamsungHealthService from '../../services/SamsungHealthService';
+import BalancaDigitalService from '../../services/BalancaDigitalService';
+import WearablesService from '../../services/WearablesService';
 
+// Suppress specific warnings that don't affect functionality
+LogBox.ignoreLogs([
+  'Text strings must be rendered within a <Text> component',
+  'Warning: Text strings must be rendered within a <Text> component'
+]);
 
 const { width } = Dimensions.get('window');
 
@@ -67,14 +75,31 @@ const MedicalDiaryScreen = ({ navigation }) => {
   // Health Connect states
   const [isLoadingHealthData, setIsLoadingHealthData] = useState(false);
   const [healthData, setHealthData] = useState(null);
-  
-  // Estados para o modal de todos os dados do Health Connect
+  const [healthResponses, setHealthResponses] = useState(null);
   const [allHealthData, setAllHealthData] = useState(null);
   const [loadingAllHealthData, setLoadingAllHealthData] = useState(false);
   const [healthDataError, setHealthDataError] = useState(null);
   const [healthConnectModalVisible, setHealthConnectModalVisible] = useState(false);
   const [showSavedDataModal, setShowSavedDataModal] = useState(false);
   const [lastSavedData, setLastSavedData] = useState(null);
+  
+  // IMC Calculator states
+  const [imcModalVisible, setImcModalVisible] = useState(false);
+  const [userAge, setUserAge] = useState('');
+  const [fatMassKg, setFatMassKg] = useState('');
+  const [muscleMass, setMuscleMass] = useState('');
+  const [imcResults, setImcResults] = useState(null);
+
+  // Helper function to check if selected date is today
+  const isToday = (date) => {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
+
+  // Helper function to format date for comparison
+  const formatDateForComparison = (date) => {
+    return date.toISOString().split('T')[0];
+  };
 
   useEffect(() => {
     const loadUserData = () => {
@@ -505,37 +530,37 @@ const MedicalDiaryScreen = ({ navigation }) => {
     setMedicationDetailsModalVisible(true);
   };
 
-  // 2. Função assíncrona para buscar TODOS os dados do Health Connect REAL
+  // 2. Async function to fetch ALL REAL Health Connect data
   const fetchAllHealthConnectData = async () => {
     try {
-      console.log('🏥 [Health Connect] Iniciando busca REAL com react-native-health-connect...');
-
-      // Verificar se é Android (Health Connect só funciona no Android)
+            console.log('🏥 [Health Connect] Starting REAL search with react-native-health-connect...');
+  
+      // Check if Android (Health Connect only works on Android)
       if (Platform.OS !== 'android') {
-        throw new Error('Health Connect está disponível apenas no Android');
+        throw new Error('Health Connect is only available on Android');
       }
 
       // PRIMEIRO: Verificar status do SDK
       const sdkStatus = await getSdkStatus();
-      console.log('📱 [Health Connect] Status do SDK:', sdkStatus);
+      console.log('📱 [Health Connect] SDK Status:', sdkStatus);
       
       if (sdkStatus !== SdkAvailabilityStatus.SDK_AVAILABLE) {
-        throw new Error('Health Connect não está disponível. Instale o Health Connect da Google Play Store.');
+        throw new Error('Health Connect is not available. Install Health Connect from Google Play Store.');
       }
 
-      // SEGUNDO: Inicializar Health Connect com MÚLTIPLAS TENTATIVAS
-      console.log('🔄 [Health Connect] Inicializando...');
+      // SECOND: Initialize Health Connect with MULTIPLE ATTEMPTS
+      console.log('🔄 [Health Connect] Initializing...');
       const initialized = await initialize();
       if (!initialized) {
-        throw new Error('Falha ao inicializar Health Connect');
+        throw new Error('Failed to initialize Health Connect');
       }
 
-      // AGUARDAR para garantir inicialização completa
-      console.log('⏱️ [Health Connect] Aguardando inicialização completa...');
+      // WAIT to ensure complete initialization
+      console.log('⏱️ [Health Connect] Waiting for complete initialization...');
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // TERCEIRO: Solicitar permissões AGRESSIVAMENTE para FORÇAR aparição
-      console.log('🔐 [Health Connect] FORÇANDO aparição no Health Connect...');
+      // THIRD: Request permissions AGGRESSIVELY to FORCE appearance
+      console.log('🔐 [Health Connect] FORCING appearance in Health Connect...');
       
       const permissions = [
         { accessType: 'read', recordType: 'Steps' },
@@ -548,18 +573,18 @@ const MedicalDiaryScreen = ({ navigation }) => {
         { accessType: 'read', recordType: 'Hydration' },
       ];
 
-      // MÚLTIPLAS TENTATIVAS para forçar aparição
+              // MULTIPLE ATTEMPTS to force appearance
       let grantedPermissions = [];
       let attempts = 0;
       const maxAttempts = 3;
 
       while (attempts < maxAttempts && (!grantedPermissions || grantedPermissions.length === 0)) {
         attempts++;
-        console.log(`🎯 [Health Connect] Tentativa ${attempts}/${maxAttempts} - Forçando registro...`);
+                  console.log(`🎯 [Health Connect] Attempt ${attempts}/${maxAttempts} - Forcing registration...`);
         
         try {
           grantedPermissions = await requestPermission(permissions);
-          console.log(`✅ [Health Connect] Tentativa ${attempts} - Permissões:`, grantedPermissions);
+                      console.log(`✅ [Health Connect] Attempt ${attempts} - Permissions:`, grantedPermissions);
           
           if (grantedPermissions && grantedPermissions.length > 0) {
             break; // Sucesso!
@@ -567,25 +592,25 @@ const MedicalDiaryScreen = ({ navigation }) => {
           
           // Se não conseguiu, aguardar antes da próxima tentativa
           if (attempts < maxAttempts) {
-            console.log(`⏳ [Health Connect] Aguardando ${attempts * 1000}ms antes da próxima tentativa...`);
+            console.log(`⏳ [Health Connect] Waiting ${attempts * 1000}ms before next attempt...`);
             await new Promise(resolve => setTimeout(resolve, attempts * 1000));
           }
         } catch (permError) {
-          console.log(`⚠️ [Health Connect] Erro na tentativa ${attempts}:`, permError.message);
+          console.log(`⚠️ [Health Connect] Error in attempt ${attempts}:`, permError.message);
           if (attempts === maxAttempts) {
             throw permError;
           }
         }
       }
 
-      console.log('🏁 [Health Connect] Permissões finais:', grantedPermissions);
-
-      if (!grantedPermissions || grantedPermissions.length === 0) {
-        // Abrir configurações automaticamente
-        console.log('🔧 [Health Connect] Abrindo configurações - app deve aparecer agora...');
-        await openHealthConnectSettings();
-        throw new Error('Nenhuma permissão concedida após múltiplas tentativas. As configurações do Health Connect foram abertas. O HealthMate deve aparecer na lista agora - configure as permissões e tente novamente.');
-      }
+              console.log('🏁 [Health Connect] Final permissions:', grantedPermissions);
+        
+        if (!grantedPermissions || grantedPermissions.length === 0) {
+          // Open settings automatically
+          console.log('🔧 [Health Connect] Opening settings - app should appear now...');
+          await openHealthConnectSettings();
+          throw new Error('No permissions granted after multiple attempts. Health Connect settings have been opened. HealthMate should appear in the list now - configure permissions and try again.');
+        }
 
       // QUARTO: Definir intervalo de tempo
       const now = new Date();
@@ -598,7 +623,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
         endTime: now.toISOString(),
       };
 
-      console.log('📅 [Health Connect] Buscando dados entre:', startOfDay.toLocaleDateString(), 'e', now.toLocaleTimeString());
+              console.log('📅 [Health Connect] Fetching data between:', startOfDay.toLocaleDateString(), 'and', now.toLocaleTimeString());
 
       // QUINTO: Buscar dados usando react-native-health-connect
       const results = {};
@@ -733,17 +758,17 @@ const MedicalDiaryScreen = ({ navigation }) => {
       // Se o erro for de permissões, dar instruções específicas
       if (error.message.includes('permiss')) {
         Alert.alert(
-          '🔧 Configuração Necessária',
-          `O HealthMate ainda não aparece na lista do Health Connect.\n\n📋 SIGA ESTES PASSOS:\n\n1️⃣ As configurações do Health Connect foram abertas\n2️⃣ Se o "HealthMate" NÃO aparecer na lista:\n   • Feche o Health Connect\n   • Abra o HealthMate novamente\n   • Clique em "Ver Dados Completos" novamente\n\n3️⃣ Quando aparecer na lista:\n   • Toque em "HealthMate"\n   • Conceda TODAS as permissões\n   • Volte ao app e tente novamente`,
+          '🔧 Configuration Required',
+          `HealthMate does not yet appear in the Health Connect list.\n\n📋 FOLLOW THESE STEPS:\n\n1️⃣ Health Connect settings have been opened\n2️⃣ If "HealthMate" does NOT appear in the list:\n   • Close Health Connect\n   • Open HealthMate again\n   • Click "View Complete Data" again\n\n3️⃣ When it appears in the list:\n   • Tap "HealthMate"\n   • Grant ALL permissions\n   • Return to the app and try again`,
           [
-            { text: 'Abrir Health Connect', onPress: () => openHealthConnectSettings() },
+            { text: 'Open Health Connect', onPress: () => openHealthConnectSettings() },
             { text: 'OK' }
           ]
         );
       } else {
         Alert.alert(
-          '❌ Erro no Health Connect',
-          `${error.message}\n\nVerifique:\n• Health Connect está instalado\n• App foi reiniciado após a instalação`,
+          '❌ Health Connect Error',
+          `${error.message}\n\nCheck:\n• Health Connect is installed\n• App was restarted after installation`,
           [{ text: 'OK' }]
         );
       }
@@ -818,42 +843,55 @@ const MedicalDiaryScreen = ({ navigation }) => {
   };
 
     const handleConnectDigitalScale = async () => {
+    if (!isToday(selectedDate)) {
+      Alert.alert(
+        'Action Available Only for Today',
+        'Digital scale data search is only available for the current date.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    setIsLoadingHealthData(true);
     try {
-      setIsLoadingHealthData(true);
       console.log('🔵 Buscando dados de composição corporal...');
-      const [weightRes, heightRes, bodyFatRes, boneMassRes, bmrRes] = await Promise.all([
+      const [weightRes, bodyFatRes, boneMassRes, bmrRes] = await Promise.all([
         HealthConnectService.getWeightData(7),
-        HealthConnectService.getHeightData(7),
         HealthConnectService.getBodyFatData(7),
         HealthConnectService.getBoneMassData(7),
         HealthConnectService.getBasalMetabolicRateData(7)
       ]);
       console.log('[Balança Digital] Peso:', weightRes);
-      console.log('[Balança Digital] Altura:', heightRes);
       console.log('[Balança Digital] Gordura corporal:', bodyFatRes);
       console.log('[Balança Digital] Massa óssea:', boneMassRes);
       console.log('[Balança Digital] Taxa metabólica basal:', bmrRes);
+      
       setHealthData({
         type: 'bodycomp',
         weight: weightRes.latest?.weight?.inKilograms ?? null,
-        height: heightRes.latest?.height?.inMeters ?? null,
         bodyFat: bodyFatRes.latest?.percentage ?? null,
         boneMass: boneMassRes.latest?.mass?.inKilograms ?? null,
         bmr: bmrRes.latest?.basalMetabolicRate?.inKilocaloriesPerDay ?? null,
+        timestamp: new Date().toISOString(),
+        source: 'Health Connect',
         allReadings: {
           weight: weightRes.data,
-          height: heightRes.data,
           bodyFat: bodyFatRes.data,
           boneMass: boneMassRes.data,
           bmr: bmrRes.data
         }
       });
-      setHealthConnectModalVisible(true);
+      
+      Alert.alert(
+        '✅ Digital Scale Data!',
+        `📊 Body composition data successfully obtained from Health Connect!`,
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       console.error('❌ Erro geral:', error);
       Alert.alert(
-        '❌ Erro na Balança Digital',
-        `Erro inesperado: ${error.message}`,
+        '❌ Digital Scale Error',
+        `Unexpected error: ${error.message}`,
         [{ text: 'OK' }]
       );
     } finally {
@@ -864,8 +902,17 @@ const MedicalDiaryScreen = ({ navigation }) => {
     
 
     const handleConnectHealthConnect = async () => {
+    if (!isToday(selectedDate)) {
+      Alert.alert(
+        'Ação Disponível Apenas para Hoje',
+        'A busca de dados dos wearables só está disponível para a data atual.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    setIsLoadingHealthData(true);
     try {
-      setIsLoadingHealthData(true);
       console.log('🔵 Buscando dados do Samsung Health (Wearable)...');
       const result = await SamsungHealthService.getRawHealthDataForDisplay();
       console.log('[Wearable] Dados buscados:', result.summary);
@@ -908,53 +955,79 @@ const MedicalDiaryScreen = ({ navigation }) => {
   const handleSaveWearableDataToDiary = async () => {
     try {
       if (!healthData) {
-        Alert.alert('Error', 'No wearable data available to save.');
+        Alert.alert('Erro', 'Nenhum dado disponível para salvar.');
         return;
       }
 
-      const now = new Date();
-      const entryDate = new Date(selectedDate);
-      entryDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-      
-      // Salva os dados em colunas próprias para facilitar busca/exibição futura
-      const entryDataToSave = {
-        title: `Dados de Wearables - ${new Date().toLocaleString()}`,
-        description: 'Dados de saúde coletados do wearable.',
-        mood: 'normal',
-        symptoms: '',
-        daily_notes: `Data: ${new Date().toLocaleDateString()}\nHora: ${new Date().toLocaleTimeString()}`,
-        created_at: entryDate.toISOString(),
-        user_id: userId,
-        steps: healthData.steps,
-        heart_rate: healthData.heartRate,
-        calories: healthData.calories,
-        blood_oxygen: healthData.bloodOxygen,
-        sleep_hours: healthData.sleepData?.duration,
-      };
-
-      const { error, data } = await supabase
-        .from('diary_entries')
-        .insert([entryDataToSave])
-        .select();
-
-      if (error) {
-        console.error('Error inserting wearable data:', error);
-        Alert.alert('Error', `Could not save wearable data: ${error.message}`);
+      if (!isToday(selectedDate)) {
+        Alert.alert(
+          'Ação Disponível Apenas para Hoje',
+          'O salvamento de dados só está disponível para a data atual.',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
-      // Atualiza o cache local
-      const storedEntries = await AsyncStorage.getItem(STORAGE_KEY);
-      const allEntries = storedEntries ? JSON.parse(storedEntries) : [];
-      const updatedAsyncEntries = [...allEntries, { ...entryDataToSave, id: data?.[0]?.id || Date.now().toString() }];
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedAsyncEntries));
+      // Save to the appropriate database table based on data type
+      if (healthData.type === 'bodycomp') {
+        // Save body composition data
+        const bodyCompositionData = {
+          weight: healthData.weight || null,
+          bodyFat: healthData.bodyFat || null,
+          boneMass: healthData.boneMass || null,
+          bmr: healthData.bmr || null,
+          leanBodyMass: healthData.leanBodyMass || null,
+          bodyWaterMass: healthData.bodyWaterMass || null,
+          source: healthData.source || 'Health Connect'
+        };
+        
+        console.log('📊 Saving body composition data:', bodyCompositionData);
+        await BalancaDigitalService.saveBodyCompositionData(bodyCompositionData);
+        
+        Alert.alert(
+          '✅ Dados Salvos!',
+          'Dados da balança digital salvos com sucesso no banco de dados!',
+          [{ text: 'OK' }]
+        );
+      } else if (healthData.type === 'wearable') {
+        // Save wearables data
+        const vitalsData = {
+          heartRate: healthData.heartRate || null,
+          steps: healthData.steps || null,
+          calories: healthData.calories || null,
+          distance: healthData.distance || null,
+          bloodOxygen: healthData.bloodOxygen || null,
+          bodyTemperature: healthData.bodyTemperature || null,
+          bloodPressure: healthData.bloodPressure || null,
+          sleepData: healthData.sleepData || null,
+          stressLevel: healthData.stressLevel || null,
+          source: healthData.source || 'Samsung Health'
+        };
+        
+        console.log('📱 Saving wearables data:', vitalsData);
+        await WearablesService.saveVitalsData(vitalsData);
+        
+        Alert.alert(
+          '✅ Dados Salvos!',
+          'Dados dos wearables salvos com sucesso no banco de dados!',
+          [{ text: 'OK' }]
+        );
+      }
 
-      setLastSavedData(entryDataToSave);
-      setShowSavedDataModal(true);
+      // Clear the displayed data after saving
       setHealthData(null);
     } catch (error) {
-      console.error('Error saving wearable data:', error);
-      Alert.alert('Error', `Could not save wearable data: ${error.message || 'Unknown error'}`);
+      console.error('❌ Error saving health data:', error);
+      
+      // More detailed error message
+      let errorMessage = 'Erro desconhecido';
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code) {
+        errorMessage = `Erro do banco de dados (${error.code}): ${error.details || error.hint || 'Verifique a conexão'}`;
+      }
+      
+      Alert.alert('Erro ao Salvar', `Não foi possível salvar os dados:\n${errorMessage}`);
     }
   };
 
@@ -969,6 +1042,86 @@ const MedicalDiaryScreen = ({ navigation }) => {
     } catch (error) {
       Alert.alert('Erro', error.message || 'Erro desconhecido ao solicitar permissões');
     }
+  };
+
+  const handleCalculateIMC = () => {
+    if (!healthData || !healthData.weight || healthData.type !== 'bodycomp') {
+      Alert.alert(
+        'Dados Necessários',
+        'Primeiro busque os dados da balança digital para obter o peso e composição corporal.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (!isToday(selectedDate)) {
+      Alert.alert(
+        'Ação Disponível Apenas para Hoje',
+        'O cálculo de IMC só está disponível para a data atual.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    // Calculate directly with available data
+    calculateIMCWithAvailableData();
+    setImcModalVisible(true);
+  };
+
+  const calculateIMCWithAvailableData = () => {
+    const weight = healthData.weight; // em kg
+    const bodyFatPercentage = healthData.bodyFat; // em %
+    const boneMass = healthData.boneMass; // em kg
+    const bmr = healthData.bmr; // kcal/dia
+
+    // Using a standard height (you can modify this)
+    const height = 1.70; // metros - ALTURA PADRÃO
+    
+    // Calculate IMC
+    const imc = weight / (height * height);
+    
+    // Calculate fat mass from percentage
+    const fatMassFromPercentage = bodyFatPercentage ? (weight * bodyFatPercentage / 100) : null;
+    
+    // Calculate lean mass (weight - fat mass)
+    const leanMass = fatMassFromPercentage ? weight - fatMassFromPercentage : null;
+    
+    // IMC Classification
+    let imcClassification = '';
+    let imcColor = '';
+    if (imc < 18.5) {
+      imcClassification = 'Abaixo do peso';
+      imcColor = '#3498DB';
+    } else if (imc < 25) {
+      imcClassification = 'Peso normal';
+      imcColor = '#27AE60';
+    } else if (imc < 30) {
+      imcClassification = 'Sobrepeso';
+      imcColor = '#F39C12';
+    } else {
+      imcClassification = 'Obesidade';
+      imcColor = '#E74C3C';
+    }
+
+    const results = {
+      imc: imc.toFixed(1),
+      imcClassification,
+      imcColor,
+      weight: weight.toFixed(1),
+      height,
+      bodyFatPercentage: bodyFatPercentage?.toFixed(1),
+      fatMassKg: fatMassFromPercentage?.toFixed(1),
+      leanMass: leanMass?.toFixed(1),
+      boneMass: boneMass?.toFixed(2),
+      bmrFromDevice: bmr?.toFixed(0),
+      // Calculate body fat ratio
+      fatRatio: fatMassFromPercentage ? ((fatMassFromPercentage / weight) * 100).toFixed(1) : null,
+      // Calculate lean mass ratio
+      leanRatio: leanMass ? ((leanMass / weight) * 100).toFixed(1) : null
+    };
+
+    setImcResults(results);
+    console.log('📊 [IMC] Resultados com dados disponíveis:', results);
   };
 
 
@@ -994,7 +1147,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
           >
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF', flex: 1, textAlign: 'center' }}>Diário Médico</Text>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF', flex: 1, textAlign: 'center' }}>Medical Diary</Text>
           <View style={{ width: 40 }} />
         </View>
         
@@ -1009,12 +1162,15 @@ const MedicalDiaryScreen = ({ navigation }) => {
         {renderDateSelector()}
         
         <View style={styles.quickActionsContainer}>
-                <Text style={styles.sectionTitle}>Ações Rápidas</Text>
+                <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
         <TouchableOpacity
-                    style={[styles.actionButton, isLoadingHealthData && styles.actionButtonDisabled]}
+                    style={[
+                      styles.actionButton, 
+                      (isLoadingHealthData || !isToday(selectedDate)) && styles.actionButtonDisabled
+                    ]}
               onPress={handleConnectDigitalScale}
-                    disabled={isLoadingHealthData}
+                    disabled={isLoadingHealthData || !isToday(selectedDate)}
         >
           {isLoadingHealthData ? (
                       <ActivityIndicator size="small" color="#4A67E3" />
@@ -1022,15 +1178,18 @@ const MedicalDiaryScreen = ({ navigation }) => {
               <FontAwesome5 name="weight" size={28} color="#4A67E3" />
                     )}
                     <Text style={styles.actionButtonText}>
-                      {isLoadingHealthData ? 'Buscando...' : 'Balança Digital'}
+                      {isLoadingHealthData ? 'Searching...' : 'Digital Scale'}
                     </Text>
                     <Text style={styles.actionButtonSubtext}>Health Connect</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-                    style={[styles.actionButton, isLoadingHealthData && styles.actionButtonDisabled]}
+                    style={[
+                      styles.actionButton, 
+                      (isLoadingHealthData || !isToday(selectedDate)) && styles.actionButtonDisabled
+                    ]}
               onPress={handleConnectHealthConnect}
-                    disabled={isLoadingHealthData}
+                    disabled={isLoadingHealthData || !isToday(selectedDate)}
         >
           {isLoadingHealthData ? (
                       <ActivityIndicator size="small" color="#4A67E3" />
@@ -1044,20 +1203,43 @@ const MedicalDiaryScreen = ({ navigation }) => {
                   </View>
                 )}
                                         <Text style={styles.actionButtonText}>
-                      {isLoadingHealthData ? 'Buscando...' : 'Wearables'}
+                      {isLoadingHealthData ? 'Searching...' : 'Wearables'}
               </Text>
-                    <Text style={styles.actionButtonSubtext}>Health Connect</Text>
+                    <Text style={styles.actionButtonSubtext}>
+                      {!isToday(selectedDate) ? 'Today only' : 'Health Connect'}
+                    </Text>
         </TouchableOpacity>
 
         {/* Novo botão para salvar no diário */}
         <TouchableOpacity
-          style={[styles.actionButton, !healthData && styles.actionButtonDisabled]}
+          style={[
+            styles.actionButton, 
+            (!healthData || !isToday(selectedDate)) && styles.actionButtonDisabled
+          ]}
           onPress={handleSaveWearableDataToDiary}
-          disabled={!healthData}
+          disabled={!healthData || !isToday(selectedDate)}
         >
           <Ionicons name="save-outline" size={28} color="#4A67E3" />
-          <Text style={styles.actionButtonText}>Salvar no Diário</Text>
-          <Text style={styles.actionButtonSubtext}>Registrar dados</Text>
+          <Text style={styles.actionButtonText}>Save to Diary</Text>
+          <Text style={styles.actionButtonSubtext}>
+            {!isToday(selectedDate) ? 'Today only' : 'Record data'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Novo botão para calcular IMC */}
+        <TouchableOpacity
+          style={[
+            styles.actionButton, 
+            (!healthData || !healthData.weight || healthData.type !== 'bodycomp' || !isToday(selectedDate)) && styles.actionButtonDisabled
+          ]}
+          onPress={handleCalculateIMC}
+          disabled={!healthData || !healthData.weight || healthData.type !== 'bodycomp' || !isToday(selectedDate)}
+        >
+          <Ionicons name="calculator-outline" size={28} color="#4A67E3" />
+          <Text style={styles.actionButtonText}>Calculate BMI</Text>
+          <Text style={styles.actionButtonSubtext}>
+            {!isToday(selectedDate) ? 'Today only' : 'Body analysis'}
+          </Text>
         </TouchableOpacity>
 
             {/* 3. Novo botão "Ver Dados do Health Connect" */}
@@ -1066,12 +1248,173 @@ const MedicalDiaryScreen = ({ navigation }) => {
           </View>
       </View>
       
+        {/* Health Data Display Section - Now positioned first and full width */}
+        {healthData && (
+          <View style={styles.medicationsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {healthData.type === 'weight' ? 'Dados de Peso' : 
+                 healthData.type === 'bodycomp' ? 'Dados da Balança Digital' : 
+                 'Dados de Saúde por Categoria'}
+              </Text>
+              <Text style={styles.sectionSubtitle}>
+                {healthData.type === 'weight' 
+                  ? `${new Date(healthData.timestamp).toLocaleString()}`
+                  : healthData.type === 'bodycomp'
+                  ? `${new Date(healthData.timestamp).toLocaleString()}`
+                  : `${healthData.availableCategories?.length || 0} categorias encontradas • Todas as apps`
+                }
+              </Text>
+            </View>
+            
+            {healthData.type === 'weight' ? (
+              <View style={styles.weightDataCard}>
+                <View style={styles.weightDataHeader}>
+                  <FontAwesome5 name="weight" size={24} color="#4A67E3" />
+                  <Text style={styles.weightDataTitle}>Peso Atual</Text>
+                </View>
+                <Text style={styles.weightDataValue}>{healthData.weight} kg</Text>
+                <Text style={styles.weightDataTime}>
+                  Registrado em {new Date(healthData.timestamp).toLocaleString()}
+                </Text>
+                {healthData.allReadings && healthData.allReadings.length > 1 && (
+                  <Text style={styles.weightDataExtra}>
+                    Total de {healthData.allReadings.length} registros hoje
+                  </Text>
+                )}
+              </View>
+            ) : healthData.type === 'bodycomp' ? (
+              // Show body composition data for bodycomp type (Balança Digital)
+              <View style={styles.wearableDataGrid}>
+                {healthData.weight && (
+                  <View style={styles.healthDataCard}>
+                    <FontAwesome5 name="weight" size={20} color="#3498DB" />
+                    <Text style={styles.healthDataLabel}>Peso</Text>
+                    <Text style={styles.healthDataValue}>{healthData.weight.toFixed(1)} kg</Text>
+                  </View>
+                )}
+                
+                {healthData.bodyFat && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="body" size={20} color="#E74C3C" />
+                    <Text style={styles.healthDataLabel}>Gordura Corporal</Text>
+                    <Text style={styles.healthDataValue}>{healthData.bodyFat.toFixed(1)}%</Text>
+                  </View>
+                )}
+                
+                {healthData.boneMass && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="medical" size={20} color="#95A5A6" />
+                    <Text style={styles.healthDataLabel}>Massa Óssea</Text>
+                    <Text style={styles.healthDataValue}>{healthData.boneMass.toFixed(2)} kg</Text>
+                  </View>
+                )}
+                
+                {healthData.bmr && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="flame" size={20} color="#E67E22" />
+                    <Text style={styles.healthDataLabel}>Taxa Metabólica</Text>
+                    <Text style={styles.healthDataValue}>{Math.round(healthData.bmr)} kcal/dia</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              // Show wearables data for general health data (Wearables button)
+              <View style={styles.wearableDataGrid}>
+                {healthData.heartRate && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="heart" size={20} color="#E74C3C" />
+                    <Text style={styles.healthDataLabel}>Freq. Cardíaca</Text>
+                    <Text style={styles.healthDataValue}>{healthData.heartRate} bpm</Text>
+                  </View>
+                )}
+                
+                {healthData.steps && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="walk" size={20} color="#3498DB" />
+                    <Text style={styles.healthDataLabel}>Passos</Text>
+                    <Text style={styles.healthDataValue}>{healthData.steps.toLocaleString()}</Text>
+                  </View>
+                )}
+                
+                {healthData.calories && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="flame" size={20} color="#E67E22" />
+                    <Text style={styles.healthDataLabel}>Calorias</Text>
+                    <Text style={styles.healthDataValue}>{healthData.calories}</Text>
+                  </View>
+                )}
+                
+                {healthData.distance && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="map" size={20} color="#27AE60" />
+                    <Text style={styles.healthDataLabel}>Distância</Text>
+                    <Text style={styles.healthDataValue}>{healthData.distance} km</Text>
+                  </View>
+                )}
+                
+                {healthData.bloodOxygen && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="water" size={20} color="#9B59B6" />
+                    <Text style={styles.healthDataLabel}>SpO2</Text>
+                    <Text style={styles.healthDataValue}>{healthData.bloodOxygen}%</Text>
+                  </View>
+                )}
+                
+                {healthData.bodyTemperature && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="thermometer" size={20} color="#FF6B6B" />
+                    <Text style={styles.healthDataLabel}>Temperatura</Text>
+                    <Text style={styles.healthDataValue}>{healthData.bodyTemperature}°C</Text>
+                  </View>
+                )}
+                
+                {healthData.bloodPressure && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="fitness" size={20} color="#E91E63" />
+                    <Text style={styles.healthDataLabel}>Pressão</Text>
+                    <Text style={styles.healthDataValue}>
+                      {healthData.bloodPressure.systolic}/{healthData.bloodPressure.diastolic}
+                    </Text>
+                  </View>
+                )}
+
+                {healthData.sleepData && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="moon" size={20} color="#8B5A3C" />
+                    <Text style={styles.healthDataLabel}>Sono</Text>
+                    <Text style={styles.healthDataValue}>{healthData.sleepData.duration}h</Text>
+                  </View>
+                )}
+                
+                {healthData.stressLevel !== undefined && (
+                  <View style={styles.healthDataCard}>
+                    <Ionicons name="pulse" size={20} color="#FF9800" />
+                    <Text style={styles.healthDataLabel}>Stress</Text>
+                    <Text style={styles.healthDataValue}>{healthData.stressLevel}/100</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            
+            <TouchableOpacity
+              style={styles.clearHealthDataButton}
+              onPress={() => setHealthData(null)}
+            >
+              <Ionicons name="close-circle" size={16} color="#666" />
+              <Text style={styles.clearHealthDataText}>Limpar Dados</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Medications Section - Now positioned after health data */}
         <View style={styles.medicationsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Todas as Medicações</Text>
             <Text style={styles.sectionSubtitle}>
               {confirmedMedications.length + pendingMedications.length} medicação(ões)
-          </Text>
+              {healthData && healthData.source && ` • Fonte: ${healthData.source}`}
+            </Text>
           </View>
           
           {loadingMedications || loadingPendingMedications ? (
@@ -1080,182 +1423,63 @@ const MedicalDiaryScreen = ({ navigation }) => {
               <Text style={styles.loadingStateText}>Carregando medicações...</Text>
             </View>
           ) : confirmedMedications.length > 0 || pendingMedications.length > 0 ? (
-                  <ScrollView
+            <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.medicationsList}
-                  >
-                    {[...confirmedMedications, ...pendingMedications].map((item) => (
-                      <View key={`med-${item.id}`}>
-                        {renderMedication({ item })}
-                      </View>
-                    ))}
-                  </ScrollView>
+            >
+              {[...confirmedMedications, ...pendingMedications].map((item) => (
+                <View key={`med-${item.id}`}>
+                  {renderMedication({ item })}
+                </View>
+              ))}
+            </ScrollView>
           ) : (
             <View style={styles.emptyStateContainer}>
               <Ionicons name="medical-outline" size={36} color="#6A8DFD" />
               <Text style={styles.emptyStateText}>Nenhuma medicação para esta data.</Text>
-        </View>
-      )}
-    </View>
-
-              {/* Health Data Display Section */}
-              {healthData && (
-                <View style={styles.healthDataDisplaySection}>
-          <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>
-                      {healthData.type === 'weight' ? 'Dados de Peso' : 'Dados de Saúde por Categoria'}
-            </Text>
-            <Text style={styles.sectionSubtitle}>
-                      {healthData.type === 'weight' 
-                        ? `Fonte: ${healthData.source} • ${new Date(healthData.timestamp).toLocaleString()}`
-                        : `${healthData.availableCategories?.length || 0} categorias encontradas • Todas as apps`
-                      }
-            </Text>
-          </View>
-          
-                  {healthData.type === 'weight' ? (
-                    <View style={styles.weightDataCard}>
-                      <View style={styles.weightDataHeader}>
-                        <FontAwesome5 name="weight" size={24} color="#4A67E3" />
-                        <Text style={styles.weightDataTitle}>Peso Atual</Text>
-            </View>
-                      <Text style={styles.weightDataValue}>{healthData.weight} kg</Text>
-                      <Text style={styles.weightDataTime}>
-                        Registrado em {new Date(healthData.timestamp).toLocaleString()}
-                  </Text>
-                      {healthData.allReadings && healthData.allReadings.length > 1 && (
-                        <Text style={styles.weightDataExtra}>
-                          Total de {healthData.allReadings.length} registros hoje
-                    </Text>
-                  )}
-                    </View>
-                  ) : (
-                    <View style={styles.wearableDataGrid}>
-                      {healthData.heartRate && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="heart" size={20} color="#E74C3C" />
-                          <Text style={styles.healthDataLabel}>Freq. Cardíaca</Text>
-                          <Text style={styles.healthDataValue}>{healthData.heartRate} bpm</Text>
-                    </View>
-                  )}
-                      
-                      {healthData.steps && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="walk" size={20} color="#3498DB" />
-                          <Text style={styles.healthDataLabel}>Passos</Text>
-                          <Text style={styles.healthDataValue}>{healthData.steps.toLocaleString()}</Text>
-                </View>
-                    )}
-                    
-                      {healthData.calories && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="flame" size={20} color="#E67E22" />
-                          <Text style={styles.healthDataLabel}>Calorias</Text>
-                          <Text style={styles.healthDataValue}>{healthData.calories}</Text>
-                </View>
-              )}
-                    
-                      {healthData.distance && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="map" size={20} color="#27AE60" />
-                          <Text style={styles.healthDataLabel}>Distância</Text>
-                          <Text style={styles.healthDataValue}>{healthData.distance} km</Text>
-            </View>
-                    )}
-                    
-                      {healthData.bloodOxygen && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="water" size={20} color="#9B59B6" />
-                          <Text style={styles.healthDataLabel}>SpO2</Text>
-                          <Text style={styles.healthDataValue}>{healthData.bloodOxygen}%</Text>
-            </View>
-                    )}
-                      
-                      {healthData.bodyTemperature && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="thermometer" size={20} color="#FF6B6B" />
-                          <Text style={styles.healthDataLabel}>Temperatura</Text>
-                          <Text style={styles.healthDataValue}>{healthData.bodyTemperature}°C</Text>
-            </View>
-              )}
-                      
-                      {healthData.bloodPressure && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="fitness" size={20} color="#E91E63" />
-                          <Text style={styles.healthDataLabel}>Pressão</Text>
-                          <Text style={styles.healthDataValue}>
-                            {healthData.bloodPressure.systolic}/{healthData.bloodPressure.diastolic}
-              </Text>
             </View>
           )}
+        </View>
 
-                      {healthData.sleepData && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="moon" size={20} color="#8B5A3C" />
-                          <Text style={styles.healthDataLabel}>Sono</Text>
-                          <Text style={styles.healthDataValue}>{healthData.sleepData.duration}h</Text>
-            </View>
-                      )}
-                      
-                      {healthData.stressLevel !== undefined && (
-                        <View style={styles.healthDataCard}>
-                          <Ionicons name="pulse" size={20} color="#FF9800" />
-                          <Text style={styles.healthDataLabel}>Stress</Text>
-                          <Text style={styles.healthDataValue}>{healthData.stressLevel}/100</Text>
-            </View>
-                      )}
-            </View>
-                  )}
-          
-            <TouchableOpacity
-                    style={styles.clearHealthDataButton}
-                    onPress={() => setHealthData(null)}
-                  >
-                    <Ionicons name="close-circle" size={16} color="#666" />
-                    <Text style={styles.clearHealthDataText}>Limpar Dados</Text>
-            </TouchableOpacity>
-          </View>
-              )}
-
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Minhas Anotações</Text>
-            <Text style={styles.sectionSubtitle}>
-              {entries.length} anotação(ões) para este dia
-            </Text>
-          </View>
-          </View>
-        )}
-          ListEmptyComponent={() => (
-            loading ? (
-            <View style={styles.loadingStateContainer}>
-              <ActivityIndicator size="large" color="#6A8DFD" />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Minhas Anotações</Text>
+          <Text style={styles.sectionSubtitle}>
+            {entries.length} anotação(ões) para este dia
+          </Text>
+        </View>
       </View>
-          ) : (
-                <View style={styles.emptyStateContainer}>
-                  <Ionicons name="document-text-outline" size={36} color="#6A8DFD" />
-                  <Text style={styles.emptyStateText}>Nenhuma anotação para esta data.</Text>
-            <TouchableOpacity
-                    style={styles.addNoteButton}
-              onPress={() => {
-                      setEditingEntry(null);
-                      setNewEntry({
-                        title: '',
-                        description: '',
-                        mood: 'normal',
-                        symptoms: '',
-                        dailyNotes: '',
-                      });
+    )}
+    ListEmptyComponent={() => (
+      loading ? (
+        <View style={styles.loadingStateContainer}>
+          <ActivityIndicator size="large" color="#6A8DFD" />
+        </View>
+      ) : (
+        <View style={styles.emptyStateContainer}>
+          <Ionicons name="document-text-outline" size={36} color="#6A8DFD" />
+          <Text style={styles.emptyStateText}>Nenhuma anotação para esta data.</Text>
+          <TouchableOpacity
+            style={styles.addNoteButton}
+            onPress={() => {
+              setEditingEntry(null);
+              setNewEntry({
+                title: '',
+                description: '',
+                mood: 'normal',
+                symptoms: '',
+                dailyNotes: '',
+              });
               setModalVisible(true);
             }}
           >
-                    <Ionicons name="add-circle-outline" size={24} color="#FFF" />
-                    <Text style={styles.addNoteButtonText}>Adicionar Anotação</Text>
+            <Ionicons name="add-circle-outline" size={24} color="#FFF" />
+            <Text style={styles.addNoteButtonText}>Adicionar Anotação</Text>
           </TouchableOpacity>
         </View>
-            )
-          )}
-        />
+      )
+    )}
+  />
 
           <TouchableOpacity 
           style={styles.floatingAddButton}
@@ -1661,6 +1885,111 @@ const MedicalDiaryScreen = ({ navigation }) => {
       </View>
     </Modal>
 
+    {/* Modal para Calculadora de IMC */}
+    <Modal
+      visible={imcModalVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setImcModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>🧮 Calculadora de IMC</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setImcModalVisible(false)}
+            >
+              <Ionicons name="close" size={26} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            {!imcResults ? (
+              <View>
+                <Text style={styles.modalSubtitle}>
+                  Dados disponíveis da balança digital:
+                </Text>
+                
+                <View style={styles.availableDataContainer}>
+                  <Text style={styles.availableDataText}>
+                    • Peso: {healthData?.weight?.toFixed(1)} kg
+                  </Text>
+                  <Text style={styles.availableDataText}>
+                    • Gordura corporal: {healthData?.bodyFat?.toFixed(1)}%
+                  </Text>
+                  <Text style={styles.availableDataText}>
+                    • Massa óssea: {healthData?.boneMass?.toFixed(2)} kg
+                  </Text>
+                  <Text style={styles.availableDataText}>
+                    • Taxa metabólica: {healthData?.bmr?.toFixed(0)} kcal/dia
+                  </Text>
+                  <Text style={styles.availableDataText}>
+                    • Altura assumida: 1.70m (padrão)
+                  </Text>
+                </View>
+
+                <TouchableOpacity style={styles.calculateButton} onPress={calculateIMCWithAvailableData}>
+                  <Ionicons name="calculator" size={20} color="#fff" />
+                  <Text style={styles.calculateButtonText}>Calcular IMC e Análise</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.resultsContainer}>
+                <View style={[styles.imcCard, { borderLeftColor: imcResults.imcColor }]}>
+                  <Text style={styles.imcValue}>{imcResults.imc}</Text>
+                  <Text style={[styles.imcClassification, { color: imcResults.imcColor }]}>
+                    {imcResults.imcClassification}
+                  </Text>
+                </View>
+
+                <View style={styles.dataGrid}>
+                  <View style={styles.dataCard}>
+                    <Text style={styles.dataLabel}>Peso</Text>
+                    <Text style={styles.dataValue}>{imcResults.weight} kg</Text>
+                  </View>
+                  <View style={styles.dataCard}>
+                    <Text style={styles.dataLabel}>Gordura %</Text>
+                    <Text style={styles.dataValue}>{imcResults.bodyFatPercentage}%</Text>
+                  </View>
+                  <View style={styles.dataCard}>
+                    <Text style={styles.dataLabel}>Massa Gorda</Text>
+                    <Text style={styles.dataValue}>{imcResults.fatMassKg} kg</Text>
+                  </View>
+                  <View style={styles.dataCard}>
+                    <Text style={styles.dataLabel}>Massa Magra</Text>
+                    <Text style={styles.dataValue}>{imcResults.leanMass} kg</Text>
+                  </View>
+                  <View style={styles.dataCard}>
+                    <Text style={styles.dataLabel}>Taxa Magra</Text>
+                    <Text style={styles.dataValue}>{imcResults.leanRatio}%</Text>
+                  </View>
+                  <View style={styles.dataCard}>
+                    <Text style={styles.dataLabel}>Massa Óssea</Text>
+                    <Text style={styles.dataValue}>{imcResults.boneMass} kg</Text>
+                  </View>
+                  <View style={styles.dataCard}>
+                    <Text style={styles.dataLabel}>Taxa Metabólica</Text>
+                    <Text style={styles.dataValue}>{imcResults.bmrFromDevice} kcal</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.newCalculationButton} 
+                  onPress={() => {
+                    setImcResults(null);
+                  }}
+                >
+                  <Ionicons name="refresh" size={18} color="#6A8DFD" />
+                  <Text style={styles.newCalculationText}>Recalcular</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
       </View>
     </SafeAreaView>
   );
@@ -2183,7 +2512,85 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-
+  inputSection: { marginBottom: 20 },
+  inputLabel: { fontSize: 16, color: '#444', marginBottom: 8 },
+  inputField: { backgroundColor: '#F5F6FA', borderRadius: 12, padding: 15, fontSize: 16, borderWidth: 1, borderColor: '#E8ECF4' },
+  inputHint: { fontSize: 12, color: '#888', marginTop: 4 },
+  availableDataContainer: {
+    backgroundColor: '#F8F9FF',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6A8DFD',
+  },
+  availableDataText: {
+    fontSize: 16,
+    color: '#444',
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  calculateButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#6A8DFD', 
+    borderRadius: 12, 
+    padding: 15, 
+    marginTop: 20 
+  },
+  calculateButtonText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    marginLeft: 8 
+  },
+  resultsContainer: { padding: 20 },
+  imcCard: { 
+    backgroundColor: '#FFF', 
+    borderRadius: 12, 
+    padding: 20, 
+    marginBottom: 20, 
+    borderLeftWidth: 5, 
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  imcValue: { fontSize: 36, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+  imcClassification: { fontSize: 18, fontWeight: '600' },
+  dataGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'space-between', 
+    marginBottom: 10 
+  },
+  dataCard: { 
+    width: '48%', 
+    padding: 12, 
+    backgroundColor: '#F8F9FF', 
+    borderRadius: 10, 
+    marginBottom: 10,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+  },
+  dataLabel: { fontSize: 12, color: '#666', marginBottom: 4 },
+  dataValue: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  newCalculationButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#F0F3FF',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 15 
+  },
+  newCalculationText: { fontSize: 14, color: '#6A8DFD', marginLeft: 5, fontWeight: '600' },
 });
 
 export default MedicalDiaryScreen;

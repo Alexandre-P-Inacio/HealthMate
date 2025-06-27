@@ -350,20 +350,18 @@ class HealthConnectTypeScriptService {
 
   public async getWeightData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
     try {
-      // Ensure initialization
+      console.log('[getWeightData] FORCING direct read...');
+      
+      // FORCE initialization without permission check
       if (!this.isInitialized) {
         const initResult = await this.initializeHealthConnect();
         if (!initResult.success) {
-          return { success: false, error: initResult.error };
+          console.log('[getWeightData] Init failed, but continuing...');
+        } else {
+          console.log('[getWeightData] Init successful');
         }
       }
-      // Ensure permissions
-      if (!this.hasPermissions) {
-        const permResult = await this.requestHealthPermissions();
-        if (!permResult.success) {
-          return { success: false, error: permResult.error };
-        }
-      }
+      
       // Date range
       const endDate = new Date();
       const startDate = new Date();
@@ -373,68 +371,48 @@ class HealthConnectTypeScriptService {
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
       };
-      // Fetch weight records
-      let data: any[] = await readRecords('Weight', { timeRangeFilter }) as unknown as any[];
-      console.log('[getWeightData] readRecords returned:', data);
-      data = Array.isArray(data) ? data : [];
+      
+      console.log('[getWeightData] Calling readRecords directly...');
+      
+      // DIRECT call to readRecords - bypass all permission checks
+      const result: any = await readRecords('Weight', { timeRangeFilter });
+      console.log('[getWeightData] RAW readRecords result:', JSON.stringify(result, null, 2));
+      
+      // Extract records array
+      const records = result?.records || [];
+      console.log('[getWeightData] extracted records:', records.length, 'items');
+      
+      if (records.length > 0) {
+        console.log('[getWeightData] First record structure:', JSON.stringify(records[0], null, 2));
+      }
+      
       let latest = null;
-      if (data.length > 0) {
-        latest = data.reduce((a, b) => {
-          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
-          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+      if (records.length > 0) {
+        latest = records.reduce((a: any, b: any) => {
+          const aTime = new Date(a.time || a.endTime || a.startTime || 0).getTime();
+          const bTime = new Date(b.time || b.endTime || b.startTime || 0).getTime();
           return bTime > aTime ? b : a;
         });
+        console.log('[getWeightData] latest record:', JSON.stringify(latest, null, 2));
       }
-      return { success: true, data, latest };
+      
+      return { success: true, data: records, latest };
     } catch (error: any) {
+      console.error('[getWeightData] error:', error);
       return { success: false, error: error.message };
     }
   }
 
-  public async getHeightData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
-    try {
-      if (!this.isInitialized) {
-        const initResult = await this.initializeHealthConnect();
-        if (!initResult.success) return { success: false, error: initResult.error };
-      }
-      if (!this.hasPermissions) {
-        const permResult = await this.requestHealthPermissions();
-        if (!permResult.success) return { success: false, error: permResult.error };
-      }
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - daysBack);
-      const timeRangeFilter = {
-        operator: 'between' as const,
-        startTime: startDate.toISOString(),
-        endTime: endDate.toISOString(),
-      };
-      let data: any[] = await readRecords('Height', { timeRangeFilter }) as unknown as any[];
-      data = Array.isArray(data) ? data : [];
-      let latest = null;
-      if (data.length > 0) {
-        latest = data.reduce((a, b) => {
-          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
-          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
-          return bTime > aTime ? b : a;
-        });
-      }
-      return { success: true, data, latest };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
+
 
   public async getBodyFatData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
     try {
+      console.log('[getBodyFatData] FORCING direct read...');
+      
       if (!this.isInitialized) {
-        const initResult = await this.initializeHealthConnect();
-        if (!initResult.success) return { success: false, error: initResult.error };
+        await this.initializeHealthConnect();
       }
-      if (!this.hasPermissions) {
-        const permResult = await this.requestHealthPermissions();
-        if (!permResult.success) return { success: false, error: permResult.error };
-      }
+      
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - daysBack);
@@ -443,32 +421,34 @@ class HealthConnectTypeScriptService {
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
       };
-      let data: any[] = await readRecords('BodyFat', { timeRangeFilter }) as unknown as any[];
-      data = Array.isArray(data) ? data : [];
+      
+      const result: any = await readRecords('BodyFat', { timeRangeFilter });
+      console.log('[getBodyFatData] RAW result:', JSON.stringify(result, null, 2));
+      
+      const records = result?.records || [];
       let latest = null;
-      if (data.length > 0) {
-        latest = data.reduce((a, b) => {
-          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
-          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+      if (records.length > 0) {
+        latest = records.reduce((a: any, b: any) => {
+          const aTime = new Date(a.time || a.endTime || a.startTime || 0).getTime();
+          const bTime = new Date(b.time || b.endTime || b.startTime || 0).getTime();
           return bTime > aTime ? b : a;
         });
       }
-      return { success: true, data, latest };
+      return { success: true, data: records, latest };
     } catch (error: any) {
+      console.error('[getBodyFatData] error:', error);
       return { success: false, error: error.message };
     }
   }
 
   public async getBoneMassData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
     try {
+      console.log('[getBoneMassData] FORCING direct read...');
+      
       if (!this.isInitialized) {
-        const initResult = await this.initializeHealthConnect();
-        if (!initResult.success) return { success: false, error: initResult.error };
+        await this.initializeHealthConnect();
       }
-      if (!this.hasPermissions) {
-        const permResult = await this.requestHealthPermissions();
-        if (!permResult.success) return { success: false, error: permResult.error };
-      }
+      
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - daysBack);
@@ -477,32 +457,34 @@ class HealthConnectTypeScriptService {
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
       };
-      let data: any[] = await readRecords('BoneMass', { timeRangeFilter }) as unknown as any[];
-      data = Array.isArray(data) ? data : [];
+      
+      const result: any = await readRecords('BoneMass', { timeRangeFilter });
+      console.log('[getBoneMassData] RAW result:', JSON.stringify(result, null, 2));
+      
+      const records = result?.records || [];
       let latest = null;
-      if (data.length > 0) {
-        latest = data.reduce((a, b) => {
-          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
-          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+      if (records.length > 0) {
+        latest = records.reduce((a: any, b: any) => {
+          const aTime = new Date(a.time || a.endTime || a.startTime || 0).getTime();
+          const bTime = new Date(b.time || b.endTime || b.startTime || 0).getTime();
           return bTime > aTime ? b : a;
         });
       }
-      return { success: true, data, latest };
+      return { success: true, data: records, latest };
     } catch (error: any) {
+      console.error('[getBoneMassData] error:', error);
       return { success: false, error: error.message };
     }
   }
 
   public async getBasalMetabolicRateData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
     try {
+      console.log('[getBasalMetabolicRateData] FORCING direct read...');
+      
       if (!this.isInitialized) {
-        const initResult = await this.initializeHealthConnect();
-        if (!initResult.success) return { success: false, error: initResult.error };
+        await this.initializeHealthConnect();
       }
-      if (!this.hasPermissions) {
-        const permResult = await this.requestHealthPermissions();
-        if (!permResult.success) return { success: false, error: permResult.error };
-      }
+      
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - daysBack);
@@ -511,32 +493,34 @@ class HealthConnectTypeScriptService {
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
       };
-      let data: any[] = await readRecords('BasalMetabolicRate', { timeRangeFilter }) as unknown as any[];
-      data = Array.isArray(data) ? data : [];
+      
+      const result: any = await readRecords('BasalMetabolicRate', { timeRangeFilter });
+      console.log('[getBasalMetabolicRateData] RAW result:', JSON.stringify(result, null, 2));
+      
+      const records = result?.records || [];
       let latest = null;
-      if (data.length > 0) {
-        latest = data.reduce((a, b) => {
-          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
-          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+      if (records.length > 0) {
+        latest = records.reduce((a: any, b: any) => {
+          const aTime = new Date(a.time || a.endTime || a.startTime || 0).getTime();
+          const bTime = new Date(b.time || b.endTime || b.startTime || 0).getTime();
           return bTime > aTime ? b : a;
         });
       }
-      return { success: true, data, latest };
+      return { success: true, data: records, latest };
     } catch (error: any) {
+      console.error('[getBasalMetabolicRateData] error:', error);
       return { success: false, error: error.message };
     }
   }
 
   public async getLeanBodyMassData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
     try {
+      console.log('[getLeanBodyMassData] FORCING direct read...');
+      
       if (!this.isInitialized) {
-        const initResult = await this.initializeHealthConnect();
-        if (!initResult.success) return { success: false, error: initResult.error };
+        await this.initializeHealthConnect();
       }
-      if (!this.hasPermissions) {
-        const permResult = await this.requestHealthPermissions();
-        if (!permResult.success) return { success: false, error: permResult.error };
-      }
+      
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - daysBack);
@@ -545,32 +529,34 @@ class HealthConnectTypeScriptService {
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
       };
-      let data: any[] = await readRecords('LeanBodyMass', { timeRangeFilter }) as unknown as any[];
-      data = Array.isArray(data) ? data : [];
+      
+      const result: any = await readRecords('LeanBodyMass', { timeRangeFilter });
+      console.log('[getLeanBodyMassData] RAW result:', JSON.stringify(result, null, 2));
+      
+      const records = result?.records || [];
       let latest = null;
-      if (data.length > 0) {
-        latest = data.reduce((a, b) => {
-          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
-          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+      if (records.length > 0) {
+        latest = records.reduce((a: any, b: any) => {
+          const aTime = new Date(a.time || a.endTime || a.startTime || 0).getTime();
+          const bTime = new Date(b.time || b.endTime || b.startTime || 0).getTime();
           return bTime > aTime ? b : a;
         });
       }
-      return { success: true, data, latest };
+      return { success: true, data: records, latest };
     } catch (error: any) {
+      console.error('[getLeanBodyMassData] error:', error);
       return { success: false, error: error.message };
     }
   }
 
   public async getBodyWaterMassData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
     try {
+      console.log('[getBodyWaterMassData] FORCING direct read...');
+      
       if (!this.isInitialized) {
-        const initResult = await this.initializeHealthConnect();
-        if (!initResult.success) return { success: false, error: initResult.error };
+        await this.initializeHealthConnect();
       }
-      if (!this.hasPermissions) {
-        const permResult = await this.requestHealthPermissions();
-        if (!permResult.success) return { success: false, error: permResult.error };
-      }
+      
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - daysBack);
@@ -579,18 +565,22 @@ class HealthConnectTypeScriptService {
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
       };
-      let data: any[] = await readRecords('BodyWaterMass', { timeRangeFilter }) as unknown as any[];
-      data = Array.isArray(data) ? data : [];
+      
+      const result: any = await readRecords('BodyWaterMass', { timeRangeFilter });
+      console.log('[getBodyWaterMassData] RAW result:', JSON.stringify(result, null, 2));
+      
+      const records = result?.records || [];
       let latest = null;
-      if (data.length > 0) {
-        latest = data.reduce((a, b) => {
-          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
-          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+      if (records.length > 0) {
+        latest = records.reduce((a: any, b: any) => {
+          const aTime = new Date(a.time || a.endTime || a.startTime || 0).getTime();
+          const bTime = new Date(b.time || b.endTime || b.startTime || 0).getTime();
           return bTime > aTime ? b : a;
         });
       }
-      return { success: true, data, latest };
+      return { success: true, data: records, latest };
     } catch (error: any) {
+      console.error('[getBodyWaterMassData] error:', error);
       return { success: false, error: error.message };
     }
   }

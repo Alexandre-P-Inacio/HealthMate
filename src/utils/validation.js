@@ -1,38 +1,42 @@
 import { DoctorAvailabilityService } from '../services/DoctorAvailabilityService';
+import supabase from '../../supabase';
 
 export const validateAppointmentRequest = (data) => {
   const errors = {};
 
   if (!data.doctorId) {
-    errors.doctor = 'Por favor, selecione um médico';
+    errors.doctor = 'Please select a doctor';
   }
 
   if (!data.appointmentDateTime) {
-    errors.date = 'Por favor, selecione uma data e hora';
+    errors.date = 'Please select a date and time';
   } else {
     const selectedDate = new Date(data.appointmentDateTime);
     const now = new Date();
 
     // Appointment must be at least 24 hours in the future
-    if (selectedDate < new Date(now.getTime() + 24 * 60 * 60 * 1000)) {
-      errors.date = 'A consulta deve ser agendada com pelo menos 24 horas de antecedência';
+    const timeDiff = selectedDate.getTime() - now.getTime();
+    const hoursDiff = timeDiff / (1000 * 3600);
+    
+    if (hoursDiff < 24) {
+      errors.date = 'Appointment must be scheduled at least 24 hours in advance';
     }
 
     // Check if it's within business hours (8am - 6pm)
     const hours = selectedDate.getHours();
     if (hours < 8 || hours >= 18) {
-      errors.date = 'As consultas devem ser agendadas entre 8:00 e 18:00';
+      errors.date = 'Appointments must be scheduled between 8:00 AM and 6:00 PM';
     }
 
     // Check if it's not on weekend
     const day = selectedDate.getDay();
     if (day === 0 || day === 6) {
-      errors.date = 'As consultas não podem ser agendadas para finais de semana';
+      errors.date = 'Appointments cannot be scheduled for weekends';
     }
   }
 
   if (data.notes && data.notes.length > 500) {
-    errors.notes = 'As observações não podem exceder 500 caracteres';
+    errors.notes = 'Notes cannot exceed 500 characters';
   }
 
   return {
@@ -54,7 +58,7 @@ export const validateDoctorAvailability = async (doctorId, appointmentDateTime, 
       console.error('Error fetching doctor availability:', availabilitiesResult.error);
       return {
         isAvailable: false,
-        message: 'Erro ao verificar disponibilidade do médico.'
+        message: 'Error checking doctor availability.'
       };
     }
 
@@ -70,7 +74,7 @@ export const validateDoctorAvailability = async (doctorId, appointmentDateTime, 
     if (exceptionForToday) {
       if (!exceptionForToday.is_available) {
         // Se há uma exceção para hoje e o médico está indisponível, não há slots.
-        return { isAvailable: false, message: 'O médico está indisponível nesta data.' };
+        return { isAvailable: false, message: 'Doctor is unavailable on this date.' };
       }
       relevantAvailabilities.push(exceptionForToday);
     } else {
@@ -81,7 +85,7 @@ export const validateDoctorAvailability = async (doctorId, appointmentDateTime, 
     }
 
     if (relevantAvailabilities.length === 0) {
-      return { isAvailable: false, message: 'O médico não tem horários definidos para este dia.' };
+      return { isAvailable: false, message: 'Doctor has no defined hours for this day.' };
     }
 
     // Verificar se o horário da consulta cai em algum slot de disponibilidade
@@ -96,7 +100,7 @@ export const validateDoctorAvailability = async (doctorId, appointmentDateTime, 
     }
 
     if (!isDoctorAvailableInSlot) {
-      return { isAvailable: false, message: 'Horário fora da disponibilidade do médico para este dia.' };
+      return { isAvailable: false, message: 'Time outside doctor availability for this day.' };
     }
 
     // 2. Verificar conflitos com outras consultas já agendadas
@@ -122,7 +126,7 @@ export const validateDoctorAvailability = async (doctorId, appointmentDateTime, 
       if (
         (appointmentDate < existingAppEnd && appointmentEndTime > existingAppStart) 
       ) {
-        return { isAvailable: false, message: 'O médico já possui uma consulta neste horário ou muito próximo.' };
+        return { isAvailable: false, message: 'Doctor already has an appointment at this time or very close.' };
       }
     }
 
@@ -134,7 +138,7 @@ export const validateDoctorAvailability = async (doctorId, appointmentDateTime, 
     console.error('Error checking doctor availability:', error);
     return {
       isAvailable: false,
-      message: 'Erro ao verificar disponibilidade do médico.'
+      message: 'Error checking doctor availability.'
     };
   }
 };
@@ -164,14 +168,190 @@ export const validateUserAppointments = async (userId, appointmentDateTime, supa
     return {
       canSchedule: activeAppointments.length === 0,
       message: activeAppointments.length > 0 
-        ? 'Você já possui uma consulta agendada para este dia' 
+        ? 'You already have an appointment scheduled for this day' 
         : null
     };
   } catch (error) {
     console.error('Error checking user appointments:', error);
     return {
       canSchedule: false,
-      message: 'Erro ao verificar agendamentos do usuário'
+      message: 'Error checking user appointments'
     };
   }
-}; 
+};
+
+const validateAppointment = (doctorId, appointmentDate, notes) => {
+  const errors = {};
+
+  if (!doctorId) {
+    errors.doctor = 'Please select a doctor';
+  }
+
+  if (!appointmentDate) {
+    errors.date = 'Please select a date and time';
+  } else {
+    const now = new Date();
+    const appointment = new Date(appointmentDate);
+    
+    // Check if appointment is at least 24 hours in advance
+    const timeDiff = appointment.getTime() - now.getTime();
+    const hoursDiff = timeDiff / (1000 * 3600);
+    
+    if (hoursDiff < 24) {
+      errors.date = 'Appointment must be scheduled at least 24 hours in advance';
+    }
+
+    // Check if appointment is during business hours (8 AM - 6 PM)
+    const appointmentHour = appointment.getHours();
+    if (appointmentHour < 8 || appointmentHour >= 18) {
+      errors.date = 'Appointments must be scheduled between 8:00 AM and 6:00 PM';
+    }
+
+    // Check if appointment is not on weekend
+    const appointmentDay = appointment.getDay();
+    if (appointmentDay === 0 || appointmentDay === 6) {
+      errors.date = 'Appointments cannot be scheduled for weekends';
+    }
+  }
+
+  if (notes && notes.length > 500) {
+    errors.notes = 'Notes cannot exceed 500 characters';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
+};
+
+const checkDoctorAvailability = async (doctorId, appointmentDate) => {
+  try {
+    console.log('🔍 Checking doctor availability...');
+    const appointmentTime = appointmentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const appointmentDateString = appointmentDate.toISOString().split('T')[0];
+    const appointmentDayOfWeek = appointmentDate.getDay();
+
+    // 1. Check doctor's configured availability
+    const { data: availabilities, error: availabilitiesError } = await supabase
+      .from('doctor_availability')
+      .select('*')
+      .eq('doctor_id', doctorId);
+
+    if (availabilitiesError) {
+      console.error('Error fetching doctor availability:', availabilitiesError);
+      return {
+        isAvailable: false,
+        message: 'Error checking doctor availability.'
+      };
+    }
+
+    console.log('📋 Doctor availabilities found:', availabilities?.length || 0);
+
+    // Check if there's an exception for today
+    const todayException = availabilities?.find(avail => 
+      avail.specific_date === appointmentDateString && !avail.is_available
+    );
+
+    if (todayException) {
+      console.log('❌ Doctor has exception for this date');
+      // If there's an exception for today and the doctor is unavailable, no slots available.
+      return { isAvailable: false, message: 'Doctor is unavailable on this date.' };
+    }
+
+    // Check regular weekly availability
+    const dayAvailability = availabilities?.find(avail => 
+      avail.day_of_week === appointmentDayOfWeek && 
+      !avail.specific_date && 
+      avail.is_available
+    );
+
+    if (!dayAvailability) {
+      console.log('❌ Doctor has no availability for this day of week');
+      return { isAvailable: false, message: 'Doctor has no defined hours for this day.' };
+    }
+
+    // Check if appointment time falls within availability slot
+    const startTime = dayAvailability.start_time;
+    const endTime = dayAvailability.end_time;
+    
+    console.log(`🕐 Checking if ${appointmentTime} is between ${startTime} and ${endTime}`);
+    
+    if (appointmentTime < startTime || appointmentTime >= endTime) {
+      console.log('❌ Appointment time outside doctor availability');
+      return { isAvailable: false, message: 'Time outside doctor availability for this day.' };
+    }
+
+    // 2. Check conflicts with other scheduled appointments
+    // Where the new appointment would end (assuming 30 minutes duration)
+    const appointmentEndTime = new Date(appointmentDate.getTime() + 30 * 60000);
+
+    const { data: conflictingAppointments, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('doctor_id', doctorId)
+      .gte('appointment_datetime', appointmentDate.toISOString()) // Conflicts if starts before the end of new appointment
+      .lt('appointment_datetime', appointmentEndTime.toISOString()) // Conflicts if starts after the beginning of new appointment minus 30 min
+      .neq('status', 'cancelled');
+
+    if (error) throw error;
+
+    // Loop through existing appointments to check precise overlap
+    for (const existingAppointment of conflictingAppointments || []) {
+      const existingStart = new Date(existingAppointment.appointment_datetime);
+      const existingEnd = new Date(existingStart.getTime() + 30 * 60000); // Assuming 30 min duration
+
+      // Check if there's overlap
+      if (
+        (appointmentDate >= existingStart && appointmentDate < existingEnd) ||
+        (appointmentEndTime > existingStart && appointmentEndTime <= existingEnd)
+      ) {
+        console.log('❌ Conflict found with existing appointment');
+        return { isAvailable: false, message: 'Doctor already has an appointment at this time or very close.' };
+      }
+    }
+
+    console.log('✅ Doctor is available at this time');
+    return { isAvailable: true };
+
+  } catch (error) {
+    console.error('Error checking doctor availability:', error);
+    return {
+      isAvailable: false,
+      message: 'Error checking doctor availability.'
+    };
+  }
+};
+
+const checkUserAppointmentConflict = async (userId, appointmentDate) => {
+  try {
+    const appointmentDateString = appointmentDate.toISOString().split('T')[0];
+    
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('appointment_datetime', appointmentDateString + 'T00:00:00.000Z')
+      .lt('appointment_datetime', appointmentDateString + 'T23:59:59.999Z')
+      .neq('status', 'cancelled');
+
+    if (error) throw error;
+
+    const hasConflict = data && data.length > 0;
+
+    return {
+      hasConflict,
+      message: hasConflict 
+        ? 'You already have an appointment scheduled for this day'
+        : null
+    };
+
+  } catch (error) {
+    console.error('Error checking user appointments:', error);
+    return {
+      hasConflict: false,
+      message: 'Error checking user appointments'
+    };
+  }
+};
+
+export { validateAppointment, checkDoctorAvailability, checkUserAppointmentConflict }; 

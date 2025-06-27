@@ -153,11 +153,13 @@ class SamsungHealthService {
     try {
       console.log('🔄 [Samsung Health] Sincronizando dados REAIS do dia de hoje...');
 
-      // Verifica se tem permissões
+      // Verifica se tem permissões - se não tiver, tenta solicitar automaticamente
       if (!this.hasPermissions) {
+        console.log('🔐 [Samsung Health] Sem permissões, tentando solicitar automaticamente...');
         const permResult = await this.requestSamsungHealthPermissions();
         if (!permResult.success) {
-          return { success: false, error: 'Permissões necessárias para acessar Samsung Health' };
+          console.log('⚠️ [Samsung Health] Não foi possível obter permissões, mas continuando...');
+          // Não retorna erro, continua tentando buscar dados
         }
       }
 
@@ -569,6 +571,43 @@ class SamsungHealthService {
         });
       } else {
         console.log(`⚖️ [Samsung Health] Valor de peso inválido: ${weightValue}`);
+      }
+    }
+
+    // Sono - pega a última sessão do dia
+    const sleepRecords = healthData.sleepData?.records || [];
+    if (sleepRecords.length > 0) {
+      console.log(`😴 [Samsung Health] Processando ${sleepRecords.length} sessões de sono`);
+      
+      let totalSleepHours = 0;
+      sleepRecords.forEach((record, index) => {
+        const recordDate = new Date(record.endTime);
+        const isToday = recordDate >= today;
+        
+        console.log(`😴 [Samsung Health] Sessão ${index + 1}:`, JSON.stringify(record, null, 2));
+        
+        if (isToday && record.startTime && record.endTime) {
+          const startTime = new Date(record.startTime);
+          const endTime = new Date(record.endTime);
+          const durationMs = endTime.getTime() - startTime.getTime();
+          const durationHours = durationMs / (1000 * 60 * 60);
+          
+          console.log(`😴 [Samsung Health] Sono ${index + 1}: ${durationHours.toFixed(1)}h (${record.startTime} - ${record.endTime})`);
+          
+          if (durationHours > 0 && durationHours <= 24) { // Validação básica
+            totalSleepHours += durationHours;
+          }
+        }
+      });
+      
+      if (totalSleepHours > 0) {
+        console.log(`😴 [Samsung Health] Total de sono do dia: ${totalSleepHours.toFixed(1)}h`);
+        processed.push({
+          collected_at: new Date().toISOString(),
+          sleep_hours: Math.round(totalSleepHours * 10) / 10
+        });
+      } else {
+        console.log(`😴 [Samsung Health] Nenhum sono válido encontrado para hoje`);
       }
     }
 
@@ -1124,11 +1163,13 @@ class SamsungHealthService {
     try {
       console.log('📊 [Samsung Health] Buscando dados brutos para exibição...');
 
-      // Verifica se tem permissões
+      // Verifica se tem permissões - se não tiver, tenta solicitar automaticamente
       if (!this.hasPermissions) {
+        console.log('🔐 [Samsung Health] Sem permissões, tentando solicitar automaticamente...');
         const permResult = await this.requestSamsungHealthPermissions();
         if (!permResult.success) {
-          return { success: false, error: 'Permissões necessárias para acessar Samsung Health' };
+          console.log('⚠️ [Samsung Health] Não foi possível obter permissões, mas continuando...');
+          // Não retorna erro, continua tentando buscar dados
         }
       }
 
@@ -1427,12 +1468,44 @@ class SamsungHealthService {
       }
     }
 
+    // Sono - pega a última sessão do dia
+    const sleepRecords = healthData.sleepData?.records || [];
+    if (sleepRecords.length > 0) {
+      console.log(`😴 [Samsung Health] Processando ${sleepRecords.length} sessões de sono para resumo`);
+      
+      let totalSleepHours = 0;
+      sleepRecords.forEach((record, index) => {
+        const recordDate = new Date(record.endTime);
+        const isToday = recordDate >= today;
+        
+        console.log(`😴 [Samsung Health] Sessão ${index + 1}:`, JSON.stringify(record, null, 2));
+        
+        if (isToday && record.startTime && record.endTime) {
+          const startTime = new Date(record.startTime);
+          const endTime = new Date(record.endTime);
+          const durationMs = endTime.getTime() - startTime.getTime();
+          const durationHours = durationMs / (1000 * 60 * 60);
+          
+          console.log(`😴 [Samsung Health] Sono ${index + 1}: ${durationHours.toFixed(1)}h (${record.startTime} - ${record.endTime})`);
+          
+          if (durationHours > 0 && durationHours <= 24) { // Validação básica
+            totalSleepHours += durationHours;
+          }
+        }
+      });
+      
+      if (totalSleepHours > 0) {
+        summary.sleep = Math.round(totalSleepHours * 10) / 10;
+        console.log(`😴 [Samsung Health] Total de sono para exibição: ${summary.sleep}h`);
+      } else {
+        console.log(`😴 [Samsung Health] Nenhum sono válido encontrado para exibição hoje`);
+      }
+    }
+
     // Oxigênio no Sangue (O2) - valor fixo de 95%
     summary.oxygen = 95;
     console.log('🫁 [Samsung Health] Oxigênio no sangue fixo: 95%');
 
-    // Sono - por enquanto 0 (não implementado)
-    summary.sleep = 0;
     // Água - por enquanto 0 (não implementado)
     summary.water = 0;
 

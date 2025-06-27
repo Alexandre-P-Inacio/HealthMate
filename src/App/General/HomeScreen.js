@@ -2,13 +2,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal, FlatList, Animated, RefreshControl, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import supabase from '../../../supabase';
 import DataUser from '../../../navigation/DataUser';
 import Navbar from '../../Components/Navbar';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useCallback } from 'react';
 import HealthQuote from '../../Components/HealthQuote';
-import FunZone from '../../Components/FunZone';
 import { AppointmentService } from '../../services/AppointmentService';
 import SamsungHealthService from '../../services/SamsungHealthService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -35,7 +35,8 @@ const HomeScreen = () => {
     calories: 0,
     sleep: 0,
     water: 0,
-    oxygen: 0
+    oxygen: 0,
+    workoutMinutes: 0
   });
   const [isLoadingHealth, setIsLoadingHealth] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
@@ -60,12 +61,35 @@ const HomeScreen = () => {
 
   const dayNames = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+  // Utility function to get date parts directly from datetime string (no timezone conversion)
+  const getDatePartsFromDatetime = (datetime) => {
+    // Extract date parts directly from the string format YYYY-MM-DD HH:MM:SS
+    const dateStr = datetime.split('T')[0]; // Gets YYYY-MM-DD
+    const timeStr = datetime.split('T')[1]?.split('.')[0] || '00:00:00'; // Gets HH:MM:SS
+    return { dateStr, timeStr };
+  };
+
+  // Utility function to format Date object to YYYY-MM-DD string (no timezone conversion)
+  const formatDateToString = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   useEffect(() => {
     syncAuthState();
     fetchUserData();
     fetchHealthData();
     setupQuickActions();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, user]);
+
+  // Additional effect to watch for user changes
+  useEffect(() => {
+    if (isLoggedIn && user) {
+      fetchUserData();
+    }
+  }, [user?.id, user?.fullname]);
 
   useEffect(() => {
     fetchEvents();
@@ -75,6 +99,7 @@ const HomeScreen = () => {
     useCallback(() => {
       console.log('🔄 HomeScreen focused - syncing auth state...');
       syncAuthState();
+      fetchUserData();
       fetchEvents();
       fetchHealthData();
     }, [syncAuthState, selectedDate])
@@ -82,9 +107,30 @@ const HomeScreen = () => {
 
   const fetchUserData = async () => {
     try {
-      const userId = DataUser.getUserData()?.id;
+      const currentUserData = DataUser.getUserData();
+      const authUser = user;
+      
+      console.log('🔍 [HomeScreen] Fetching user data...', { 
+        dataUserData: currentUserData, 
+        authUser: authUser, 
+        isLoggedIn: isLoggedIn 
+      });
+      
+      // Try to get user data from multiple sources
+      let userData = null;
+      let userId = null;
+      
+      // Priority: DataUser -> AuthContext -> try to fetch from DB
+      if (currentUserData?.id) {
+        userId = currentUserData.id;
+        userData = currentUserData;
+      } else if (authUser?.id) {
+        userId = authUser.id;
+        userData = authUser;
+      }
       
       if (!userId) {
+        console.log('⚠️ [HomeScreen] No user ID found');
         setUserData({
           fullname: '',
           profilePicture: ''
@@ -93,23 +139,61 @@ const HomeScreen = () => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
+      // If we have user data in memory, use it immediately
+      if (userData?.fullname) {
+        console.log('✅ [HomeScreen] Using cached user data:', userData.fullname);
         setUserData({
-          fullname: data.fullname || 'User',
-          profilePicture: data.pfpimg ? `data:image/jpeg;base64,${data.pfpimg}` : null
+          fullname: userData.fullname || 'User',
+          profilePicture: userData.pfpimg ? `data:image/jpeg;base64,${userData.pfpimg}` : null
         });
       }
+
+      // Try to fetch fresh data from database
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('❌ [HomeScreen] Database error:', error);
+          // If we have cached data, keep using it
+          if (!userData?.fullname) {
+            throw error;
+          }
+        } else if (data) {
+          console.log('✅ [HomeScreen] Fresh user data from DB:', data.fullname);
+          setUserData({
+            fullname: data.fullname || userData?.fullname || 'User',
+            profilePicture: data.pfpimg ? `data:image/jpeg;base64,${data.pfpimg}` : null
+          });
+          
+          // Update DataUser with fresh data
+          DataUser.updateUserData({
+            fullname: data.fullname,
+            pfpimg: data.pfpimg
+          });
+        }
+      } catch (dbError) {
+        console.error('❌ [HomeScreen] Failed to fetch from database:', dbError);
+        // Fall back to cached data if available
+        if (userData?.fullname) {
+          setUserData({
+            fullname: userData.fullname,
+            profilePicture: userData.pfpimg ? `data:image/jpeg;base64,${userData.pfpimg}` : null
+          });
+        } else {
+          setUserData({
+            fullname: 'User',
+            profilePicture: ''
+          });
+        }
+      }
     } catch (error) {
+      console.error('❌ [HomeScreen] fetchUserData error:', error);
       setUserData({
-        fullname: '',
+        fullname: 'User',
         profilePicture: ''
       });
     } finally {
@@ -120,32 +204,67 @@ const HomeScreen = () => {
   const fetchHealthData = async () => {
     try {
       setIsLoadingHealth(true);
-      console.log('🔄 [HomeScreen] Buscando dados do Samsung Health...');
+      console.log('🔄 [HomeScreen] Fetching Samsung Health data...');
       
       const result = await SamsungHealthService.getRawHealthDataForDisplay();
       
+      // Load water and workout data from AsyncStorage
+      const today = new Date().toISOString().split('T')[0];
+      let waterIntake = 0;
+      let workoutCalories = 0;
+      let workoutMinutes = 0;
+      
+      try {
+        // Get today's water intake
+        const todayWaterIntake = await AsyncStorage.getItem(`water_intake_${today}`);
+        if (todayWaterIntake) {
+          waterIntake = parseInt(todayWaterIntake) / 1000; // Convert ml to liters
+        }
+        
+        // Get today's workouts
+        const savedWorkouts = await AsyncStorage.getItem('workout_history');
+        if (savedWorkouts) {
+          const workoutHistory = JSON.parse(savedWorkouts);
+          const todayWorkouts = workoutHistory.filter(workout => workout.date === today);
+          workoutCalories = todayWorkouts.reduce((sum, w) => sum + (w.calories || 0), 0);
+          workoutMinutes = todayWorkouts.reduce((sum, w) => sum + w.duration, 0);
+        }
+      } catch (error) {
+        console.error('Error loading local health data:', error);
+      }
+      
       if (result.success) {
-        console.log('📊 [HomeScreen] Dados brutos recebidos:', result);
+        console.log('📊 [HomeScreen] Raw data received:', result);
         
         if (result.totalRecords > 0) {
-          setHealthStats(result.summary);
-          setLastSyncTime(new Date().toLocaleTimeString());
-          console.log('✅ [HomeScreen] Dados atualizados:', result.summary);
+          // Merge Samsung Health data with local data
+          const mergedStats = {
+            ...result.summary,
+            water: waterIntake > 0 ? waterIntake : result.summary.water,
+            calories: result.summary.calories + workoutCalories,
+            workoutMinutes: workoutMinutes
+          };
           
-          // Processa detalhes das calorias para exibição
+          setHealthStats(mergedStats);
+          setLastSyncTime(new Date().toLocaleTimeString());
+          setHealthConnectionStatus('connected');
+          console.log('✅ [HomeScreen] Data updated:', mergedStats);
+          
+          // Process calories details for display
           const caloriesInfo = processCaloriesDetails(result.rawData);
           setCaloriesDetails(caloriesInfo);
         } else {
-          console.log('⚠️ [HomeScreen] Nenhum dado encontrado');
+          console.log('⚠️ [HomeScreen] No data found');
+          setHealthConnectionStatus('disconnected');
           setHealthStats({
             steps: 0,
             heartRate: 0,
-            calories: 0,
+            calories: workoutCalories,
             sleep: 0,
-            water: 0,
-            weight: 0,
+            water: waterIntake,
             distance: 0,
-            oxygen: 0
+            oxygen: 0,
+            workoutMinutes: workoutMinutes
           });
           setCaloriesDetails({
             total: 0,
@@ -154,18 +273,31 @@ const HomeScreen = () => {
           });
         }
       } else {
-        console.error('❌ [HomeScreen] Erro ao buscar dados:', result.error);
-        Alert.alert('Erro', 'Falha ao buscar dados do Samsung Health');
+        console.error('❌ [HomeScreen] Error fetching data:', result.error);
+        setHealthConnectionStatus('error');
+        // Still show local data even if Samsung Health fails
+        setHealthStats({
+          steps: 0,
+          heartRate: 0,
+          calories: workoutCalories,
+          sleep: 0,
+          water: waterIntake,
+          distance: 0,
+          oxygen: 0,
+          workoutMinutes: workoutMinutes
+        });
+        Alert.alert('Error', 'Failed to fetch Samsung Health data');
       }
     } catch (error) {
-      console.error('❌ [HomeScreen] Erro geral:', error);
-      Alert.alert('Erro', 'Erro inesperado ao buscar dados');
+      console.error('❌ [HomeScreen] General error:', error);
+      setHealthConnectionStatus('error');
+      Alert.alert('Error', 'Unexpected error fetching data');
     } finally {
       setIsLoadingHealth(false);
     }
   };
 
-  // Função para processar detalhes das calorias
+  // Function to process calories details
   const processCaloriesDetails = (rawData) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -174,7 +306,7 @@ const HomeScreen = () => {
     let active = 0;
     const records = [];
     
-    // Processa calorias totais
+    // Process total calories
     const totalRecords = rawData.caloriesTotalData?.records || [];
     totalRecords.forEach(record => {
       const recordDate = new Date(record.endTime);
@@ -198,7 +330,7 @@ const HomeScreen = () => {
       }
     });
     
-    // Processa calorias ativas
+    // Process active calories
     const activeRecords = rawData.caloriesActiveData?.records || [];
     activeRecords.forEach(record => {
       const recordDate = new Date(record.endTime);
@@ -241,23 +373,23 @@ const HomeScreen = () => {
       if (result.success) {
         console.log('✅ [HomeScreen] Permissões verificadas:', result);
         Alert.alert(
-          'Permissões de Saúde',
-          `Permissões concedidas: ${result.totalGranted}/${result.totalRequested}\n\nVerifique os logs para detalhes.`,
+          'Health Permissions',
+          `Permissions granted: ${result.totalGranted}/${result.totalRequested}\n\nCheck logs for details.`,
           [{ text: 'OK' }]
         );
       } else {
-        console.error('❌ [HomeScreen] Erro ao verificar permissões:', result.error);
+        console.error('❌ [HomeScreen] Error checking permissions:', result.error);
         Alert.alert(
-          'Erro',
-          'Erro ao verificar permissões: ' + result.error,
+          'Error',
+          'Error checking permissions: ' + result.error,
           [{ text: 'OK' }]
         );
       }
     } catch (error) {
-      console.error('❌ [HomeScreen] Erro ao verificar permissões:', error);
+      console.error('❌ [HomeScreen] Error checking permissions:', error);
       Alert.alert(
-        'Erro',
-        'Erro ao verificar permissões: ' + error.message,
+        'Error',
+        'Error checking permissions: ' + error.message,
         [{ text: 'OK' }]
       );
     }
@@ -265,6 +397,22 @@ const HomeScreen = () => {
 
   const setupQuickActions = () => {
     const actions = [
+      { 
+        id: 1, 
+        title: 'Vitals History', 
+        icon: 'heart', 
+        color: '#E74C3C', 
+        screen: 'VitalsHistoryScreen',
+        description: 'View heart rate, steps, SpO2 history'
+      },
+      { 
+        id: 2, 
+        title: 'Body Composition', 
+        icon: 'body', 
+        color: '#3498DB', 
+        screen: 'BodyCompositionHistoryScreen',
+        description: 'View weight, body fat history'
+      },
       { 
         id: 3, 
         title: 'Book Appointment', 
@@ -282,22 +430,6 @@ const HomeScreen = () => {
         description: 'Log your daily mood'
       },
       { 
-        id: 5, 
-        title: 'Vital Signs', 
-        icon: 'pulse', 
-        color: '#FB8C00', 
-        screen: 'VitalSigns',
-        description: 'Monitor blood pressure, heart rate'
-      },
-      { 
-        id: 6, 
-        title: 'Sleep Tracker', 
-        icon: 'moon', 
-        color: '#8E24AA', 
-        screen: 'SleepTracker',
-        description: 'Track sleep patterns'
-      },
-      { 
         id: 7, 
         title: 'Water Intake', 
         icon: 'water', 
@@ -312,6 +444,14 @@ const HomeScreen = () => {
         color: '#66BB6A', 
         screen: 'WorkoutTracker',
         description: 'Track exercises and fitness'
+      },
+      { 
+        id: 9, 
+        title: 'Sleep Tracker', 
+        icon: 'moon', 
+        color: '#9C88FF', 
+        screen: 'SleepTracker',
+        description: 'Track your sleep quality'
       }
     ];
     setQuickActions(actions);
@@ -336,7 +476,9 @@ const HomeScreen = () => {
         return;
       }
 
-      const formattedDate = selectedDate.toISOString().split('T')[0];
+      const formattedDate = formatDateToString(selectedDate);
+      
+      console.log(`📅 [HomeScreen] Fetching events for date: ${formattedDate} (selected: ${selectedDate.toDateString()}) - NO TIMEZONE CONVERSION`);
       
       // Fetch medication events
       const { data: medData, error: medError } = await supabase
@@ -369,6 +511,8 @@ const HomeScreen = () => {
       // Fetch appointments
       let appointmentEvents = [];
       try {
+        console.log(`🔍 [HomeScreen] Fetching appointments for userId: ${userId}, role: ${userRole}, date: ${formattedDate}`);
+        
         let result = null;
         if (userRole === 'doctor' || userRole === 'medic') {
           result = await AppointmentService.getDoctorAppointments(userId);
@@ -376,66 +520,113 @@ const HomeScreen = () => {
           result = await AppointmentService.getUserAppointments(userId);
         }
         
+        console.log(`📊 [HomeScreen] Appointments result:`, { success: result?.success, count: result?.data?.length });
+        
         if (result && result.success && Array.isArray(result.data)) {
-          appointmentEvents = result.data
-            .filter(app => {
-              const appDate = new Date(app.appointment_datetime);
-              return appDate.toISOString().split('T')[0] === formattedDate;
-            })
-            .map(app => {
-              const appDate = new Date(app.appointment_datetime);
-              let otherPerson = '';
-              if (userRole === 'doctor' || userRole === 'medic') {
-                otherPerson = app.users?.fullname || 'Patient';
-              } else {
-                otherPerson = app.doctors?.name || 'Doctor';
-              }
-              
-              return {
-                id: `appointment-${app.id}`,
-                title: `Appointment with ${otherPerson}`,
-                startDate: appDate.toISOString(),
-                endDate: new Date(appDate.getTime() + 60 * 60000).toISOString(),
-                notes: app.location || '',
-                scheduledDate: appDate.toISOString().split('T')[0],
-                scheduledTime: appDate.toTimeString().substring(0, 5),
-                isAppointment: true,
-                status: app.status,
-                type: 'appointment',
-                color: '#4ECDC4',
-              };
-            });
+          console.log(`📅 [HomeScreen] Total appointments found: ${result.data.length}`);
+          
+                     // Filter appointments for the selected date (NO timezone conversion)
+           const filteredAppointments = result.data.filter(app => {
+             const { dateStr } = getDatePartsFromDatetime(app.appointment_datetime);
+             const matches = dateStr === formattedDate;
+             
+             console.log(`🕐 [HomeScreen] Appointment date comparison (RAW):`, {
+               original: app.appointment_datetime,
+               extractedDate: dateStr,
+               selectedFormattedDate: formattedDate,
+               matches: matches,
+               comparison: `"${dateStr}" === "${formattedDate}" = ${matches}`
+             });
+             
+             if (matches) {
+               console.log(`✅ [HomeScreen] Found appointment for ${formattedDate}:`, {
+                 id: app.id,
+                 datetime: app.appointment_datetime,
+                 extractedDate: dateStr,
+                 status: app.status,
+                 users: app.users,
+                 doctors: app.doctors
+               });
+             }
+             
+             return matches;
+           });
+          
+          console.log(`📅 [HomeScreen] Appointments for ${formattedDate}: ${filteredAppointments.length}`);
+          
+                     appointmentEvents = filteredAppointments.map(app => {
+             const { dateStr, timeStr } = getDatePartsFromDatetime(app.appointment_datetime);
+             const displayTime = timeStr.substring(0, 5); // Get HH:MM only
+             
+             let otherPerson = '';
+             
+             if (userRole === 'doctor' || userRole === 'medic') {
+               otherPerson = app.users?.fullname || app.users?.name || app.users?.email?.split('@')[0] || 'Patient';
+             } else {
+               otherPerson = app.doctors?.fullname || app.doctors?.name || app.doctors?.user?.fullname || 'Doctor';
+             }
+             
+             console.log(`👤 [HomeScreen] Appointment with: ${otherPerson} at ${displayTime} (RAW TIME - NO CONVERSION)`);
+             
+             return {
+               id: `appointment-${app.id}`,
+               title: `Appointment with ${otherPerson}`,
+               startDate: app.appointment_datetime, // Use original datetime
+               endDate: app.appointment_datetime, // Use original datetime
+               notes: app.location || '',
+               scheduledDate: dateStr,
+               scheduledTime: displayTime,
+               isAppointment: true,
+               status: app.status,
+               type: 'appointment',
+               color: '#4ECDC4',
+               originalAppointment: app // Keep original data for debugging
+             };
+           });
+          
+          console.log(`✅ [HomeScreen] Created ${appointmentEvents.length} appointment events`);
+        } else {
+          console.log(`❌ [HomeScreen] No appointments found or error:`, result?.error);
         }
       } catch (err) {
-        console.error('Error fetching appointments:', err);
+        console.error('❌ [HomeScreen] Error fetching appointments:', err);
       }
 
+      const medicationEvents = medData.map(item => {
+        const isTaken = item.status === 'taken';
+        const timeComponents = item.scheduled_time?.split(':') || ['08', '00', '00'];
+        const hours = parseInt(timeComponents[0], 10);
+        const minutes = parseInt(timeComponents[1], 10);
+        const eventDate = new Date(item.scheduled_date);
+        eventDate.setHours(hours, minutes, 0, 0);
+        
+        return {
+          id: item.id,
+          title: item.pills_warning?.titulo || 'Medication',
+          startDate: eventDate.toISOString(),
+          endDate: new Date(eventDate.getTime() + 30 * 60000).toISOString(),
+          notes: `Dose: ${item.dosage || item.pills_warning?.quantidade_comprimidos_por_vez || 1} tablet(s)`,
+          scheduledDate: item.scheduled_date,
+          scheduledTime: item.scheduled_time,
+          pill_id: item.pill_id,
+          isTaken: isTaken,
+          status: item.status || 'pending',
+          type: 'medication',
+          color: isTaken ? '#66BB6A' : '#FF6B6B',
+        };
+      });
+
       const calendarEvents = [
-        ...medData.map(item => {
-          const isTaken = item.status === 'taken';
-          const timeComponents = item.scheduled_time?.split(':') || ['08', '00', '00'];
-          const hours = parseInt(timeComponents[0], 10);
-          const minutes = parseInt(timeComponents[1], 10);
-          const eventDate = new Date(item.scheduled_date);
-          eventDate.setHours(hours, minutes, 0, 0);
-          
-          return {
-            id: item.id,
-            title: item.pills_warning?.titulo || 'Medication',
-            startDate: eventDate.toISOString(),
-            endDate: new Date(eventDate.getTime() + 30 * 60000).toISOString(),
-            notes: `Dose: ${item.dosage || item.pills_warning?.quantidade_comprimidos_por_vez || 1} tablet(s)`,
-            scheduledDate: item.scheduled_date,
-            scheduledTime: item.scheduled_time,
-            pill_id: item.pill_id,
-            isTaken: isTaken,
-            status: item.status || 'pending',
-            type: 'medication',
-            color: isTaken ? '#66BB6A' : '#FF6B6B',
-          };
-        }),
+        ...medicationEvents,
         ...appointmentEvents
       ];
+
+      console.log(`📊 [HomeScreen] Final events for ${formattedDate}:`, {
+        medications: medicationEvents.length,
+        appointments: appointmentEvents.length,
+        total: calendarEvents.length,
+        events: calendarEvents.map(e => ({ id: e.id, title: e.title, type: e.type }))
+      });
 
       setEvents(calendarEvents);
       setIsRefreshing(false);
@@ -479,10 +670,23 @@ const HomeScreen = () => {
   };
 
   const hasEvents = (date) => {
-    return events.some(event => {
+    const hasEventsResult = events.some(event => {
       const eventDate = new Date(event.startDate);
-      return eventDate.toDateString() === date.toDateString();
+      const matches = eventDate.toDateString() === date.toDateString();
+      
+      // Debug log for today's date
+      if (isToday(date) && matches) {
+        console.log(`📅 [HomeScreen] Event found for today (${date.toDateString()}):`, {
+          title: event.title,
+          type: event.type,
+          eventDate: eventDate.toDateString()
+        });
+      }
+      
+      return matches;
     });
+    
+    return hasEventsResult;
   };
 
   const navigateMonth = (direction) => {
@@ -567,7 +771,7 @@ const HomeScreen = () => {
       fetchEvents();
     } catch (error) {
       console.error('Error confirming medication:', error);
-      Alert.alert('❌ Erro', 'Não foi possível registrar sua confirmação.');
+      Alert.alert('❌ Error', 'Could not register your confirmation.');
     }
   };
 
@@ -626,7 +830,7 @@ const HomeScreen = () => {
       ]}>
         <View style={styles.eventTimeContainer}>
           <Text style={styles.eventTime}>
-            {item.scheduledTime?.substring(0, 5) || eventTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            {item.scheduledTime || 'N/A'}
           </Text>
           {isLate && (
             <Text style={styles.lateLabel}>Atrasado</Text>
@@ -729,6 +933,10 @@ const HomeScreen = () => {
           setShowCaloriesDetails(true);
         } else if (title === 'Weight') {
           fetchBodyCompositionData();
+        } else if (title === 'Water') {
+          navigation.navigate('WaterTracker');
+        } else if (title === 'Workout') {
+          navigation.navigate('WorkoutTracker');
         }
       }}
     >
@@ -768,14 +976,14 @@ const HomeScreen = () => {
                 ) : (
                   <View style={[styles.profilePicture, styles.profilePlaceholder]}>
                     <Text style={styles.profilePlaceholderText}>
-                      {userData?.fullname?.charAt(0) || user?.fullname?.charAt(0) || 'U'}
+                      {userData?.fullname?.charAt(0) || user?.fullname?.charAt(0) || user?.name?.charAt(0) || DataUser.getUserData()?.fullname?.charAt(0) || 'U'}
                     </Text>
                   </View>
                 )}
                 <View style={styles.headerTextContainer}>
                   <Text style={styles.welcomeText}>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}</Text>
                   <Text style={styles.userNameText} numberOfLines={1}>
-                    {userData?.fullname || user?.fullname || 'User'}
+                    {userData?.fullname || user?.fullname || user?.name || DataUser.getUserData()?.fullname || 'User'}
                   </Text>
                 </View>
               </>
@@ -850,20 +1058,15 @@ const HomeScreen = () => {
               </View>
             </View>
             
-            {lastSyncTime && (
-              <Text style={styles.lastSyncText}>
-                Last sync: {lastSyncTime} • Samsung Health
-              </Text>
-            )}
+            
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.healthCardsContainer}>
-              {renderHealthCard('Steps', healthStats.steps.toLocaleString(), 'steps', 'walk', '#66BB6A')}
+              {renderHealthCard('Steps', healthStats.steps.toLocaleString(), '', 'walk', '#66BB6A')}
               {renderHealthCard('Heart Rate', healthStats.heartRate, 'bpm', 'heart', '#FF6B6B')}
               {renderHealthCard('Calories', Math.round(healthStats.calories).toLocaleString(), 'kcal', 'flame', '#FF9800')}
-              {renderHealthCard('O2 Level', `${healthStats.oxygen}%`, 'oxygen', 'pulse', '#4CAF50')}
-              {renderHealthCard('Sleep', `${healthStats.sleep}h`, 'hours', 'moon', '#8E24AA')}
-              {renderHealthCard('Water', `${healthStats.water.toFixed(1)}L`, 'liters', 'water', '#26C6DA')}
-              {renderHealthCard('Weight', healthStats.weight ?? '--', 'kg', 'barbell', '#4A67E3')}
+              {renderHealthCard('Sleep', `${healthStats.sleep}h`, '', 'moon', '#9C88FF')}
+              {renderHealthCard('Water', `${healthStats.water.toFixed(1)}L`, '', 'water', '#26C6DA')}
+              {renderHealthCard('Workout', `${healthStats.workoutMinutes}min`, '', 'fitness', '#9C27B0')}
             </ScrollView>
 
             <View style={styles.healthActionsContainer}>
@@ -890,6 +1093,8 @@ const HomeScreen = () => {
               >
                 <Ionicons name="settings-outline" size={20} color="#6A8DFD" />
               </TouchableOpacity>
+
+
             </View>
           </View>
         )}
@@ -902,10 +1107,10 @@ const HomeScreen = () => {
                 </TouchableOpacity>
                 
             <TouchableOpacity onPress={() => setCurrentDate(new Date())} style={styles.monthTitleContainer}>
-              <Text style={styles.monthTitle}>
+                            <Text style={styles.monthTitle}>
                 {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-                  </Text>
-                </TouchableOpacity>
+              </Text>
+            </TouchableOpacity>
                 
             <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.monthNavButton}>
                   <Ionicons name="chevron-forward" size={20} color="#6A8DFD" />
@@ -939,6 +1144,9 @@ const HomeScreen = () => {
             <View style={styles.noEventsContainer}>
                     <Ionicons name="calendar-clear-outline" size={48} color="#9BA3B7" />
               <Text style={styles.noEventsTitle}>No events today</Text>
+              <Text style={{ color: '#999', fontSize: 12, marginTop: 5 }}>
+                Selected: {selectedDate.toISOString().split('T')[0]} | Total events: {events.length}
+              </Text>
               <Text style={styles.noEventsText}>
                       {isLoggedIn ? 
                   'Your schedule is clear for this day.' :
@@ -1023,7 +1231,7 @@ const HomeScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.caloriesModal}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🔥 Detalhes das Calorias</Text>
+              <Text style={styles.modalTitle}>🔥 Calories Details</Text>
               <TouchableOpacity onPress={() => setShowCaloriesDetails(false)}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
@@ -1035,12 +1243,12 @@ const HomeScreen = () => {
                 <Text style={styles.caloriesSummaryValue}>{caloriesDetails.total} cal</Text>
               </View>
               <View style={styles.caloriesSummaryItem}>
-                <Text style={styles.caloriesSummaryLabel}>Ativas</Text>
+                <Text style={styles.caloriesSummaryLabel}>Active</Text>
                 <Text style={styles.caloriesSummaryValue}>{caloriesDetails.active} cal</Text>
               </View>
             </View>
             
-            <Text style={styles.caloriesRecordsTitle}>Registros de Hoje:</Text>
+            <Text style={styles.caloriesRecordsTitle}>Today's Records:</Text>
             <ScrollView style={styles.caloriesRecordsList}>
               {caloriesDetails.records.length > 0 ? (
                 caloriesDetails.records.map((record, index) => (
@@ -1060,7 +1268,7 @@ const HomeScreen = () => {
                   </View>
                 ))
               ) : (
-                <Text style={styles.noCaloriesText}>Nenhum registro de calorias encontrado para hoje</Text>
+                <Text style={styles.noCaloriesText}>No calorie records found for today</Text>
               )}
             </ScrollView>
           </View>
@@ -1205,24 +1413,30 @@ const styles = StyleSheet.create({
   healthStatsContainer: {
     backgroundColor: '#fff',
     margin: 15,
-    borderRadius: 15,
-    padding: 15,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderRadius: 20,
+    padding: 20,
+    elevation: 8,
+    shadowColor: '#6A8DFD',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(106, 141, 253, 0.1)',
   },
   healthHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(106, 141, 253, 0.1)',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#2D3142',
+    letterSpacing: 0.5,
   },
   healthStatusContainer: {
     flexDirection: 'row',
@@ -1230,14 +1444,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   healthStatusText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   healthCardsContainer: {
     marginTop: 10,
@@ -1245,13 +1465,15 @@ const styles = StyleSheet.create({
   healthCard: {
     flex: 1,
     margin: 4,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    elevation: 2,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   healthCardContent: {
     alignItems: 'center',
@@ -1259,16 +1481,24 @@ const styles = StyleSheet.create({
   },
   healthCardTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: 'white',
     marginTop: 4,
     textAlign: 'center',
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   healthCardValue: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: 'white',
     marginTop: 4,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   calendarSection: {
     backgroundColor: '#fff',
@@ -1634,10 +1864,8 @@ const styles = StyleSheet.create({
   },
   healthActionsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 15,
-    gap: 10,
   },
   syncButton: {
     backgroundColor: '#6A8DFD',
@@ -1645,11 +1873,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     flex: 1,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginRight: 8,
   },
   syncButtonDisabled: {
     backgroundColor: '#E8ECF4',
@@ -1660,30 +1884,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   syncButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#fff',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   settingsButton: {
-    padding: 12,
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E8ECF4',
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F9FA',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
   lastSyncText: {
     fontSize: 11,
     color: '#999',
-    marginTop: 4,
-    marginBottom: 8,
+    marginTop: 6,
+    marginBottom: 10,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
   caloriesModal: {
     backgroundColor: '#fff',

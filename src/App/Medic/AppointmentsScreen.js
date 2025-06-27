@@ -154,54 +154,104 @@ const AppointmentsScreen = ({ navigation }) => {
         setLoading(false);
         return;
       }
+      
+      console.log(`🔍 [AppointmentsScreen] Fetching appointments for userId: ${userId}, isMedic: ${isMedic}`);
       let data = [];
       if (isMedic) {
         const res = await AppointmentService.getDoctorAppointments(userId);
-        if (res.success) data = res.data;
+        if (res.success) {
+          data = res.data;
+          console.log(`✅ [AppointmentsScreen] Doctor appointments fetched: ${data.length} appointments`);
+        } else {
+          console.error(`❌ [AppointmentsScreen] Failed to fetch doctor appointments:`, res.error);
+        }
         // Fallback: fetch user data if missing
         for (let apt of data) {
-          if (!apt.users || !apt.users.fullname) {
-            const { data: userData } = await supabase
+          if (!apt.users || (!apt.users.fullname && !apt.users.name)) {
+            console.log(`🔍 Fetching missing user data for user_id: ${apt.user_id}`);
+            const { data: userData, error: userError } = await supabase
               .from('users')
-              .select('fullname')
+              .select('fullname, email')
               .eq('id', apt.user_id)
               .single();
-            if (userData && userData.fullname) {
-              apt.users = { fullname: userData.fullname };
+            
+            if (!userError && userData) {
+              apt.users = { 
+                fullname: userData.fullname || userData.email?.split('@')[0] || 'Patient',
+                email: userData.email
+              };
+              console.log(`✅ Found user data: ${apt.users.fullname}`);
+            } else {
+              console.log(`❌ No user data found for user_id: ${apt.user_id}`);
+              apt.users = { fullname: 'Patient' };
             }
           }
         }
       } else {
         const res = await AppointmentService.getUserAppointments(userId);
-        if (res.success) data = res.data;
+        if (res.success) {
+          data = res.data;
+          console.log(`✅ [AppointmentsScreen] User appointments fetched: ${data.length} appointments`);
+        } else {
+          console.error(`❌ [AppointmentsScreen] Failed to fetch user appointments:`, res.error);
+        }
         // Fallback: fetch doctor data if missing
         for (let apt of data) {
           if (!apt.doctors || (!apt.doctors.fullname && !apt.doctors.name)) {
             if (apt.doctor_id) {
+              console.log(`🔍 Fetching missing doctor data for doctor_id: ${apt.doctor_id}`);
               // Fetch doctor from doctors table
-              const { data: doctorData } = await supabase
+              const { data: doctorData, error: doctorError } = await supabase
                 .from('doctors')
                 .select('id, name, user_id')
                 .eq('id', apt.doctor_id)
                 .single();
-              if (doctorData) {
+              
+              if (!doctorError && doctorData) {
                 // Fetch user fullname from users table
-                const { data: userData } = await supabase
+                const { data: userData, error: userError } = await supabase
                   .from('users')
-                  .select('fullname')
+                  .select('fullname, email')
                   .eq('id', doctorData.user_id)
                   .single();
-                if (userData && userData.fullname) {
-                  apt.doctors = { fullname: userData.fullname, name: doctorData.name };
+                
+                if (!userError && userData) {
+                  apt.doctors = { 
+                    fullname: userData.fullname || userData.email?.split('@')[0] || doctorData.name || 'Doctor', 
+                    name: doctorData.name,
+                    user_id: doctorData.user_id
+                  };
+                  console.log(`✅ Found doctor data: ${apt.doctors.fullname}`);
                 } else if (doctorData.name) {
-                  apt.doctors = { name: doctorData.name };
+                  apt.doctors = { name: doctorData.name, fullname: doctorData.name };
+                  console.log(`✅ Using doctor name: ${doctorData.name}`);
+                } else {
+                  apt.doctors = { fullname: 'Doctor' };
+                  console.log(`❌ No doctor data found for doctor_id: ${apt.doctor_id}`);
                 }
+              } else {
+                console.log(`❌ No doctor found for doctor_id: ${apt.doctor_id}`);
+                apt.doctors = { fullname: 'Doctor' };
               }
             }
           }
         }
       }
-      setAppointments(applyFilter(data, filter));
+      const filteredData = applyFilter(data, filter);
+      console.log(`📊 [AppointmentsScreen] Final appointments after filter '${filter}':`, filteredData.length);
+      
+      // Debug: log first appointment's data structure
+      if (filteredData.length > 0) {
+        console.log(`🔍 [AppointmentsScreen] First appointment data:`, {
+          id: filteredData[0].id,
+          user_id: filteredData[0].user_id,
+          doctor_id: filteredData[0].doctor_id,
+          users: filteredData[0].users,
+          doctors: filteredData[0].doctors
+        });
+      }
+      
+      setAppointments(filteredData);
     } catch (error) {
       Alert.alert('Error', 'Failed to load appointments.');
       console.error('Error fetching appointments:', error);
@@ -476,8 +526,8 @@ const AppointmentsScreen = ({ navigation }) => {
     // Check if current user should see response buttons
     const shouldShowResponseButtons = item.status === 'scheduled' && item.requested_by && item.requested_by !== (isMedic ? item.doctor_id : item.user_id);
     
-    const patientName = item.users?.fullname || item.users?.name || 'N/A';
-    const doctorName = item.doctors?.fullname || item.doctors?.name || 'Nome não disponível';
+    const patientName = item.users?.fullname || item.users?.name || item.users?.email?.split('@')[0] || 'Patient';
+    const doctorName = item.doctors?.fullname || item.doctors?.name || item.doctors?.user?.fullname || 'Doctor';
 
     const getStatusMessage = () => {
       if (item.status === 'no-show') {
