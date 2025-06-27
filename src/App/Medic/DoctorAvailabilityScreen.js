@@ -45,11 +45,11 @@ const useDoctorAvailability = (navigation) => {
 
   useEffect(() => {
     const loadAvailability = async () => {
-      if (!fetchedOnce.current) {
+    if (!fetchedOnce.current) {
         console.log('🚀 Initializing Doctor Availability screen...');
         await fetchAvailability();
-        fetchedOnce.current = true;
-      }
+      fetchedOnce.current = true;
+    }
     };
     
     loadAvailability();
@@ -272,7 +272,7 @@ const useDoctorAvailability = (navigation) => {
 };
 
 const TimeSelector = ({ label, value, onPress, disabled }) => (
-  <TouchableOpacity 
+  <TouchableOpacity
     style={[styles.timeSelector, disabled && styles.timeSelectorDisabled]} 
     onPress={onPress}
     disabled={disabled}
@@ -351,8 +351,8 @@ const DayCard = ({ dayKey, label, schedule, onToggle, onSelectHour, onOpenCustom
           >
             <Ionicons name="create-outline" size={20} color="#6c47ff" />
             <Text style={styles.customTimeButtonText}>Enter Custom Time</Text>
-          </TouchableOpacity>
-        </View>
+      </TouchableOpacity>
+    </View>
       </View>
     </Modal>
   );
@@ -395,7 +395,7 @@ const DayCard = ({ dayKey, label, schedule, onToggle, onSelectHour, onOpenCustom
           />
           <View style={styles.timeSeparator}>
             <Text style={styles.timeSeparatorText}>to</Text>
-          </View>
+    </View>
           <TimeSelector
             label="End Time"
             value={schedule.end}
@@ -406,8 +406,8 @@ const DayCard = ({ dayKey, label, schedule, onToggle, onSelectHour, onOpenCustom
       )}
 
       <TimePickerModal />
-    </View>
-  );
+  </View>
+);
 };
 
 const DoctorAvailabilityScreen = ({ navigation }) => {
@@ -466,7 +466,7 @@ const DoctorAvailabilityScreen = ({ navigation }) => {
               <Text style={styles.saveButtonText}>Save Availability</Text>
             </>
           )}
-        </TouchableOpacity>
+      </TouchableOpacity>
       </View>
 
       {/* Custom Time Modal */}

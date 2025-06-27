@@ -505,6 +505,18 @@ const AppointmentsScreen = ({ navigation }) => {
   };
 
   const renderAppointmentItem = ({ item }) => {
+    // Debug: log appointment data to see available fields
+    if (item.requested_by) {
+      console.log('🔍 Appointment with requested_by:', {
+        id: item.id,
+        status: item.status,
+        requested_by: item.requested_by,
+        requested_date_change: item.requested_date_change,
+        reschedule_requested: item.reschedule_requested,
+        allFields: Object.keys(item)
+      });
+    }
+    
     const appointmentDate = new Date(item.appointment_datetime);
     const oneHourAfter = new Date(appointmentDate.getTime() + 60 * 60 * 1000);
     const fiveHoursAfter = new Date(appointmentDate.getTime() + 5 * 60 * 60 * 1000);
@@ -601,11 +613,11 @@ const AppointmentsScreen = ({ navigation }) => {
           )}
           
           {/* Show response buttons for date change requests */}
-          {item.requested_date_change && isMedic && item.status === 'scheduled' && (
+          {(item.requested_date_change || item.reschedule_requested) && isMedic && (
             <View style={styles.dateChangeResponseButtons}>
               <TouchableOpacity
                 style={[styles.responseButton, styles.acceptButton]}
-                onPress={() => handleAcceptDateChange(item.id, item.requested_date_change)}
+                onPress={() => handleAcceptDateChange(item.id, item.requested_date_change || item.reschedule_requested)}
               >
                 <Ionicons name="checkmark" size={16} color="#fff" />
                 <Text style={styles.responseButtonText}>Accept</Text>
@@ -616,6 +628,16 @@ const AppointmentsScreen = ({ navigation }) => {
               >
                 <Ionicons name="close" size={16} color="#fff" />
                 <Text style={styles.responseButtonText}>Reject</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.responseButton, styles.rescheduleButton]}
+                onPress={() => {
+                  setSelectedAppointment(item);
+                  setShowRequestModal(true);
+                }}
+              >
+                <Ionicons name="calendar" size={16} color="#fff" />
+                <Text style={styles.responseButtonText}>Reschedule</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1317,7 +1339,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff3e0',
   },
   rescheduleButton: {
-    backgroundColor: '#e8eaf6',
+    backgroundColor: '#2196F3',
   },
   viewReportButton: {
     backgroundColor: '#e3f2fd',
@@ -1481,12 +1503,12 @@ const styles = StyleSheet.create({
   dateChangeResponseButtons: {
     flexDirection: 'row',
     marginTop: 12,
-    gap: 8,
+    gap: 6,
   },
   responseButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 8,
     borderRadius: 8,
     flex: 1,
@@ -1495,7 +1517,7 @@ const styles = StyleSheet.create({
   responseButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 12,
     marginLeft: 4,
   },
 });
