@@ -214,29 +214,33 @@ const DoctorRegistrationScreen = ({ navigation, route }) => {
 
               <View style={styles.rowContainer}>
                 <View style={styles.halfInput}>
-                  <Text style={styles.label}>Age</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.age}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, age: text.replace(/[^0-9]/g, '') }))}
-                    placeholder="25+"
-                    keyboardType="numeric"
-                    placeholderTextColor="#9ca3af"
-                  />
-                  <Text style={styles.inputHelper}>Minimum 25 years</Text>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Age</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={formData.age}
+                      onChangeText={(text) => setFormData(prev => ({ ...prev, age: text.replace(/[^0-9]/g, '') }))}
+                      placeholder="25+"
+                      keyboardType="numeric"
+                      placeholderTextColor="#9ca3af"
+                    />
+                    <Text style={styles.inputHelper}>Minimum 25 years</Text>
+                  </View>
                 </View>
 
                 <View style={styles.halfInput}>
-                  <Text style={styles.label}>Years of Experience</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.years_experience}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, years_experience: text.replace(/[^0-9]/g, '') }))}
-                    placeholder="0+"
-                    keyboardType="numeric"
-                    placeholderTextColor="#9ca3af"
-                  />
-                  <Text style={styles.inputHelper}>Professional experience</Text>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Years of Experience</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={formData.years_experience}
+                      onChangeText={(text) => setFormData(prev => ({ ...prev, years_experience: text.replace(/[^0-9]/g, '') }))}
+                      placeholder="0+"
+                      keyboardType="numeric"
+                      placeholderTextColor="#9ca3af"
+                    />
+                    <Text style={styles.inputHelper}>Professional experience</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -493,6 +497,7 @@ const styles = StyleSheet.create({
   },
   halfInput: {
     width: '48%',
+    marginBottom: 0,
   },
   submitButtonContent: {
     flexDirection: 'row',

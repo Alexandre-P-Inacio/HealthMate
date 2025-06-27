@@ -599,6 +599,26 @@ const AppointmentsScreen = ({ navigation }) => {
               Date change requested: {new Date(item.requested_date_change).toLocaleString()}
             </Text>
           )}
+          
+          {/* Show response buttons for date change requests */}
+          {item.requested_date_change && isMedic && item.status === 'scheduled' && (
+            <View style={styles.dateChangeResponseButtons}>
+              <TouchableOpacity
+                style={[styles.responseButton, styles.acceptButton]}
+                onPress={() => handleAcceptDateChange(item.id, item.requested_date_change)}
+              >
+                <Ionicons name="checkmark" size={16} color="#fff" />
+                <Text style={styles.responseButtonText}>Accept</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.responseButton, styles.rejectButton]}
+                onPress={() => handleRejectDateChange(item.id)}
+              >
+                <Ionicons name="close" size={16} color="#fff" />
+                <Text style={styles.responseButtonText}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {item.charged_value && (
             <Text style={styles.chargedValue}>
               Charged Value: ${item.charged_value}
@@ -778,6 +798,48 @@ const AppointmentsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error rejecting appointment:', error);
+    }
+  };
+
+  // Add handlers for date change responses
+  const handleAcceptDateChange = async (appointmentId, newDateTime) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          appointment_datetime: newDateTime,
+          requested_date_change: null,
+          status: 'confirmed'
+        })
+        .eq('id', appointmentId);
+      
+      if (error) throw error;
+      
+      Alert.alert('Success', 'Date change accepted and appointment confirmed.');
+      fetchAppointments();
+    } catch (error) {
+      console.error('Error accepting date change:', error);
+      Alert.alert('Error', 'Failed to accept date change.');
+    }
+  };
+
+  const handleRejectDateChange = async (appointmentId) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          requested_date_change: null,
+          status: 'confirmed' // Keep original appointment
+        })
+        .eq('id', appointmentId);
+      
+      if (error) throw error;
+      
+      Alert.alert('Success', 'Date change rejected. Original appointment maintained.');
+      fetchAppointments();
+    } catch (error) {
+      console.error('Error rejecting date change:', error);
+      Alert.alert('Error', 'Failed to reject date change.');
     }
   };
 
@@ -1234,10 +1296,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   acceptButton: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: '#4CAF50',
   },
   rejectButton: {
-    backgroundColor: '#ffebee',
+    backgroundColor: '#f44336',
   },
   changeTimeButton: {
     backgroundColor: '#e3f2fd',
@@ -1414,6 +1476,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
     marginHorizontal: 5,
+  },
+  // Styles for date change response buttons
+  dateChangeResponseButtons: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+  },
+  responseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  responseButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 4,
   },
 });
 
