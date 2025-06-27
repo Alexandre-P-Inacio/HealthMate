@@ -371,32 +371,31 @@ const styles = StyleSheet.create({
     fontSize: 16, 
     color: '#555', 
     marginRight: 8, 
-    minWidth: 54, 
+    width: 54, 
     fontWeight: 'bold' 
   },
   scrollWrapper: {
     flex: 1,
-    height: 50,
   },
   scrollView: {
-    flex: 1,
+    height: 50,
   },
   scrollContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 16, // Extra padding at the end
-    minHeight: 50,
+    paddingRight: 20,
+    paddingLeft: 5,
   },
   hourChip: { 
     backgroundColor: '#eaf3ff', 
     borderRadius: 20, 
-    paddingVertical: 7, 
+    paddingVertical: 8, 
     paddingHorizontal: 16, 
-    marginRight: 8, 
+    marginRight: 10, 
     borderWidth: 1, 
     borderColor: '#e0e7ef',
-    minWidth: 60, // Fixed minimum width for consistency
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   selectedChip: { backgroundColor: '#3498db', borderColor: '#3498db' },
   chipText: { color: '#3498db', fontWeight: 'bold', fontSize: 16 },
@@ -406,10 +405,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     backgroundColor: '#6c47ff', 
     borderRadius: 20, 
-    paddingVertical: 7, 
+    paddingVertical: 8, 
     paddingHorizontal: 14, 
-    marginRight: 16, // Extra margin for better spacing
-    minWidth: 100 // Minimum width for custom button
+    marginRight: 10,
+    marginLeft: 5,
   },
   customChipText: { 
     color: '#fff', 
