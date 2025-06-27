@@ -523,6 +523,7 @@ const AppointmentsScreen = ({ navigation }) => {
     const now = new Date();
     const isUpcoming = appointmentDate > now && oneHourAfter > now;
     const isPast = appointmentDate <= now;
+    const isPastFiveHours = fiveHoursAfter <= now;
     
     const patientName = item.users?.fullname || item.users?.name || item.users?.email?.split('@')[0] || 'Patient';
     const doctorName = item.doctors?.fullname || item.doctors?.name || item.doctors?.user?.fullname || 'Doctor';
@@ -532,13 +533,11 @@ const AppointmentsScreen = ({ navigation }) => {
         return 'Patient did not show up';
       } else if (item.status === 'cancelled') {
         return 'Appointment was cancelled';
-      } else if (isPastFiveHours && item.status === 'confirmed') {
-        return 'More than 5 hours have passed - Mark as no-show or cancelled';
-      } else if (isWithinFiveHours && item.status === 'confirmed') {
-        return 'Time available to write report (within 5 hours)';
+      } else if (isPast && item.status === 'confirmed') {
+        return 'Time available to write report and prescription';
       } else if (isUpcoming && item.status === 'confirmed') {
-        return 'Time slot available for report and prescription';
-      } else if (isPast && !isPastFiveHours) {
+        return 'Appointment confirmed';
+      } else if (isPast) {
         return 'This appointment has passed';
       }
       return '';
@@ -581,9 +580,9 @@ const AppointmentsScreen = ({ navigation }) => {
           <Text style={[styles.status, { 
             color: item.status === 'no-show' ? '#e74c3c' : 
                    item.status === 'cancelled' ? '#e74c3c' :
-                   isPastFiveHours ? '#e74c3c' :
-                   isWithinFiveHours ? '#2ecc71' :
-                   isUpcoming ? '#2ecc71' : '#e74c3c'
+                   isPast && item.status === 'confirmed' ? '#2ecc71' :
+                   isUpcoming && item.status === 'confirmed' ? '#3498db' :
+                   '#e74c3c'
           }]}>
             {getStatusMessage()}
           </Text>
