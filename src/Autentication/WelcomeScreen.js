@@ -188,7 +188,7 @@ const WelcomeScreen = ({ navigation }) => {
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
             style={styles.primaryButton}
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => navigation.navigate('LoginScreen')}
           >
             <Ionicons name="log-in-outline" size={24} color="#fff" style={styles.buttonIcon} />
             <Text style={styles.primaryButtonText}>Log In</Text>

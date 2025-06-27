@@ -2,7 +2,7 @@
   "expo": {
     "name": "HealthMate",
     "slug": "HealthMate",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -71,7 +71,7 @@
         "android.permission.health.READ_OXYGEN_SATURATION"
       ],
       "package": "com.apinacio.healthmate",
-      "versionCode": 1,
+      "versionCode": 2,
       "queries": [
         {
           "package": [
@@ -89,7 +89,10 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"],
+          "modes": [
+            "peripheral",
+            "central"
+          ],
           "bluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your smartwatch and health devices.",
           "locationWhenInUseUsageDescription": "This app uses location services to connect to nearby health devices and wearables."
         }
@@ -98,11 +101,21 @@
         "expo-health-connect",
         {
           "healthDataTypes": [
-            "Steps", "Distance", "ActiveCaloriesBurned", "TotalCaloriesBurned", 
-            "HeartRate", "Weight", "Height", "SleepSession"
+            "Steps",
+            "Distance",
+            "ActiveCaloriesBurned",
+            "TotalCaloriesBurned",
+            "HeartRate",
+            "Weight",
+            "Height",
+            "SleepSession"
           ],
           "healthConnectTypes": [
-            "Steps", "HeartRate", "Weight", "SleepSession", "OxygenSaturation"
+            "Steps",
+            "HeartRate",
+            "Weight",
+            "SleepSession",
+            "OxygenSaturation"
           ]
         }
       ],
@@ -142,9 +155,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "e20294e7-79a8-48f1-abb3-ae46bea4086d"
+        "projectId": "6f568435-9f91-4e68-a21f-4b9680eeec81"
       }
-    },
-    "owner": "healthmate2"
+    }
   }
 }
+ 

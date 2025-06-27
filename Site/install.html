@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Como Instalar o HealthMate - Guia de Instalação</title>
+    <meta name="description" content="Guia passo a passo para instalar a aplicação HealthMate no seu dispositivo Android">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #8b5cf6;
+            --secondary: #06b6d4;
+            --accent: #f59e0b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --bg-glass: rgba(255, 255, 255, 0.05);
+            
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --border-muted: rgba(255, 255, 255, 0.2);
+            
+            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.3);
+            
+            --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --gradient-secondary: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+            --gradient-accent: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+            --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: var(--gradient-dark);
+        }
+
+        .animated-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 60%, rgba(6, 182, 212, 0.05) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-10px) rotate(0.5deg); }
+            66% { transform: translateY(5px) rotate(-0.5deg); }
+        }
+
+        /* Grid Pattern */
+        .grid-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.03;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: clamp(1rem, 4vw, 2rem);
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: clamp(2rem, 6vw, 3rem);
+            padding: clamp(2rem, 6vw, 3rem) clamp(1.5rem, 4vw, 2rem);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+        }
+
+        .header h1 {
+            font-size: clamp(2rem, 6vw, 3rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #ffffff 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+            z-index: 2;
+        }
+
+        .header p {
+            font-size: clamp(1rem, 3vw, 1.25rem);
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 2;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: clamp(0.65rem, 2vw, 0.75rem) clamp(1.25rem, 3vw, 1.5rem);
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 500;
+            border: 1px solid var(--border-subtle);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-bottom: clamp(1.5rem, 4vw, 2rem);
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
+        }
+
+        .back-btn:hover {
+            background: var(--bg-card);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Steps */
+        .step {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: clamp(1.5rem, 5vw, 2.5rem);
+            margin: clamp(1.5rem, 4vw, 2rem) 0;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .step::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--gradient-primary);
+        }
+
+        .step:hover {
+            transform: translateY(-5px);
+            border-color: var(--border-muted);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: clamp(0.75rem, 3vw, 1rem);
+            margin-bottom: 1.5rem;
+        }
+
+        .step-number {
+            width: clamp(45px, 10vw, 50px);
+            height: clamp(45px, 10vw, 50px);
+            background: var(--gradient-primary);
+            color: white;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: clamp(1.1rem, 3vw, 1.25rem);
+            flex-shrink: 0;
+        }
+
+        .step h3 {
+            color: var(--text-primary);
+            font-size: clamp(1.25rem, 4vw, 1.5rem);
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .step-content {
+            margin-left: 0;
+        }
+
+        .step p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
+            line-height: 1.7;
+        }
+
+        .step ul {
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .step li {
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .step li strong {
+            color: var(--text-primary);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: clamp(0.75rem, 2vw, 0.875rem) clamp(1.5rem, 4vw, 2rem);
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            margin: 0.5rem 0;
+            justify-content: center;
+            min-width: 180px;
+        }
+
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .btn-secondary {
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .alert-warning i {
+            color: var(--warning);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .alert-success i {
+            color: var(--success);
+        }
+
+        .alert-info {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        .alert-info i {
+            color: var(--primary);
+        }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert strong {
+            color: var(--text-primary);
+        }
+
+        .alert p {
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        /* Image Placeholder */
+        .image-placeholder {
+            background: var(--bg-secondary);
+            border: 2px dashed var(--border-subtle);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin: 1.5rem 0;
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        .image-placeholder:hover {
+            border-color: var(--border-muted);
+            background: var(--bg-tertiary);
+        }
+
+        .image-placeholder i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+            color: var(--primary);
+            opacity: 0.7;
+        }
+
+        /* Download Center */
+        .download-center {
+            text-align: center;
+            margin: clamp(2rem, 6vw, 3rem) 0;
+            padding: clamp(2rem, 6vw, 3rem) clamp(1.5rem, 4vw, 2rem);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+        }
+
+        .download-center h3 {
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            font-size: clamp(1.25rem, 4vw, 1.5rem);
+        }
+
+        .download-center p {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 2rem 0;
+            position: relative;
+        }
+
+        .progress-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border-subtle);
+            z-index: 1;
+        }
+
+        .progress-step {
+            width: clamp(35px, 8vw, 40px);
+            height: clamp(35px, 8vw, 40px);
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-subtle);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: clamp(0.75rem, 2vw, 0.875rem);
+            color: var(--text-muted);
+            position: relative;
+            z-index: 2;
+        }
+
+        .progress-step.active {
+            background: var(--gradient-primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .step-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.75rem;
+            }
+
+            .step-content {
+                margin-left: 0;
+                text-align: center;
+            }
+
+            .progress-container {
+                flex-wrap: wrap;
+                gap: 1rem;
+                justify-content: center;
+            }
+
+            .progress-container::before {
+                display: none;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .alert {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .step-header {
+                gap: 1rem;
+            }
+
+            .step h3 {
+                text-align: center;
+            }
+
+            .progress-container {
+                gap: 0.5rem;
+            }
+
+            .download-center {
+                margin: 1.5rem 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="animated-bg"></div>
+    
+    <!-- Grid Pattern -->
+    <div class="grid-pattern"></div>
+
+    <div class="container">
+        <a href="index.html" class="back-btn">
+            <i class="fas fa-arrow-left"></i>
+            Voltar ao Site Principal
+        </a>
+
+        <div class="header">
+            <h1><i class="fab fa-android"></i> Guia de Instalação</h1>
+            <p>Como instalar o HealthMate no seu dispositivo Android</p>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="progress-container">
+            <div class="progress-step active">1</div>
+            <div class="progress-step">2</div>
+            <div class="progress-step">3</div>
+            <div class="progress-step">4</div>
+        </div>
+
+        <!-- Step 1: Download -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">1</div>
+                <h3><i class="fas fa-download"></i> Baixar o APK</h3>
+            </div>
+            <div class="step-content">
+                <p>Primeiro, faça o download do ficheiro APK do HealthMate para o seu dispositivo:</p>
+                
+                <div class="download-center">
+                    <h3>Download do HealthMate</h3>
+                    <p>Aplicação gratuita para gestão de saúde pessoal</p>
+                    <a href="../APK/HealthMate.apk" class="btn btn-primary" download="HealthMate.apk" onclick="trackDownload()">
+                        <i class="fab fa-android"></i>
+                        Baixar HealthMate.apk (96MB)
+                    </a>
+                </div>
+
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="alert-content">
+                        <strong>Requisitos:</strong>
+                        <p>• Android 6.0 ou superior<br>
+                        • 200MB de espaço livre<br>
+                        • Conexão à internet para configuração inicial</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Enable Unknown Sources -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">2</div>
+                <h3><i class="fas fa-shield-alt"></i> Ativar "Origens Desconhecidas"</h3>
+            </div>
+            <div class="step-content">
+                <p>Para instalar aplicações fora da Google Play Store, precisa de ativar esta opção de segurança:</p>
+                
+                <ul>
+                    <li>Abra as <strong>Definições</strong> do seu dispositivo</li>
+                    <li>Procure por <strong>"Segurança"</strong> ou <strong>"Privacidade e Segurança"</strong></li>
+                    <li>Encontre <strong>"Origens Desconhecidas"</strong> ou <strong>"Instalar aplicações desconhecidas"</strong></li>
+                    <li>Ative a opção para o browser ou gestor de ficheiros</li>
+                </ul>
+
+                <div class="image-placeholder">
+                    <i class="fas fa-mobile-alt"></i>
+                    <div>Definições → Segurança → Origens Desconhecidas</div>
+                    <small>[Inserir screenshot das definições Android]</small>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-content">
+                        <strong>Nota:</strong>
+                        <p>Em alguns dispositivos, pode ativar esta opção apenas quando tentar instalar o APK.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Install APK -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">3</div>
+                <h3><i class="fas fa-mobile-alt"></i> Instalar o APK</h3>
+            </div>
+            <div class="step-content">
+                <p>Agora pode proceder com a instalação da aplicação HealthMate:</p>
+                
+                <ul>
+                    <li>Abra o <strong>Gestor de Ficheiros</strong> ou <strong>Transferências</strong></li>
+                    <li>Navegue até à pasta onde foi guardado o <strong>HealthMate.apk</strong></li>
+                    <li>Toque no ficheiro APK para iniciar a instalação</li>
+                    <li>Revise as permissões solicitadas</li>
+                    <li>Toque em <strong>"Instalar"</strong> para confirmar</li>
+                    <li>Aguarde alguns momentos até a instalação completar</li>
+                </ul>
+
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="alert-content">
+                        <strong>Aviso de Segurança:</strong>
+                        <p>O Android pode mostrar um aviso sobre aplicações não verificadas. Toque em "Instalar mesmo assim" para continuar.</p>
+                    </div>
+                </div>
+
+                <div class="image-placeholder">
+                    <i class="fas fa-download"></i>
+                    <div>Processo de Instalação do APK</div>
+                    <small>[Inserir screenshots do processo de instalação]</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Setup and Use -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">4</div>
+                <h3><i class="fas fa-rocket"></i> Configurar e Usar</h3>
+            </div>
+            <div class="step-content">
+                <p>Parabéns! O HealthMate está instalado. Agora configure a aplicação:</p>
+                
+                <ul>
+                    <li>Encontre o ícone do <strong>HealthMate</strong> no menu de aplicações</li>
+                    <li>Toque para abrir a aplicação pela primeira vez</li>
+                    <li>Complete o registo ou faça login na sua conta</li>
+                    <li>Configure o seu perfil de saúde básico</li>
+                    <li>Explore as funcionalidades disponíveis</li>
+                    <li>Configure lembretes de medicação se necessário</li>
+                </ul>
+
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <div class="alert-content">
+                        <strong>Instalação Concluída!</strong>
+                        <p>O HealthMate está pronto a usar. Comece a gerir a sua saúde de forma inteligente.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Troubleshooting -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">?</div>
+                <h3><i class="fas fa-question-circle"></i> Resolução de Problemas</h3>
+            </div>
+            <div class="step-content">
+                <p>Se encontrar dificuldades durante a instalação, consulte estas soluções:</p>
+                
+                <div style="display: grid; gap: 1rem; margin-top: 1rem;">
+                    <div class="alert alert-info">
+                        <i class="fas fa-hdd"></i>
+                        <div class="alert-content">
+                            <strong>Espaço Insuficiente:</strong>
+                            <p>Liberte pelo menos 200MB de espaço e tente novamente.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-ban"></i>
+                        <div class="alert-content">
+                            <strong>Instalação Bloqueada:</strong>
+                            <p>Verifique se "Origens Desconhecidas" está ativado para o gestor de ficheiros.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div class="alert-content">
+                            <strong>Aplicação Não Abre:</strong>
+                            <p>Reinicie o dispositivo e tente abrir novamente.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-mobile-alt"></i>
+                        <div class="alert-content">
+                            <strong>Incompatibilidade:</strong>
+                            <p>Verifique se o seu dispositivo tem Android 6.0 ou superior.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning" style="margin-top: 2rem;">
+                    <i class="fas fa-headset"></i>
+                    <div class="alert-content">
+                        <strong>Precisa de Mais Ajuda?</strong>
+                        <p>Este é um projeto académico TGPSI. Para questões técnicas, consulte a documentação do projeto.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer CTA -->
+        <div class="download-center">
+            <h3><i class="fas fa-heart"></i> Obrigado por Usar o HealthMate!</h3>
+            <p>A gestão da sua saúde agora está mais simples e organizada.</p>
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <a href="index.html" class="btn btn-secondary">
+                    <i class="fas fa-home"></i>
+                    Voltar ao Website
+                </a>
+                <a href="../APK/HealthMate.apk" class="btn btn-primary" download="HealthMate.apk">
+                    <i class="fas fa-download"></i>
+                    Baixar Novamente
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Track download for analytics (placeholder)
+        function trackDownload() {
+            console.log('HealthMate APK download started');
+            
+            // Update progress
+            setTimeout(() => {
+                const steps = document.querySelectorAll('.progress-step');
+                steps[1].classList.add('active');
+            }, 1000);
+        }
+
+        // Smooth scroll to top when clicking back
+        document.querySelector('.back-btn').addEventListener('click', function(e) {
+            if (this.getAttribute('href') === '#') {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+
+        // Add scroll animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.transform = 'translateY(0)';
+                    entry.target.style.opacity = '1';
+                }
+            });
+        }, observerOptions);
+
+        // Initialize animations
+        document.querySelectorAll('.step').forEach((step, index) => {
+            step.style.transform = 'translateY(30px)';
+            step.style.opacity = '0';
+            step.style.transition = `all 0.6s ease-out ${index * 0.1}s`;
+            observer.observe(step);
+        });
+    </script>
+</body>
+</html> 

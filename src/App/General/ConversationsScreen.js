@@ -35,12 +35,12 @@ const ConversationsScreen = ({ navigation }) => {
         setCurrentUser(userData);
         return userData;
       } else {
-        navigation.navigate('Login');
+        navigation.navigate('LoginScreen');
         return null;
       }
     } catch (error) {
       console.error('Erro ao carregar usuário:', error);
-      navigation.navigate('Login');
+      navigation.navigate('LoginScreen');
       return null;
     }
   };

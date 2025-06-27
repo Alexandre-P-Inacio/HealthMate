@@ -42,7 +42,7 @@ const ChatListScreen = ({ navigation }) => {
         await loadConversations(user);
       } else {
         Alert.alert('Erro', 'Usuário não encontrado. Faça login novamente.');
-        navigation.navigate('Login');
+        navigation.navigate('LoginScreen');
       }
     } catch (error) {
       console.error('Erro ao inicializar tela:', error);

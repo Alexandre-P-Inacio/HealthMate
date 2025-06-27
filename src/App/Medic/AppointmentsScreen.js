@@ -526,7 +526,9 @@ const AppointmentsScreen = ({ navigation }) => {
     const isPastFiveHours = fiveHoursAfter <= now;
     
     const patientName = item.users?.fullname || item.users?.name || item.users?.email?.split('@')[0] || 'Patient';
-    const doctorName = item.doctors?.fullname || item.doctors?.name || item.doctors?.user?.fullname || 'Doctor';
+    const doctorName = item.is_custom_appointment && item.custom_doctor_name 
+      ? item.custom_doctor_name 
+      : (item.doctors?.fullname || item.doctors?.name || item.doctors?.user?.fullname || 'Doctor');
 
     const getStatusMessage = () => {
       if (item.status === 'no-show') {
@@ -576,6 +578,23 @@ const AppointmentsScreen = ({ navigation }) => {
           </Text>
           {item.location && (
             <Text style={styles.location}>Location: {item.location}</Text>
+          )}
+          {item.is_custom_appointment && (
+            <View style={{ marginTop: 4 }}>
+              {item.custom_doctor_specialty && (
+                <Text style={[styles.location, { color: '#666' }]}>
+                  Specialty: {item.custom_doctor_specialty}
+                </Text>
+              )}
+              {item.custom_doctor_phone && (
+                <Text style={[styles.location, { color: '#666' }]}>
+                  Phone: {item.custom_doctor_phone}
+                </Text>
+              )}
+              <Text style={[styles.location, { color: '#4a67e3', fontWeight: '600' }]}>
+                Custom Appointment
+              </Text>
+            </View>
           )}
           <Text style={[styles.status, { 
             color: item.status === 'no-show' ? '#e74c3c' : 
@@ -1052,11 +1071,29 @@ const AppointmentsScreen = ({ navigation }) => {
             </TouchableOpacity>
             <Text style={{ fontSize: 22, fontWeight: '700', color: '#222' }}>Appointments</Text>
           </View>
-          {isMedic && userDoctorData && (
-            <TouchableOpacity style={{ marginLeft: 8 }} onPress={() => navigation.navigate('RequestAppointmentScreen', { doctor: userDoctorData })}>
-              <Ionicons name="add-circle-outline" size={28} color="#4a67e3" />
-            </TouchableOpacity>
-          )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {!isMedic && (
+              <TouchableOpacity 
+                style={{ 
+                  backgroundColor: '#4a67e3', 
+                  borderRadius: 20, 
+                  paddingHorizontal: 12, 
+                  paddingVertical: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center'
+                }} 
+                onPress={() => navigation.navigate('AddCustomAppointment')}
+              >
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 4 }}>Custom</Text>
+              </TouchableOpacity>
+            )}
+            {isMedic && userDoctorData && (
+              <TouchableOpacity style={{ marginLeft: 8 }} onPress={() => navigation.navigate('RequestAppointmentScreen', { doctor: userDoctorData })}>
+                <Ionicons name="add-circle-outline" size={28} color="#4a67e3" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         {/* Filter Chips */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 2, marginBottom: 8, gap: 8 }}>

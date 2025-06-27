@@ -100,11 +100,15 @@ const RegisterOne = ({ navigation }) => {
         return;
       }
 
+      // Extract first name from full name
+      const firstName = formData.fullname.trim().split(' ')[0];
+
       const { data: user, error } = await supabase
         .from('users')
         .insert([
           {
             fullname: formData.fullname,
+            name: firstName,
             email: formData.email,
             phone: formData.phone,
             password: hashedPassword,
@@ -118,7 +122,7 @@ const RegisterOne = ({ navigation }) => {
       if (error) throw error;
 
       DataUser.setUserData(user);
-      navigation.navigate('RegisterTwo', { userId: user.id });
+      navigation.navigate('RegisterThree', { userId: user.id });
     } catch (error) {
       console.error('Registration error:', error);
       Alert.alert('Error', 'Failed to register. Please try again.');
@@ -240,7 +244,7 @@ const RegisterOne = ({ navigation }) => {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => navigation.navigate('LoginScreen')}
             disabled={loading}
             style={styles.loginLink}
           >

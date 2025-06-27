@@ -81,11 +81,11 @@ const UnifiedChatScreen = ({ route, navigation }) => {
       if (userData && userData.id) {
         setCurrentUser(userData);
       } else {
-        navigation.navigate('Login');
+        navigation.navigate('LoginScreen');
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      navigation.navigate('Login');
+      navigation.navigate('LoginScreen');
     }
   };
 

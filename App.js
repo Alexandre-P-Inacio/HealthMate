@@ -43,6 +43,7 @@ import DoctorDetailsScreen from './src/App/Medic/DoctorDetailsScreen';
 import DoctorDashboardScreen from './src/App/Medic/DoctorDashboardScreen';
 import DoctorRegistrationScreen from './src/App/Medic/DoctorRegistrationScreen';
 import RequestAppointmentScreen from './src/App/Medic/RequestAppointmentScreen';
+import AddCustomAppointmentScreen from './src/App/Medic/AddCustomAppointmentScreen';
 import DoctorAvailabilityScreen from './src/App/Medic/DoctorAvailabilityScreen';
 import AppointmentHistoryScreen from './src/App/Medic/AppointmentHistoryScreen';
 import TelehealthScreen from './src/App/Medic/TelehealthScreen';
@@ -169,6 +170,7 @@ const App = () => {
           <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />
           <Stack.Screen name="DoctorRegistration" component={DoctorRegistrationScreen} />
           <Stack.Screen name="RequestAppointmentScreen" component={RequestAppointmentScreen} />
+          <Stack.Screen name="AddCustomAppointment" component={AddCustomAppointmentScreen} />
           <Stack.Screen name="Appointments" component={RequestAppointmentScreen} />
           <Stack.Screen name="DoctorAvailability" component={DoctorAvailabilityScreen} />
           <Stack.Screen name="AppointmentHistory" component={AppointmentHistoryScreen} />

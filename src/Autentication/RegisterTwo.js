@@ -84,11 +84,8 @@ const RegisterTwo = ({ route, navigation }) => {
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Registration completed successfully!');
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'HomeScreen', params: { userId } }],
-      });
+      // Navigate to RegisterThree for biometric setup
+      navigation.navigate('RegisterThree', { userId });
     } catch (error) {
       console.error('Profile creation error:', error);
       Alert.alert('Error', 'Failed to create profile. Please try again.');

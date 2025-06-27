@@ -223,9 +223,17 @@ export class AppointmentService {
 
       // Process appointments to ensure doctor data is available
       const processedAppointments = appointments.map(appointment => {
-        // Ensure doctors data is properly structured
-        if (appointment.doctors) {
-          // If doctor has a user relation, use that fullname, otherwise use doctor name
+        // Handle custom appointments
+        if (appointment.is_custom_appointment && appointment.custom_doctor_name) {
+          appointment.doctors = {
+            fullname: appointment.custom_doctor_name,
+            name: appointment.custom_doctor_name,
+            specialization: appointment.custom_doctor_specialty || 'N/A',
+            phone: appointment.custom_doctor_phone,
+            isCustom: true
+          };
+        } else if (appointment.doctors) {
+          // Ensure doctors data is properly structured for regular appointments
           if (appointment.doctors.user && appointment.doctors.user.fullname) {
             appointment.doctors.fullname = appointment.doctors.user.fullname;
           } else if (appointment.doctors.name) {
@@ -378,6 +386,64 @@ export class AppointmentService {
     } catch (error) {
       console.error('Error fetching appointment by ID:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  static async createCustomAppointment(appointmentData) {
+    try {
+      // Basic validation for custom appointments
+      if (!appointmentData.userId || !appointmentData.customDoctorName || !appointmentData.location) {
+        return {
+          success: false,
+          errors: { 
+            general: 'User ID, doctor name, and location are required for custom appointments.' 
+          }
+        };
+      }
+
+      // Validate appointment date is in the future
+      const appointmentDate = new Date(appointmentData.appointmentDateTime);
+      const now = new Date();
+      if (appointmentDate <= now) {
+        return {
+          success: false,
+          errors: { date: 'Appointment date must be in the future.' }
+        };
+      }
+
+      // Create the custom appointment
+      const { data, error } = await supabase
+        .from('appointments')
+        .insert([{
+          user_id: !isNaN(parseInt(appointmentData.userId)) ? parseInt(appointmentData.userId) : null,
+          doctor_id: null, // No doctor ID for custom appointments
+          appointment_datetime: appointmentData.appointmentDateTime,
+          location: appointmentData.location || null,
+          notes: appointmentData.notes || null,
+          description: appointmentData.description || null,
+          status: appointmentData.status || 'confirmed',
+          requested_by: (appointmentData.requestedBy !== null && appointmentData.requestedBy !== undefined && !isNaN(parseInt(appointmentData.requestedBy))) ? parseInt(appointmentData.requestedBy) : null,
+          // Custom appointment specific fields
+          custom_doctor_name: appointmentData.customDoctorName,
+          custom_doctor_specialty: appointmentData.customDoctorSpecialty || null,
+          custom_doctor_phone: appointmentData.customDoctorPhone || null,
+          is_custom_appointment: true
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        data
+      };
+    } catch (error) {
+      console.error('Error creating custom appointment:', error);
+      return {
+        success: false,
+        errors: { general: 'Erro ao criar consulta personalizada. Tente novamente.' }
+      };
     }
   }
 } 

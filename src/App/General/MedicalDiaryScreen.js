@@ -144,16 +144,35 @@ const MedicalDiaryScreen = ({ navigation }) => {
     try {
       setLoadingMedications(true);
       const formattedDate = date.toISOString().split('T')[0];
+      console.log('🔍 [Diary] Fetching confirmed medications for:', formattedDate, 'userId:', userId);
+      
       const { data, error } = await supabase
         .from('medication_schedule_times')
-        .select('*')
+        .select(`
+          *,
+          pills_warning:pill_id (
+            id,
+            titulo,
+            nome_medicamento:titulo
+          )
+        `)
         .eq('user_id', userId)
         .eq('scheduled_date', formattedDate)
         .not('status', 'eq', 'pending');
+        
+      console.log('🔍 [Diary] Confirmed medications query result:', { data, error });
+      
       if (error) throw error;
-      setConfirmedMedications(data || []);
+      
+      // Processar dados para incluir nome do medicamento
+      const processedData = (data || []).map(item => ({
+        ...item,
+        nome_medicamento: item.pills_warning?.titulo || item.pills_warning?.nome_medicamento || 'Medicamento Desconhecido'
+      }));
+      
+      setConfirmedMedications(processedData);
     } catch (error) {
-      console.error('Error fetching confirmed medications:', error);
+      console.error('❌ [Diary] Error fetching confirmed medications:', error);
       Alert.alert('Error', 'Failed to load confirmed medications');
       setConfirmedMedications([]);
     } finally {
@@ -165,16 +184,35 @@ const MedicalDiaryScreen = ({ navigation }) => {
     try {
       setLoadingPendingMedications(true);
       const formattedDate = date.toISOString().split('T')[0];
+      console.log('🔍 [Diary] Fetching pending medications for:', formattedDate, 'userId:', userId);
+      
       const { data, error } = await supabase
         .from('medication_schedule_times')
-        .select('*')
+        .select(`
+          *,
+          pills_warning:pill_id (
+            id,
+            titulo,
+            nome_medicamento:titulo
+          )
+        `)
         .eq('user_id', userId)
         .eq('scheduled_date', formattedDate)
         .eq('status', 'pending');
+        
+      console.log('🔍 [Diary] Pending medications query result:', { data, error });
+      
       if (error) throw error;
-      setPendingMedications(data || []);
+      
+      // Processar dados para incluir nome do medicamento
+      const processedData = (data || []).map(item => ({
+        ...item,
+        nome_medicamento: item.pills_warning?.titulo || item.pills_warning?.nome_medicamento || 'Medicamento Desconhecido'
+      }));
+      
+      setPendingMedications(processedData);
     } catch (error) {
-      console.error('Error fetching pending medications:', error);
+      console.error('❌ [Diary] Error fetching pending medications:', error);
       Alert.alert('Error', 'Failed to load pending medications');
       setPendingMedications([]);
     } finally {
@@ -233,7 +271,120 @@ const MedicalDiaryScreen = ({ navigation }) => {
     }
   };
 
+  // Função temporária para debug de medicamentos
+  const debugMedicationData = async () => {
+    try {
+      console.log('🔍 [Debug] Testing medication data in database...');
+      console.log('🔍 [Debug] Current userId:', userId);
+      
+      // Verificar se existem dados na tabela medication_schedule_times
+      const { data: allMeds, error: allMedsError } = await supabase
+        .from('medication_schedule_times')
+        .select('*')
+        .limit(10);
+      
+      console.log('🔍 [Debug] All medications in table (first 10):', allMeds);
+      console.log('🔍 [Debug] Error fetching all medications:', allMedsError);
+      
+      // Verificar medicamentos do utilizador específico
+      if (userId) {
+        const { data: userMeds, error: userMedsError } = await supabase
+          .from('medication_schedule_times')
+          .select('*')
+          .eq('user_id', userId);
+        
+        console.log('🔍 [Debug] User medications for userId', userId, ':', userMeds);
+        console.log('🔍 [Debug] Error fetching user medications:', userMedsError);
+      }
+      
+      // Verificar se há medicamentos na tabela pills_warning
+      const { data: pillsData, error: pillsError } = await supabase
+        .from('pills_warning')
+        .select('*')
+        .limit(5);
+        
+      console.log('🔍 [Debug] Pills warning data:', pillsData);
+      console.log('🔍 [Debug] Pills warning error:', pillsError);
+      
+      // Criar dados de teste se não existirem
+      if (userId && (!userMeds || userMeds.length === 0)) {
+        await createTestMedications();
+      }
+      
+    } catch (error) {
+      console.error('❌ [Debug] Error in debug function:', error);
+    }
+  };
 
+  // Função para criar medicamentos de teste
+  const createTestMedications = async () => {
+    try {
+      console.log('🔧 [Debug] Creating test medications...');
+      
+      // Primeiro criar entrada na pills_warning
+      const { data: pillData, error: pillError } = await supabase
+        .from('pills_warning')
+        .insert({
+          user_id: userId,
+          titulo: 'Paracetamol 500mg',
+          quantidade_comprimidos: 30,
+          quantidade_comprimidos_por_vez: 1,
+          intervalo_horas: 8,
+          horario_fixo: '08:00',
+          data_inicio: new Date().toISOString().split('T')[0],
+          status: 'active'
+        })
+        .select()
+        .single();
+      
+      if (pillError) {
+        console.error('❌ [Debug] Error creating test pill:', pillError);
+        return;
+      }
+      
+      console.log('✅ [Debug] Test pill created:', pillData);
+      
+      // Agora criar horários na medication_schedule_times
+      const today = new Date();
+      const testSchedules = [
+        {
+          scheduled_date: today.toISOString().split('T')[0],
+          scheduled_time: '08:00:00',
+          complete_datetime: new Date(today.toISOString().split('T')[0] + 'T08:00:00').toISOString(),
+          dosage: '1 comprimido',
+          user_id: userId,
+          pill_id: pillData.id,
+          status: 'pending',
+          notes: 'Medicamento de teste - manhã'
+        },
+        {
+          scheduled_date: today.toISOString().split('T')[0],
+          scheduled_time: '16:00:00',
+          complete_datetime: new Date(today.toISOString().split('T')[0] + 'T16:00:00').toISOString(),
+          dosage: '1 comprimido',
+          user_id: userId,
+          pill_id: pillData.id,
+          status: 'pending',
+          notes: 'Medicamento de teste - tarde'
+        }
+      ];
+      
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('medication_schedule_times')
+        .insert(testSchedules)
+        .select();
+      
+      if (scheduleError) {
+        console.error('❌ [Debug] Error creating test schedules:', scheduleError);
+      } else {
+        console.log('✅ [Debug] Test schedules created:', scheduleData);
+        Alert.alert('Sucesso', 'Medicamentos de teste criados! Recarregue a página para ver.');
+      }
+      
+    } catch (error) {
+      console.error('❌ [Debug] Error creating test medications:', error);
+    }
+  };
 
   const handleSaveEntry = async () => {
     try {
@@ -803,7 +954,7 @@ const MedicalDiaryScreen = ({ navigation }) => {
     }
     
     const timeString = item.scheduled_time 
-      ? new Date(`2000-01-01T${item.scheduled_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? item.scheduled_time.substring(0, 5) // Extrair HH:MM do formato time
       : '';
         
     return (
@@ -1163,6 +1314,17 @@ const MedicalDiaryScreen = ({ navigation }) => {
         
         <View style={styles.quickActionsContainer}>
                 <Text style={styles.sectionTitle}>Quick Actions</Text>
+          
+          {/* Botão temporário para debug de medicamentos */}
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#E74C3C' }]}
+            onPress={debugMedicationData}
+          >
+            <Ionicons name="bug-outline" size={28} color="#FFF" />
+            <Text style={[styles.actionButtonText, { color: '#FFF' }]}>Fix Medications</Text>
+            <Text style={[styles.actionButtonSubtext, { color: '#FFF' }]}>Create test data</Text>
+          </TouchableOpacity>
+          
           <View style={styles.quickActionsGrid}>
         <TouchableOpacity
                     style={[
@@ -1438,6 +1600,13 @@ const MedicalDiaryScreen = ({ navigation }) => {
             <View style={styles.emptyStateContainer}>
               <Ionicons name="medical-outline" size={36} color="#6A8DFD" />
               <Text style={styles.emptyStateText}>Nenhuma medicação para esta data.</Text>
+              <TouchableOpacity
+                style={[styles.addNoteButton, { marginTop: 10 }]}
+                onPress={() => navigation.navigate('MedicationTracker')}
+              >
+                <Ionicons name="add-circle-outline" size={24} color="#FFF" />
+                <Text style={styles.addNoteButtonText}>Adicionar Medicamento</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>

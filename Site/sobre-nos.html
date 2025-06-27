@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sobre Nós - HealthMate</title>
+    <meta name="description" content="Conheça a equipe por trás do desenvolvimento do HealthMate - A sua aplicação de gestão de saúde pessoal">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --secondary: #06b6d4;
+            --accent: #f59e0b;
+            --success: #10b981;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --bg-glass: rgba(255, 255, 255, 0.05);
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --border-muted: rgba(255, 255, 255, 0.2);
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: var(--gradient-dark);
+        }
+
+        .animated-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-10px) rotate(0.5deg); }
+            66% { transform: translateY(5px) rotate(-0.5deg); }
+        }
+
+        .grid-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.03;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 500;
+            border: 1px solid var(--border-subtle);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            margin-bottom: 2rem;
+        }
+
+        .back-btn:hover {
+            background: var(--bg-card);
+            transform: translateY(-2px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 3rem 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+        }
+
+        .header h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #ffffff 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+            z-index: 2;
+        }
+
+        .header p {
+            font-size: clamp(1rem, 2.5vw, 1.25rem);
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 2;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .developer-spotlight {
+            margin: 3rem 0;
+        }
+
+        .developer-content {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .developer-image {
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .developer-photo {
+            width: min(300px, 90vw);
+            height: min(300px, 90vw);
+            max-width: 300px;
+            max-height: 300px;
+            border: 3px solid var(--border-subtle);
+            border-radius: 20px;
+            object-fit: cover;
+            transition: all 0.3s ease;
+            margin: 0 auto;
+            display: block;
+        }
+
+        .developer-photo:hover {
+            border-color: var(--primary);
+            transform: scale(1.02);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .developer-info {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+        }
+
+        .developer-info h3 {
+            font-size: clamp(2rem, 6vw, 3rem);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #ffffff 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .developer-info h4 {
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+
+        .developer-info p {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 2rem;
+        }
+
+        .developer-skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            justify-content: center;
+        }
+
+        .skill-tag {
+            padding: 0.5rem 1rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 25px;
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+            font-weight: 500;
+            color: var(--primary);
+            transition: all 0.3s ease;
+        }
+
+        .skill-tag:hover {
+            background: rgba(99, 102, 241, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .developer-stats {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .stat-item .stat-number {
+            display: block;
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-item .stat-label {
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+            color: var(--text-muted);
+        }
+
+        .mission-section {
+            margin: 4rem 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            padding: 3rem 2rem;
+            backdrop-filter: blur(20px);
+            text-align: center;
+        }
+
+        .mission-section h3 {
+            font-size: clamp(2rem, 5vw, 2.5rem);
+            font-weight: 600;
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }
+
+        .mission-section p {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            color: var(--text-secondary);
+            line-height: 1.7;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .value-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .value-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--border-muted);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .value-icon {
+            width: min(80px, 20vw);
+            height: min(80px, 20vw);
+            background: var(--gradient-primary);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            color: white;
+            margin: 0 auto 1.5rem;
+        }
+
+        .value-content h4 {
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .value-content p {
+            font-size: clamp(0.9rem, 2vw, 1rem);
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .supporters-section {
+            margin: 4rem 0;
+            text-align: center;
+        }
+
+        .supporters-title {
+            font-size: clamp(2rem, 5vw, 2.5rem);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .supporters-subtitle {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .supporters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .supporter-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .supporter-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--border-muted);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .supporter-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .supporter-image {
+            width: min(120px, 30vw);
+            height: min(120px, 30vw);
+            background: var(--bg-secondary);
+            border: 3px solid var(--border-subtle);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            margin: 0 auto 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
+        }
+
+        .supporter-image i {
+            font-size: clamp(2rem, 5vw, 2.5rem);
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+            opacity: 0.7;
+        }
+
+        .supporter-image .placeholder-text {
+            font-weight: 600;
+            font-size: clamp(0.7rem, 2vw, 0.8rem);
+            margin-bottom: 0.25rem;
+        }
+
+        .supporter-info {
+            position: relative;
+            z-index: 2;
+        }
+
+        .supporter-info h4 {
+            font-size: clamp(1.2rem, 3vw, 1.4rem);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .supporter-role {
+            font-size: clamp(1rem, 2.5vw, 1.1rem);
+            color: var(--primary);
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        .supporter-description {
+            font-size: clamp(0.85rem, 2vw, 0.95rem);
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .project-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+            gap: 2rem;
+            margin: 4rem 0;
+        }
+
+        .info-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--border-muted);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .info-icon {
+            width: min(80px, 20vw);
+            height: min(80px, 20vw);
+            background: var(--gradient-primary);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            color: white;
+            margin: 0 auto 1.5rem;
+        }
+
+        .info-content h4 {
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .info-content p {
+            font-size: clamp(0.9rem, 2vw, 1rem);
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .footer-cta {
+            text-align: center;
+            margin: 3rem 0;
+            padding: 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+        }
+
+        .footer-cta h3 {
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+        }
+
+        .footer-cta p {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-size: clamp(0.9rem, 2vw, 1rem);
+        }
+
+        .footer-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .footer-btn {
+            padding: 0.75rem 1.5rem;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: clamp(0.9rem, 2vw, 1rem);
+        }
+
+        .footer-btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+        }
+
+        .footer-btn-secondary {
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .footer-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-on-scroll {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease;
+        }
+
+        .animate-on-scroll.animated {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Responsive Design */
+        @media (min-width: 768px) {
+            .container {
+                padding: 2rem;
+            }
+
+            .developer-content {
+                grid-template-columns: 350px 1fr;
+                gap: 3rem;
+                padding: 3rem;
+            }
+
+            .developer-info {
+                text-align: left;
+            }
+
+            .developer-skills {
+                justify-content: flex-start;
+            }
+
+            .developer-stats {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .developer-content {
+                grid-template-columns: 350px 1fr;
+                gap: 4rem;
+                padding: 4rem;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .supporters-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .project-info {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .values-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .supporters-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="animated-bg"></div>
+    <div class="grid-pattern"></div>
+
+    <div class="container">
+        <a href="index.html" class="back-btn">
+            <i class="fas fa-arrow-left"></i>
+            Voltar ao Site Principal
+        </a>
+
+        <div class="header animate-on-scroll">
+            <h1><i class="fas fa-heart-pulse"></i> Sobre o HealthMate</h1>
+            <p>Descubra a história por trás da aplicação que está a revolucionar a gestão pessoal de saúde em Portugal</p>
+        </div>
+
+        <div class="developer-spotlight animate-on-scroll">
+            <div class="developer-content">
+                <div class="developer-image">
+                    <img src="assets/Captura de ecrã 2025-06-27 235605.png" alt="Criador do HealthMate" class="developer-photo">
+                </div>
+                <div class="developer-info">
+                    <h3>Criador do HealthMate</h3>
+                    <h4>Técnico de Gestão e Programação de Sistemas Informáticos</h4>
+                    <p>Desenvolvedor apaixonado por tecnologia e saúde digital, responsável pela criação completa do HealthMate. Este projeto nasceu da necessidade de democratizar o acesso à gestão de saúde pessoal, combinando tecnologia avançada com uma interface intuitiva para utilizadores de todas as idades.</p>
+                    <div class="developer-skills">
+                        <span class="skill-tag">React Native</span>
+                        <span class="skill-tag">JavaScript</span>
+                        <span class="skill-tag">TypeScript</span>
+                        <span class="skill-tag">Expo</span>
+                        <span class="skill-tag">Supabase</span>
+                        <span class="skill-tag">PostgreSQL</span>
+                        <span class="skill-tag">Health Connect</span>
+                        <span class="skill-tag">Samsung Health</span>
+                        <span class="skill-tag">UI/UX Design</span>
+                        <span class="skill-tag">Android Development</span>
+                    </div>
+                    <div class="developer-stats">
+                        <div class="stat-item">
+                            <span class="stat-number">8+</span>
+                            <span class="stat-label">Meses de Desenvolvimento</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">30+</span>
+                            <span class="stat-label">Funcionalidades</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">100%</span>
+                            <span class="stat-label">Dedicação</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mission-section animate-on-scroll">
+            <h3><i class="fas fa-bullseye"></i> A Nossa Missão</h3>
+            <p>O HealthMate foi criado com o objetivo de tornar a gestão de saúde pessoal mais acessível, intuitiva e eficaz. Acreditamos que cada pessoa merece ter controlo total sobre a sua saúde, com ferramentas que facilitam o acompanhamento médico, a gestão de medicação e o registo de dados de saúde vitais.</p>
+        </div>
+
+        <div class="values-grid animate-on-scroll">
+            <div class="value-card">
+                <div class="value-icon">
+                    <i class="fas fa-shield-heart"></i>
+                </div>
+                <div class="value-content">
+                    <h4>Privacidade & Segurança</h4>
+                    <p>Os seus dados de saúde são sagrados. Utilizamos as mais avançadas tecnologias de encriptação e seguimos rigorosamente as normas de proteção de dados.</p>
+                </div>
+            </div>
+            
+            <div class="value-card">
+                <div class="value-icon">
+                    <i class="fas fa-universal-access"></i>
+                </div>
+                <div class="value-content">
+                    <h4>Acessibilidade</h4>
+                    <p>Criámos uma interface intuitiva que funciona para utilizadores de todas as idades e níveis de experiência tecnológica.</p>
+                </div>
+            </div>
+            
+            <div class="value-card">
+                <div class="value-icon">
+                    <i class="fas fa-rocket"></i>
+                </div>
+                <div class="value-content">
+                    <h4>Inovação</h4>
+                    <p>Integramos as tecnologias mais recentes, incluindo Health Connect e Samsung Health, para oferecer a melhor experiência possível.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="supporters-section animate-on-scroll">
+            <h3 class="supporters-title"><i class="fas fa-users"></i> Pessoas que Apoiaram o Projeto</h3>
+            <p class="supporters-subtitle">Agradeço profundamente a estas pessoas que contribuíram para tornar o HealthMate uma realidade</p>
+            <div class="supporters-grid">
+                <div class="supporter-card animate-on-scroll">
+                    <div class="supporter-image">
+                        <i class="fas fa-user"></i>
+                        <div class="placeholder-text">Apoiador 1</div>
+                    </div>
+                    <div class="supporter-info">
+                        <h4>Nome do Apoiador</h4>
+                        <p class="supporter-role">Função/Contribuição</p>
+                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
+                    </div>
+                </div>
+
+                <div class="supporter-card animate-on-scroll">
+                    <div class="supporter-image">
+                        <i class="fas fa-user"></i>
+                        <div class="placeholder-text">Apoiador 2</div>
+                    </div>
+                    <div class="supporter-info">
+                        <h4>Nome do Apoiador</h4>
+                        <p class="supporter-role">Função/Contribuição</p>
+                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
+                    </div>
+                </div>
+
+                <div class="supporter-card animate-on-scroll">
+                    <div class="supporter-image">
+                        <i class="fas fa-user"></i>
+                        <div class="placeholder-text">Apoiador 3</div>
+                    </div>
+                    <div class="supporter-info">
+                        <h4>Nome do Apoiador</h4>
+                        <p class="supporter-role">Função/Contribuição</p>
+                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
+                    </div>
+                </div>
+
+                <div class="supporter-card animate-on-scroll">
+                    <div class="supporter-image">
+                        <i class="fas fa-user"></i>
+                        <div class="placeholder-text">Apoiador 4</div>
+                    </div>
+                    <div class="supporter-info">
+                        <h4>Nome do Apoiador</h4>
+                        <p class="supporter-role">Função/Contribuição</p>
+                        <p class="supporter-description">Breve descrição de como esta pessoa apoiou o desenvolvimento do HealthMate. Pode incluir áreas como testes, feedback, suporte técnico, ou orientação.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="project-info animate-on-scroll">
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div class="info-content">
+                    <h4>Projeto Académico de Excelência</h4>
+                    <p>Desenvolvido como Projeto de Aptidão Profissional (PAP) no curso de Técnico de Gestão e Programação de Sistemas Informáticos, representando o culminar de anos de aprendizagem.</p>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-calendar-check"></i>
+                </div>
+                <div class="info-content">
+                    <h4>Desenvolvimento Contínuo</h4>
+                    <p>Mais de 8 meses de desenvolvimento intensivo, com testes rigorosos e melhorias constantes baseadas no feedback de utilizadores reais.</p>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-heart-pulse"></i>
+                </div>
+                <div class="info-content">
+                    <h4>Foco na Saúde Digital</h4>
+                    <p>Uma solução completa que abrange desde a gestão de medicação até ao acompanhamento de sinais vitais e consultas médicas.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-cta animate-on-scroll">
+            <h3>
+                <i class="fas fa-download" style="color: var(--primary);"></i> 
+                Pronto para Cuidar da Sua Saúde?
+            </h3>
+            <p>Junte-se a milhares de utilizadores que já confiam no HealthMate para gerir a sua saúde de forma inteligente e segura.</p>
+            <div class="footer-buttons">
+                <a href="index.html" class="footer-btn footer-btn-secondary">
+                    <i class="fas fa-home"></i>
+                    Voltar ao Website
+                </a>
+                <a href="../APK/HealthMate.apk" download="HealthMate.apk" class="footer-btn footer-btn-primary">
+                    <i class="fas fa-download"></i>
+                    Baixar HealthMate
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Smooth scroll animation observer
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animated');
+                }
+            });
+        }, observerOptions);
+
+        // Observe all animated elements
+        document.querySelectorAll('.animate-on-scroll').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth page transition
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.style.opacity = '1';
+        });
+
+        // Enhanced hover effects for interactive elements
+        document.querySelectorAll('.skill-tag, .value-card, .info-card, .supporter-card').forEach(el => {
+            el.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px) scale(1.02)';
+            });
+            
+            el.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+    </script>
+</body>
+</html>
