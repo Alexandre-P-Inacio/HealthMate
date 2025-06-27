@@ -523,20 +523,6 @@ const AppointmentsScreen = ({ navigation }) => {
     const now = new Date();
     const isUpcoming = appointmentDate > now && oneHourAfter > now;
     const isPast = appointmentDate <= now;
-    const isPastFiveHours = fiveHoursAfter <= now;
-    const isWithinFiveHours = appointmentDate <= now && fiveHoursAfter > now;
-    const canConfirm = isMedic && (item.status === 'pending' || item.status === 'requested') && isUpcoming;
-    const canCancel = isMedic && (item.status === 'pending' || item.status === 'requested') && isUpcoming;
-    const canComplete = isMedic && item.status === 'confirmed' && isUpcoming;
-    const canEditReport = isMedic && (item.status === 'completed' || (isWithinFiveHours && item.status === 'confirmed'));
-    const canReschedule = isMedic && item.status === 'confirmed' && isUpcoming;
-    const canViewReport = !isMedic && (item.status === 'completed' || item.status === 'no-show' || item.status === 'cancelled');
-    const canRequestNewDate = !isMedic && item.status === 'scheduled' && isUpcoming;
-    const canMarkNoShow = isMedic && isPastFiveHours && item.status === 'confirmed';
-    const canMarkCancelled = isMedic && isPastFiveHours && item.status === 'confirmed';
-    
-    // Check if current user should see response buttons
-    const shouldShowResponseButtons = item.status === 'scheduled' && item.requested_by && item.requested_by !== (isMedic ? item.doctor_id : item.user_id);
     
     const patientName = item.users?.fullname || item.users?.name || item.users?.email?.split('@')[0] || 'Patient';
     const doctorName = item.doctors?.fullname || item.doctors?.name || item.doctors?.user?.fullname || 'Doctor';
@@ -669,8 +655,8 @@ const AppointmentsScreen = ({ navigation }) => {
           )}
         </View>
         <View style={styles.buttonContainer}>
-          {/* Icones em coluna à direita para status 'pending' e 'scheduled' */}
-          {(item.status === 'scheduled' || item.status === 'pending') && (
+          {/* Show accept/reject/reschedule buttons only for pending/scheduled appointments */}
+          {(item.status === 'scheduled' || item.status === 'pending') && !item.requested_date_change && !item.reschedule_requested && (
             <View style={{ flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: 10 }}>
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 }]}
@@ -698,95 +684,23 @@ const AppointmentsScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           )}
-          {!shouldShowResponseButtons && (
-            <View style={styles.verticalButtonContainer}>
-              {canComplete && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.completeButton]}
-                  onPress={() => {
-                    setEditingAppointment(item);
-                    setReportModalVisible(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="document-text" size={24} color="#4F8CFF" />
-                </TouchableOpacity>
-              )}
-              {canMarkNoShow && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.noShowButton]}
-                  onPress={() => {
-                    setEditingAppointment(item);
-                    setReportModalVisible(true);
-                    setReportType('no-show');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="person-remove" size={24} color="#e74c3c" />
-                </TouchableOpacity>
-              )}
-              {canMarkCancelled && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.cancelButton]}
-                  onPress={() => {
-                    setEditingAppointment(item);
-                    setReportModalVisible(true);
-                    setReportType('cancelled');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close-circle" size={24} color="#F87171" />
-                </TouchableOpacity>
-              )}
-              {canEditReport && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.editReportButton]}
-                  onPress={() => {
-                    setEditingAppointment(item);
-                    setReportText(item.notes || '');
-                    setReportModalVisible(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="create" size={24} color="#4F8CFF" />
-                </TouchableOpacity>
-              )}
-              {canReschedule && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.rescheduleButton]}
-                  onPress={() => handleStatusChange(item.id, 'confirmed')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="calendar" size={24} color="#4F8CFF" />
-                </TouchableOpacity>
-              )}
-              {canViewReport && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.viewReportButton]}
-                  onPress={() => {
-                    setEditingAppointment(item);
-                    setReportText(item.notes || '');
-                    setReportModalVisible(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="document-text" size={24} color="#4F8CFF" />
-                </TouchableOpacity>
-              )}
-              {canRequestNewDate && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.requestNewDateButton]}
-                  onPress={() => {
-                    setSelectedAppointment(item);
-                    setShowRequestModal(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="time" size={24} color="#60A5FA" />
-                </TouchableOpacity>
-              )}
+          
+          {/* Show report button only after appointment time has passed and appointment is confirmed */}
+          {item.status === 'confirmed' && isPast && (
+            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 }]}
+                onPress={() => {
+                  setEditingAppointment(item);
+                  setReportModalVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="document-text" size={28} color="#4A67E3" />
+              </TouchableOpacity>
             </View>
           )}
+          {/* Remove the old complex button container as we have simplified logic above */}
         </View>
       </View>
     );
