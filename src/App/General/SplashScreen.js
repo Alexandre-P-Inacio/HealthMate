@@ -16,9 +16,9 @@ const SplashScreen = () => {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    // Timeout de fallback: navega para Welcome após 5 segundos
+    // Timeout de fallback: navega direto para HomeScreen após 5 segundos
     const timeout = setTimeout(() => {
-      navigation.replace('Welcome');
+      navigation.replace('HomeScreen');
     }, 5000);
 
     return () => clearTimeout(timeout);
@@ -26,11 +26,12 @@ const SplashScreen = () => {
 
   const handlePlaybackStatusUpdate = (status) => {
     if (status.didJustFinish) {
-      navigation.replace('Welcome');
+      // Vai direto para HomeScreen quando o vídeo termina
+      navigation.replace('HomeScreen');
     }
     if (status.isLoaded === false && status.error) {
       Alert.alert('Erro', 'Não foi possível carregar o vídeo de abertura.');
-      navigation.replace('Welcome');
+      navigation.replace('HomeScreen');
     }
   };
 

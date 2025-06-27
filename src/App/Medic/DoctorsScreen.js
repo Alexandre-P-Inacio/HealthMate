@@ -161,14 +161,26 @@ const DoctorsScreen = ({ navigation }) => {
       const nonFavs = filteredMedics.filter(d => !favoriteIds.includes(String(d.id)));
       return (
         <>
-          {favs.length > 0 && <Text style={styles.favLabel}>Favoritos</Text>}
-          {favs.map(item => renderMedicItem({ item }))}
-          {favs.length > 0 && <View style={styles.dashedDivider} />}
-          {nonFavs.map(item => renderMedicItem({ item }))}
+          {favs.length > 0 && <Text key="fav-label" style={styles.favLabel}>Favoritos</Text>}
+          {favs.map(item => (
+            <View key={`fav-${item.id}`}>
+              {renderMedicItem({ item })}
+            </View>
+          ))}
+          {favs.length > 0 && <View key="divider" style={styles.dashedDivider} />}
+          {nonFavs.map(item => (
+            <View key={`nonfav-${item.id}`}>
+              {renderMedicItem({ item })}
+            </View>
+          ))}
         </>
       );
     } else {
-      return filteredMedics.map(item => renderMedicItem({ item }));
+      return filteredMedics.map(item => (
+        <View key={`doctor-${item.id}`}>
+          {renderMedicItem({ item })}
+        </View>
+      ));
     }
   };
 

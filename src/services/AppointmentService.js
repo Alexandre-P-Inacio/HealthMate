@@ -1,5 +1,4 @@
 import supabase from '../../supabase';
-import NotificationService from './NotificationService';
 import {
   validateAppointmentRequest,
   validateDoctorAvailability,

@@ -13,7 +13,7 @@ import {
   StatusBar,
   SafeAreaView
 } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import DataUser from '../../../navigation/DataUser';
 import Navbar from '../../Components/Navbar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,8 +21,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import supabase from '../../../supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import UnifiedChatService from '../../services/UnifiedChatService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const AccountScreen = ({ navigation }) => {
+  const { isLoggedIn, user, logout: authLogout } = useAuth();
   const insets = useSafeAreaInsets();
   const [userData, setUserData] = useState(null);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
@@ -114,13 +116,17 @@ const AccountScreen = ({ navigation }) => {
     }
   }, []);
 
-  const handleLogout = () => {
-    // Directly navigate to Welcome screen without confirmation
-    // The reset action clears the navigation history preventing the user from coming back
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Welcome' }],
-    });
+  const handleLogout = async () => {
+    try {
+      await authLogout();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'HomeScreen' }],
+      });
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      Alert.alert('Erro', 'Não foi possível fazer logout. Tente novamente.');
+    }
   };
 
   const toggleNotifications = () => {
@@ -354,58 +360,88 @@ const AccountScreen = ({ navigation }) => {
         >
           {/* Profile Section */}
           <View style={styles.profileSection}>
-            <View style={styles.profileHeader}>
-              <View style={styles.profileImageContainer}>
-                <Image source={profileImage} style={styles.profileImage} />
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{userData.fullname || 'User'}</Text>
-                <View style={styles.badgeContainer}>
-                  <View style={styles.badge}>
-                    <FontAwesome name="star" size={12} color="#FFD700" />
-                    <Text style={styles.badgeText}>Premium Plus</Text>
+            {isLoggedIn ? (
+              <>
+                <View style={styles.profileHeader}>
+                  <View style={styles.profileImageContainer}>
+                    <Image source={profileImage} style={styles.profileImage} />
+                  </View>
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.profileName}>{userData?.fullname || user?.fullname || 'User'}</Text>
+                    <View style={styles.badgeContainer}>
+                      <View style={styles.badge}>
+                        <FontAwesome name="star" size={12} color="#FFD700" />
+                        <Text style={styles.badgeText}>Premium Plus</Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </View>
 
-            {/* Contact Info Cards */}
-            <View style={styles.contactCards}>
-              <View style={styles.contactCard}>
-                <FontAwesome name="envelope" size={16} color="#3498db" />
-                <Text style={styles.contactText}>{userData.email || 'N/A'}</Text>
+                {/* Contact Info Cards */}
+                <View style={styles.contactCards}>
+                  <View style={styles.contactCard}>
+                    <FontAwesome name="envelope" size={16} color="#3498db" />
+                    <Text style={styles.contactText}>{userData?.email || user?.email || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.contactCard}>
+                    <FontAwesome name="phone" size={16} color="#3498db" />
+                    <Text style={styles.contactText}>{userData?.phone || user?.phone || 'N/A'}</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.loginPromptSection}>
+                <View style={styles.loginIconContainer}>
+                  <Ionicons name="person-circle-outline" size={80} color="#6A8DFD" />
+                </View>
+                <Text style={styles.loginPromptTitle}>Bem-vindo ao HealthMate!</Text>
+                <Text style={styles.loginPromptSubtitle}>
+                  Para acessar sua conta e recursos personalizados
+                </Text>
+                <TouchableOpacity 
+                  style={styles.loginPromptButton}
+                  onPress={() => navigation.navigate('WelcomeScreen')}
+                >
+                  <Text style={styles.loginPromptButtonText}>Login ou Registre-se</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </TouchableOpacity>
               </View>
-              <View style={styles.contactCard}>
-                <FontAwesome name="phone" size={16} color="#3498db" />
-                <Text style={styles.contactText}>{userData.phone || 'N/A'}</Text>
-              </View>
-            </View>
+            )}
           </View>
 
           {/* Quick Actions */}
           <View style={styles.quickActionsGrid}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => {
-                if ((userData && userData.role === 'medic') || isMedic) {
-                  navigation.navigate('DoctorDashboard');
-                } else {
-                  navigation.navigate('DoctorsScreen');
-                }
-              }}
-            >
-              <FontAwesome name="user-md" size={30} color="#6A8DFD" />
-              <Text style={styles.actionButtonText}>{(userData && userData.role === 'medic') || isMedic ? 'Doctor' : 'Doctors'}</Text>
-            </TouchableOpacity>
+            {isLoggedIn && (
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => {
+                  if ((userData && userData.role === 'medic') || isMedic) {
+                    navigation.navigate('DoctorDashboard');
+                  } else {
+                    navigation.navigate('DoctorsScreen');
+                  }
+                }}
+              >
+                <FontAwesome name="user-md" size={30} color="#6A8DFD" />
+                <Text style={styles.actionButtonText}>{(userData && userData.role === 'medic') || isMedic ? 'Doctor' : 'Doctors'}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity 
               style={[styles.actionButton, styles.chatActionButton]}
               onPress={() => {
-                navigation.navigate('ChatListScreen');
+                if (isLoggedIn) {
+                  navigation.navigate('ChatListScreen');
+                } else {
+                  Alert.alert('Login Necessário', 'Faça login para acessar as conversas', [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Fazer Login', onPress: () => navigation.navigate('WelcomeScreen') }
+                  ]);
+                }
               }}
             >
               <View style={styles.chatButtonContainer}>
                 <FontAwesome name="comments" size={30} color="#28a745" />
-                {unreadMessagesCount > 0 && (
+                {isLoggedIn && unreadMessagesCount > 0 && (
                   <View style={styles.chatBadge}>
                     <Text style={styles.chatBadgeText}>
                       {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
@@ -422,13 +458,15 @@ const AccountScreen = ({ navigation }) => {
               <FontAwesome name="info-circle" size={30} color="#6A8DFD" />
               <Text style={styles.actionButtonText}>Information</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('AppointmentsScreen')}
-            >
-              <FontAwesome name="calendar" size={30} color="#6A8DFD" />
-              <Text style={styles.actionButtonText}>Consultas</Text>
-            </TouchableOpacity>
+            {isLoggedIn && (
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => navigation.navigate('AppointmentsScreen')}
+              >
+                <FontAwesome name="calendar" size={30} color="#6A8DFD" />
+                <Text style={styles.actionButtonText}>Consultas</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Account Actions */}
@@ -441,13 +479,15 @@ const AccountScreen = ({ navigation }) => {
               <Text style={styles.buttonText}>Settings</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.logoutButton} 
-              onPress={handleLogout}
-            >
-              <FontAwesome name="sign-out" size={18} color="#e74c3c" />
-              <Text style={[styles.buttonText, styles.logoutText]}>Logout</Text>
-            </TouchableOpacity>
+            {isLoggedIn && (
+              <TouchableOpacity 
+                style={styles.logoutButton} 
+                onPress={handleLogout}
+              >
+                <FontAwesome name="sign-out" size={18} color="#e74c3c" />
+                <Text style={[styles.buttonText, styles.logoutText]}>Logout</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
 
@@ -1033,6 +1073,48 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 10,
+  },
+  loginPromptSection: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  loginIconContainer: {
+    marginBottom: 20,
+  },
+  loginPromptTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loginPromptSubtitle: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    marginBottom: 30,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  loginPromptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6A8DFD',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    elevation: 3,
+    shadowColor: '#6A8DFD',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  loginPromptButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginRight: 10,
   },
 });
 

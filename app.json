@@ -4,7 +4,7 @@
     "slug": "HealthMate",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.apinacio.healthmate",
       "buildNumber": "1.0.0",
-      "icon": "./assets/icon.png",
+      "icon": "./assets/logo.png",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take photos for your profile and medical records.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select images for your profile and medical records.",
@@ -26,19 +26,16 @@
         "NSContactsUsageDescription": "This app accesses contacts to help you manage your healthcare providers.",
         "NSMicrophoneUsageDescription": "This app uses the microphone for voice notes in your medical diary.",
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your smartwatch and health devices to gather fitness and health data.",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your smartwatch and health devices."
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your smartwatch and health devices.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location services to connect to nearby health devices and wearables.",
+        "NSLocationWhenInUseUsageDescription": "This app uses location services to connect to nearby health devices and wearables."
       }
     },
     "android": {
       "minSdkVersion": 26,
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
-      "icon": "./assets/icon.png",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#6A8DFD",
-        "monochromeImage": "./assets/adaptive-icon.png"
-      },
+      "icon": "./assets/logo.png",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -56,21 +53,22 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_ADVERTISE",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.health.READ_WEIGHT",
-        "android.permission.health.READ_HEIGHT",
-        "android.permission.health.READ_BODY_FAT",
-        "android.permission.health.READ_HEART_RATE",
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_DISTANCE",
         "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
         "android.permission.health.READ_TOTAL_CALORIES_BURNED",
-        "android.permission.health.READ_BLOOD_PRESSURE",
-        "android.permission.health.READ_OXYGEN_SATURATION",
-        "android.permission.health.READ_BODY_TEMPERATURE",
-        "android.permission.health.READ_SLEEP"
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_WEIGHT",
+        "android.permission.health.READ_SLEEP",
+        "com.samsung.health.permission.READ",
+        "com.samsung.android.health.permission.READ",
+        "com.samsung.android.health.permission.WRITE",
+        "android.permission.health.READ_OXYGEN_SATURATION"
       ],
       "package": "com.apinacio.healthmate",
       "versionCode": 1,
@@ -87,12 +85,31 @@
     },
     "plugins": [
       "expo-font",
-      "react-native-ble-plx",
-
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your smartwatch and health devices.",
+          "locationWhenInUseUsageDescription": "This app uses location services to connect to nearby health devices and wearables."
+        }
+      ],
+      [
+        "expo-health-connect",
+        {
+          "healthDataTypes": [
+            "Steps", "Distance", "ActiveCaloriesBurned", "TotalCaloriesBurned", 
+            "HeartRate", "Weight", "Height", "SleepSession"
+          ],
+          "healthConnectTypes": [
+            "Steps", "HeartRate", "Weight", "SleepSession", "OxygenSaturation"
+          ]
+        }
+      ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/logo.png",
           "color": "#6A8DFD",
           "defaultChannel": "default"
         }
@@ -125,9 +142,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "b04bdee9-92ac-4a6c-a6d3-82fe97e01b79"
+        "projectId": "e20294e7-79a8-48f1-abb3-ae46bea4086d"
       }
     },
-    "owner": "teste234"
+    "owner": "healthmate2"
   }
 }

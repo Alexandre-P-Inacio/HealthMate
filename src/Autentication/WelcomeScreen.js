@@ -14,10 +14,12 @@ import supabase from '../../supabase';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DataUser from '../../navigation/DataUser';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 const WelcomeScreen = ({ navigation }) => {
+  const { login, syncAuthState } = useAuth();
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
 
@@ -63,27 +65,36 @@ const WelcomeScreen = ({ navigation }) => {
 
       const user = users[0];
       const userIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
-      DataUser.setUserData({ ...user, id: userIdToSet });
+      const userData = { ...user, id: userIdToSet };
+      
+      // Usar a função login do AuthContext para garantir sincronização
+      const loginSuccess = await login(userData);
+      
+      if (loginSuccess) {
+        console.log('🚀 Quick Login 1 realizado com sucesso');
+        
+        if (user.role === 'medic') {
+          const { data: doctorData, error: doctorError } = await supabase
+            .from('doctors')
+            .select('*')
+            .eq('id', userIdToSet)
+            .single();
 
-      if (user.role === 'medic') {
-        const { data: doctorData, error: doctorError } = await supabase
-          .from('doctors')
-          .select('*')
-          .eq('id', userIdToSet)
-          .single();
+          if (doctorError && doctorError.code !== 'PGRST116') {
+            console.error('Error checking doctor status:', doctorError);
+            return;
+          }
 
-        if (doctorError && doctorError.code !== 'PGRST116') {
-          console.error('Error checking doctor status:', doctorError);
-          return;
-        }
-
-        if (doctorData) {
-          navigation.navigate('DoctorDashboard');
+          if (doctorData) {
+            navigation.navigate('DoctorDashboard');
+          } else {
+            navigation.navigate('DoctorRegistration');
+          }
         } else {
-          navigation.navigate('DoctorRegistration');
+          navigation.navigate('HomeScreen', { userId: userIdToSet });
         }
       } else {
-        navigation.navigate('HomeScreen', { userId: userIdToSet });
+        console.error('Falha no quick login 1');
       }
     } catch (error) {
       console.error('Auto login error:', error);
@@ -117,27 +128,36 @@ const WelcomeScreen = ({ navigation }) => {
 
       const user = users[0];
       const userIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
-      DataUser.setUserData({ ...user, id: userIdToSet });
+      const userData = { ...user, id: userIdToSet };
+      
+      // Usar a função login do AuthContext para garantir sincronização
+      const loginSuccess = await login(userData);
+      
+      if (loginSuccess) {
+        console.log('🚀 Quick Login 2 realizado com sucesso');
+        
+        if (user.role === 'medic') {
+          const { data: doctorData, error: doctorError } = await supabase
+            .from('doctors')
+            .select('*')
+            .eq('id', userIdToSet)
+            .single();
 
-      if (user.role === 'medic') {
-        const { data: doctorData, error: doctorError } = await supabase
-          .from('doctors')
-          .select('*')
-          .eq('id', userIdToSet)
-          .single();
+          if (doctorError && doctorError.code !== 'PGRST116') {
+            console.error('Error checking doctor status:', doctorError);
+            return;
+          }
 
-        if (doctorError && doctorError.code !== 'PGRST116') {
-          console.error('Error checking doctor status:', doctorError);
-          return;
-        }
-
-        if (doctorData) {
-          navigation.navigate('DoctorDashboard');
+          if (doctorData) {
+            navigation.navigate('DoctorDashboard');
+          } else {
+            navigation.navigate('DoctorRegistration');
+          }
         } else {
-          navigation.navigate('DoctorRegistration');
+          navigation.navigate('HomeScreen', { userId: userIdToSet });
         }
       } else {
-        navigation.navigate('HomeScreen', { userId: userIdToSet });
+        console.error('Falha no quick login 2');
       }
     } catch (error) {
       console.error('Auto login error:', error);

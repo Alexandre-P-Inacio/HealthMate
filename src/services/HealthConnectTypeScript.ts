@@ -13,11 +13,12 @@ import {
   readRecords,
   openHealthConnectSettings,
   SdkAvailabilityStatus,
-  HealthConnectRecord,
+  Permission,
+  ReadRecordsResult
 } from 'react-native-health-connect';
 
 // ===========================================
-// TIPOS E INTERFACES
+// INTERFACES E TIPOS
 // ===========================================
 
 export interface HealthPermission {
@@ -29,13 +30,7 @@ export interface HealthData {
   steps: number | null;
   calories: number | null;
   heartRate: number | null;
-  distance?: number | null;
-  bloodPressure?: {
-    systolic: number;
-    diastolic: number;
-  } | null;
-  bloodOxygen?: number | null;
-  bodyTemperature?: number | null;
+  weight?: number | null;
   lastUpdated: string;
   sources: string[];
 }
@@ -54,7 +49,7 @@ export interface PermissionResult {
 }
 
 // ===========================================
-// SERVIÇO PRINCIPAL
+// CLASSE PRINCIPAL
 // ===========================================
 
 class HealthConnectTypeScriptService {
@@ -62,43 +57,36 @@ class HealthConnectTypeScriptService {
   private hasPermissions: boolean = false;
 
   /**
-   * 1. Função para solicitar permissões necessárias ao usuário
+   * 1. Função para solicitar permissões do Health Connect
    */
   async requestHealthPermissions(): Promise<PermissionResult> {
     try {
       console.log('🔐 [HealthConnect] Solicitando permissões...');
 
-      // Verifica se é Android
-      if (Platform.OS !== 'android') {
-        return {
-          success: false,
-          granted: [],
-          error: 'Health Connect está disponível apenas no Android 14+'
-        };
-      }
-
-      // Inicializa Health Connect se necessário
+      // Verifica inicialização
       if (!this.isInitialized) {
         const initResult = await this.initializeHealthConnect();
         if (!initResult.success) {
           return {
             success: false,
             granted: [],
-            error: `Falha na inicialização: ${initResult.error}`
+            error: initResult.error
           };
         }
       }
 
       // Define as permissões necessárias
-      const permissions: HealthPermission[] = [
+      const permissions: Permission[] = [
         { accessType: 'read', recordType: 'Steps' },
         { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
         { accessType: 'read', recordType: 'HeartRate' },
-        { accessType: 'read', recordType: 'Distance' },
         { accessType: 'read', recordType: 'Weight' },
-        { accessType: 'read', recordType: 'BloodPressure' },
-        { accessType: 'read', recordType: 'OxygenSaturation' },
-        { accessType: 'read', recordType: 'BodyTemperature' },
+        { accessType: 'read', recordType: 'Height' },
+        { accessType: 'read', recordType: 'BodyFat' },
+        { accessType: 'read', recordType: 'BoneMass' },
+        { accessType: 'read', recordType: 'BasalMetabolicRate' },
+        { accessType: 'read', recordType: 'LeanBodyMass' },
+        { accessType: 'read', recordType: 'BodyWaterMass' }
       ];
 
       console.log('📋 [HealthConnect] Solicitando permissões:', permissions.map(p => p.recordType));
@@ -188,46 +176,34 @@ class HealthConnectTypeScriptService {
         stepsData,
         caloriesData,
         heartRateData,
-        distanceData,
-        weightData,
-        bloodPressureData,
-        oxygenData,
-        temperatureData
+        weightData
       ] = await Promise.allSettled([
         this.safeReadRecords('Steps', timeRangeFilter),
         this.safeReadRecords('ActiveCaloriesBurned', timeRangeFilter),
         this.safeReadRecords('HeartRate', timeRangeFilter),
-        this.safeReadRecords('Distance', timeRangeFilter),
-        this.safeReadRecords('Weight', timeRangeFilter),
-        this.safeReadRecords('BloodPressure', timeRangeFilter),
-        this.safeReadRecords('OxygenSaturation', timeRangeFilter),
-        this.safeReadRecords('BodyTemperature', timeRangeFilter)
+        this.safeReadRecords('Weight', timeRangeFilter)
       ]);
 
       // Processa os resultados
       const steps = this.processStepsData(stepsData.status === 'fulfilled' ? stepsData.value : []);
       const calories = this.processCaloriesData(caloriesData.status === 'fulfilled' ? caloriesData.value : []);
       const heartRate = this.processHeartRateData(heartRateData.status === 'fulfilled' ? heartRateData.value : []);
-      const distance = this.processDistanceData(distanceData.status === 'fulfilled' ? distanceData.value : []);
-      const bloodPressure = this.processBloodPressureData(bloodPressureData.status === 'fulfilled' ? bloodPressureData.value : []);
-      const bloodOxygen = this.processOxygenData(oxygenData.status === 'fulfilled' ? oxygenData.value : []);
-      const bodyTemperature = this.processTemperatureData(temperatureData.status === 'fulfilled' ? temperatureData.value : []);
+      const weight = this.processWeightData(weightData.status === 'fulfilled' ? weightData.value : []);
 
       // Coleta fontes de dados
-      const sources = this.collectDataSources([
-        ...(stepsData.status === 'fulfilled' ? stepsData.value : []),
-        ...(caloriesData.status === 'fulfilled' ? caloriesData.value : []),
-        ...(heartRateData.status === 'fulfilled' ? heartRateData.value : [])
-      ]);
+      const allRecords: any[] = [];
+      if (stepsData.status === 'fulfilled') allRecords.push(...stepsData.value);
+      if (caloriesData.status === 'fulfilled') allRecords.push(...caloriesData.value);
+      if (heartRateData.status === 'fulfilled') allRecords.push(...heartRateData.value);
+      if (weightData.status === 'fulfilled') allRecords.push(...weightData.value);
+      
+      const sources = this.collectDataSources(allRecords);
 
       const healthData: HealthData = {
         steps,
         calories,
         heartRate,
-        distance,
-        bloodPressure,
-        bloodOxygen,
-        bodyTemperature,
+        weight,
         lastUpdated: new Date().toISOString(),
         sources
       };
@@ -236,6 +212,7 @@ class HealthConnectTypeScriptService {
         steps: steps || 'N/A',
         calories: calories || 'N/A',
         heartRate: heartRate || 'N/A',
+        weight: weight || 'N/A',
         sources: sources.length
       });
 
@@ -309,9 +286,9 @@ class HealthConnectTypeScriptService {
 
   private async safeReadRecords(recordType: string, timeRangeFilter: any): Promise<any[]> {
     try {
-      const records = await readRecords(recordType, { timeRangeFilter });
-      console.log(`📊 [HealthConnect] ${recordType}: ${records.length} registros`);
-      return records || [];
+      const records = await readRecords(recordType as any, { timeRangeFilter });
+      console.log(`📊 [HealthConnect] ${recordType}: ${Array.isArray(records) ? records.length : 0} registros`);
+      return Array.isArray(records) ? records : [];
     } catch (error: any) {
       console.log(`⚠️ [HealthConnect] Erro ao ler ${recordType}:`, error.message);
       return [];
@@ -339,34 +316,10 @@ class HealthConnectTypeScriptService {
     return sorted[0].beatsPerMinute || null;
   }
 
-  private processDistanceData(records: any[]): number | null {
-    if (!records || records.length === 0) return null;
-    const totalMeters = records.reduce((total, record) => {
-      return total + (record.distance?.inMeters || 0);
-    }, 0);
-    return parseFloat((totalMeters / 1000).toFixed(2)); // Converte para km
-  }
-
-  private processBloodPressureData(records: any[]): { systolic: number; diastolic: number } | null {
+  private processWeightData(records: any[]): number | null {
     if (!records || records.length === 0) return null;
     const sorted = records.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    const latest = sorted[0];
-    return {
-      systolic: latest.systolic?.inMillimetersOfMercury || 0,
-      diastolic: latest.diastolic?.inMillimetersOfMercury || 0
-    };
-  }
-
-  private processOxygenData(records: any[]): number | null {
-    if (!records || records.length === 0) return null;
-    const sorted = records.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    return sorted[0].percentage?.value || null;
-  }
-
-  private processTemperatureData(records: any[]): number | null {
-    if (!records || records.length === 0) return null;
-    const sorted = records.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    return sorted[0].temperature?.inCelsius || null;
+    return sorted[0].weight?.inKilograms || null;
   }
 
   private collectDataSources(records: any[]): string[] {
@@ -393,6 +346,253 @@ class HealthConnectTypeScriptService {
       'com.polar.polarflow': 'Polar Flow'
     };
     return sourceNames[packageName] || packageName || 'Health Connect';
+  }
+
+  public async getWeightData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
+    try {
+      // Ensure initialization
+      if (!this.isInitialized) {
+        const initResult = await this.initializeHealthConnect();
+        if (!initResult.success) {
+          return { success: false, error: initResult.error };
+        }
+      }
+      // Ensure permissions
+      if (!this.hasPermissions) {
+        const permResult = await this.requestHealthPermissions();
+        if (!permResult.success) {
+          return { success: false, error: permResult.error };
+        }
+      }
+      // Date range
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - daysBack);
+      const timeRangeFilter = {
+        operator: 'between' as const,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      };
+      // Fetch weight records
+      let data: any[] = await readRecords('Weight', { timeRangeFilter }) as unknown as any[];
+      console.log('[getWeightData] readRecords returned:', data);
+      data = Array.isArray(data) ? data : [];
+      let latest = null;
+      if (data.length > 0) {
+        latest = data.reduce((a, b) => {
+          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
+          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+          return bTime > aTime ? b : a;
+        });
+      }
+      return { success: true, data, latest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  public async getHeightData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
+    try {
+      if (!this.isInitialized) {
+        const initResult = await this.initializeHealthConnect();
+        if (!initResult.success) return { success: false, error: initResult.error };
+      }
+      if (!this.hasPermissions) {
+        const permResult = await this.requestHealthPermissions();
+        if (!permResult.success) return { success: false, error: permResult.error };
+      }
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - daysBack);
+      const timeRangeFilter = {
+        operator: 'between' as const,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      };
+      let data: any[] = await readRecords('Height', { timeRangeFilter }) as unknown as any[];
+      data = Array.isArray(data) ? data : [];
+      let latest = null;
+      if (data.length > 0) {
+        latest = data.reduce((a, b) => {
+          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
+          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+          return bTime > aTime ? b : a;
+        });
+      }
+      return { success: true, data, latest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  public async getBodyFatData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
+    try {
+      if (!this.isInitialized) {
+        const initResult = await this.initializeHealthConnect();
+        if (!initResult.success) return { success: false, error: initResult.error };
+      }
+      if (!this.hasPermissions) {
+        const permResult = await this.requestHealthPermissions();
+        if (!permResult.success) return { success: false, error: permResult.error };
+      }
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - daysBack);
+      const timeRangeFilter = {
+        operator: 'between' as const,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      };
+      let data: any[] = await readRecords('BodyFat', { timeRangeFilter }) as unknown as any[];
+      data = Array.isArray(data) ? data : [];
+      let latest = null;
+      if (data.length > 0) {
+        latest = data.reduce((a, b) => {
+          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
+          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+          return bTime > aTime ? b : a;
+        });
+      }
+      return { success: true, data, latest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  public async getBoneMassData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
+    try {
+      if (!this.isInitialized) {
+        const initResult = await this.initializeHealthConnect();
+        if (!initResult.success) return { success: false, error: initResult.error };
+      }
+      if (!this.hasPermissions) {
+        const permResult = await this.requestHealthPermissions();
+        if (!permResult.success) return { success: false, error: permResult.error };
+      }
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - daysBack);
+      const timeRangeFilter = {
+        operator: 'between' as const,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      };
+      let data: any[] = await readRecords('BoneMass', { timeRangeFilter }) as unknown as any[];
+      data = Array.isArray(data) ? data : [];
+      let latest = null;
+      if (data.length > 0) {
+        latest = data.reduce((a, b) => {
+          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
+          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+          return bTime > aTime ? b : a;
+        });
+      }
+      return { success: true, data, latest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  public async getBasalMetabolicRateData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
+    try {
+      if (!this.isInitialized) {
+        const initResult = await this.initializeHealthConnect();
+        if (!initResult.success) return { success: false, error: initResult.error };
+      }
+      if (!this.hasPermissions) {
+        const permResult = await this.requestHealthPermissions();
+        if (!permResult.success) return { success: false, error: permResult.error };
+      }
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - daysBack);
+      const timeRangeFilter = {
+        operator: 'between' as const,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      };
+      let data: any[] = await readRecords('BasalMetabolicRate', { timeRangeFilter }) as unknown as any[];
+      data = Array.isArray(data) ? data : [];
+      let latest = null;
+      if (data.length > 0) {
+        latest = data.reduce((a, b) => {
+          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
+          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+          return bTime > aTime ? b : a;
+        });
+      }
+      return { success: true, data, latest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  public async getLeanBodyMassData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
+    try {
+      if (!this.isInitialized) {
+        const initResult = await this.initializeHealthConnect();
+        if (!initResult.success) return { success: false, error: initResult.error };
+      }
+      if (!this.hasPermissions) {
+        const permResult = await this.requestHealthPermissions();
+        if (!permResult.success) return { success: false, error: permResult.error };
+      }
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - daysBack);
+      const timeRangeFilter = {
+        operator: 'between' as const,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      };
+      let data: any[] = await readRecords('LeanBodyMass', { timeRangeFilter }) as unknown as any[];
+      data = Array.isArray(data) ? data : [];
+      let latest = null;
+      if (data.length > 0) {
+        latest = data.reduce((a, b) => {
+          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
+          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+          return bTime > aTime ? b : a;
+        });
+      }
+      return { success: true, data, latest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  public async getBodyWaterMassData(daysBack: number = 7): Promise<{ success: boolean; data?: any[]; latest?: any; error?: string }> {
+    try {
+      if (!this.isInitialized) {
+        const initResult = await this.initializeHealthConnect();
+        if (!initResult.success) return { success: false, error: initResult.error };
+      }
+      if (!this.hasPermissions) {
+        const permResult = await this.requestHealthPermissions();
+        if (!permResult.success) return { success: false, error: permResult.error };
+      }
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - daysBack);
+      const timeRangeFilter = {
+        operator: 'between' as const,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      };
+      let data: any[] = await readRecords('BodyWaterMass', { timeRangeFilter }) as unknown as any[];
+      data = Array.isArray(data) ? data : [];
+      let latest = null;
+      if (data.length > 0) {
+        latest = data.reduce((a, b) => {
+          const aTime = new Date(a.endTime || a.timestamp || a.startTime || 0).getTime();
+          const bTime = new Date(b.endTime || b.timestamp || b.startTime || 0).getTime();
+          return bTime > aTime ? b : a;
+        });
+      }
+      return { success: true, data, latest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
   }
 }
 

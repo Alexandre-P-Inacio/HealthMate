@@ -21,32 +21,41 @@
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-  <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
-  <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE"/>
-  <uses-permission android:name="android.permission.health.READ_BODY_FAT"/>
-  <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE"/>
-  <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
-  <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
-  <uses-permission android:name="android.permission.health.READ_HEIGHT"/>
-  <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION"/>
-  <uses-permission android:name="android.permission.health.READ_SLEEP"/>
   <uses-permission android:name="android.permission.health.READ_STEPS"/>
+  <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+  <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
   <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+  <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
   <uses-permission android:name="android.permission.health.READ_WEIGHT"/>
-  <uses-permission android:name="android.permission.health.READ_HYDRATION"/>
-  <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
-  <uses-permission android:name="android.permission.health.READ_NUTRITION"/>
-  
+  <uses-permission android:name="android.permission.health.READ_SLEEP"/>
+  <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION"/>
   <uses-permission android:name="com.android.alarm.permission.SET_ALARM"/>
+  <uses-permission android:name="com.samsung.android.providers.context.permission.WRITE_USE_APP_FEATURE_SURVEY"/>
+  <uses-permission android:name="com.samsung.health.permission.READ"/>
+  <uses-permission android:name="com.samsung.shealth.step_daily_trend.READ_PERMISSION"/>
+  <uses-permission android:name="com.samsung.shealth.tracker.WRITE_PERMISSION"/>
+  <uses-permission android:name="com.samsung.android.health.permission.READ"/>
+  <uses-permission android:name="com.samsung.android.health.permission.WRITE"/>
+  <uses-permission android:name="com.google.android.gms.permission.FITNESS_ACTIVITY_READ"/>
+  <uses-permission android:name="com.google.android.gms.permission.FITNESS_BODY_READ"/>
+  <uses-permission android:name="com.google.android.gms.permission.FITNESS_LOCATION_READ"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.BODY_SENSORS"/>
+  <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+  <uses-permission android:name="android.permission.health.READ_BONE_MASS" />
+  <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
+  <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+  <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS" />
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
       <category android:name="android.intent.category.BROWSABLE"/>
       <data android:scheme="https"/>
     </intent>
-    
-    <!-- 🔥 QUERY BÁSICA PARA HEALTH CONNECT -->
     <package android:name="com.google.android.apps.healthdata"/>
+    <intent>
+      <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
+    </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true">
     <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="default"/>
@@ -57,10 +66,7 @@
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
-    
-    <!-- 🔥 IDENTIFICAÇÃO SIMPLES COMO HEALTH CONNECT CLIENT -->
-    <meta-data android:name="health_permissions" android:value="true"/>
-    <meta-data android:name="androidx.health.connect.client" android:value="true"/>
+    <meta-data android:name="health_permissions" android:resource="@xml/health_permissions"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
@@ -73,35 +79,15 @@
         <data android:scheme="com.apinacio.healthmate"/>
         <data android:scheme="exp+healthmate"/>
       </intent-filter>
-      
-      <!-- 🔥 HEALTH CONNECT INTENT FILTERS SIMPLIFICADOS -->
       <intent-filter>
-        <action android:name="androidx.health.ACTION_REQUEST_PERMISSIONS"/>
-        <category android:name="android.intent.category.DEFAULT"/>
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
       </intent-filter>
     </activity>
-    
-    <!-- 🔥 ACTIVITY OBRIGATÓRIA PARA HEALTH CONNECT - SEM ELA O APP NÃO APARECE! -->
-    <activity
-        android:name=".PermissionsRationaleActivity"
-        android:exported="true"
-        android:theme="@style/AppTheme">
+    <activity-alias android:name="ViewPermissionUsageActivity" android:exported="true" android:targetActivity=".MainActivity" android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
       <intent-filter>
-        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-      </intent-filter>
-    </activity>
-
-    <!-- 🔥 ACTIVITY-ALIAS PARA ANDROID 14+ -->
-    <activity-alias
-        android:name="ViewPermissionUsageActivity"
-        android:exported="true"
-        android:targetActivity=".PermissionsRationaleActivity"
-        android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
-      <intent-filter>
-        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
-        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE"/>
+        <category android:name="android.intent.category.HEALTH_PERMISSIONS"/>
       </intent-filter>
     </activity-alias>
-    
   </application>
 </manifest>

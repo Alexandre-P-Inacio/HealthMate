@@ -19,10 +19,12 @@ import * as Crypto from 'expo-crypto';
 import * as LocalAuthentication from 'expo-local-authentication';
 import DataUser from '../../navigation/DataUser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 const LoginScreen = ({ navigation }) => {
+  const { login } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -84,33 +86,25 @@ const LoginScreen = ({ navigation }) => {
 
       // Ensure user.id is an integer or null before setting it globally
       const userIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
-      DataUser.setUserData({ ...user, id: userIdToSet });
+      const userData = { ...user, id: userIdToSet };
+      
+      // Use auth context to login
+      const loginSuccess = await login(userData);
+      
+      if (!loginSuccess) {
+        Alert.alert('Error', 'Failed to save login session.');
+        return;
+      }
 
       if (user.biometric_enabled) {
         await AsyncStorage.setItem('biometricUserId', userIdToSet.toString());
       }
 
-      if (user.role === 'medic') {
-        const { data: doctorData, error: doctorError } = await supabase
-          .from('doctors')
-          .select('*')
-          .eq('id', userIdToSet)
-          .single();
-
-        if (doctorError && doctorError.code !== 'PGRST116') {
-          console.error('Error checking doctor status:', doctorError);
-          Alert.alert('Error', 'An error occurred while checking user role.');
-          return;
-        }
-
-        if (doctorData) {
-          navigation.navigate('DoctorDashboard');
-        } else {
-          navigation.navigate('DoctorRegistration');
-        }
-      } else {
-        navigation.navigate('HomeScreen', { userId: userIdToSet });
-      }
+      // Navigate to HomeScreen regardless of role
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'HomeScreen' }],
+      });
     } catch (error) {
       console.error('Authentication error:', error);
       Alert.alert('Error', 'An error occurred while logging in.');
@@ -164,29 +158,21 @@ const LoginScreen = ({ navigation }) => {
 
         // Ensure user.id is an integer or null before setting it globally
         const bioUserIdToSet = !isNaN(parseInt(user.id)) ? parseInt(user.id) : null;
-        DataUser.setUserData({ ...user, id: bioUserIdToSet });
-
-        if (user.role === 'medic') {
-          const { data: doctorData, error: doctorError } = await supabase
-            .from('doctors')
-            .select('*')
-            .eq('id', bioUserIdToSet)
-            .single();
-
-          if (doctorError && doctorError.code !== 'PGRST116') {
-            console.error('Error checking doctor status:', doctorError);
-            Alert.alert('Error', 'An error occurred while checking user role.');
-            return;
-          }
-
-          if (doctorData) {
-            navigation.navigate('DoctorDashboard');
-          } else {
-            navigation.navigate('DoctorRegistration');
-          }
-        } else {
-          navigation.navigate('HomeScreen', { userId: bioUserIdToSet });
+        const userData = { ...user, id: bioUserIdToSet };
+        
+        // Use auth context to login
+        const loginSuccess = await login(userData);
+        
+        if (!loginSuccess) {
+          Alert.alert('Error', 'Failed to save biometric login session.');
+          return;
         }
+
+        // Navigate to HomeScreen regardless of role
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'HomeScreen' }],
+        });
       }
     } catch (error) {
       console.error('Biometric error:', error);
@@ -204,7 +190,7 @@ const LoginScreen = ({ navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
-          onPress={() => navigation.navigate('Welcome')}
+          onPress={() => navigation.navigate('WelcomeScreen')}
         >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>

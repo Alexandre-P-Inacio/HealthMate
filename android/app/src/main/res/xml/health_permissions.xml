@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<health-permissions>
+    <!-- Basic Activity Data -->
+    <health-permission name="android.permission.health.READ_STEPS"/>
+    <health-permission name="android.permission.health.READ_DISTANCE"/>
+    <health-permission name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
+    <health-permission name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+    
+    <!-- Basic Vital Signs -->
+    <health-permission name="android.permission.health.READ_HEART_RATE"/>
+    <health-permission name="android.permission.health.READ_OXYGEN_SATURATION"/>
+    
+    <!-- Basic Body Measurements -->
+    <health-permission name="android.permission.health.READ_WEIGHT"/>
+    
+    <!-- Sleep Data -->
+    <health-permission name="android.permission.health.READ_SLEEP"/>
+</health-permissions> 

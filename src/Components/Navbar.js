@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../contexts/AuthContext';
 
 const Navbar = () => {
+  const { isLoggedIn } = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
@@ -12,12 +14,20 @@ const Navbar = () => {
 
   const isActive = (screenName) => currentRoute === screenName;
 
-  const renderIcon = (iconName, isSelected) => {
+  const renderIcon = (iconName, isSelected, isDisabled = false) => {
+    let color = '#9BA3B7'; // cor padrão
+    
+    if (isDisabled) {
+      color = '#D1D5DB'; // cor desabilitada (mais clara)
+    } else if (isSelected) {
+      color = '#6A8DFD'; // cor ativa
+    }
+    
     return (
       <Ionicons 
         name={isSelected ? iconName : `${iconName}-outline`}
         size={24} 
-        color={isSelected ? '#6A8DFD' : '#9BA3B7'} 
+        color={color} 
       />
     );
   };
@@ -51,23 +61,41 @@ const Navbar = () => {
 
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => navigation.navigate('MedicalDiary')}
+        onPress={() => navigation.navigate('MedicalDiaryScreen')}
       >
-        {renderIcon('book', isActive('MedicalDiary'))}
+        {renderIcon('book', isActive('MedicalDiaryScreen'))}
         <Text style={[
           styles.navText,
-          isActive('MedicalDiary') && styles.activeText
+          isActive('MedicalDiaryScreen') && styles.activeText
         ]}>Diary</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.navItem}
-        onPress={() => navigation.navigate('AccountScreen')}
+        style={[
+          styles.navItem,
+          !isLoggedIn && styles.navItemDisabled
+        ]}
+        onPress={() => {
+          if (isLoggedIn) {
+            navigation.navigate('AccountScreen');
+          } else {
+            Alert.alert(
+              'Login Necessário',
+              'Faça login para acessar seu perfil',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Fazer Login', onPress: () => navigation.navigate('WelcomeScreen') }
+              ]
+            );
+          }
+        }}
+        disabled={!isLoggedIn}
       >
-        {renderIcon('person', isActive('AccountScreen'))}
+        {renderIcon('person', isActive('AccountScreen'), !isLoggedIn)}
         <Text style={[
           styles.navText,
-          isActive('AccountScreen') && styles.activeText
+          isActive('AccountScreen') && styles.activeText,
+          !isLoggedIn && styles.navTextDisabled
         ]}>Profile</Text>
       </TouchableOpacity>
     </View>
@@ -113,6 +141,12 @@ const styles = StyleSheet.create({
   activeText: {
     color: '#6A8DFD',
     fontWeight: '600',
+  },
+  navItemDisabled: {
+    opacity: 0.5,
+  },
+  navTextDisabled: {
+    color: '#D1D5DB',
   },
 });
 
