@@ -6,6 +6,7 @@ import {
 } from '../utils/validation';
 import DoctorService from './DoctorService';
 import UserService from './UserService';
+import NotificationService from './NotificationService';
 
 export class AppointmentService {
   static async createAppointment(appointmentData) {
@@ -63,6 +64,15 @@ export class AppointmentService {
         .single();
 
       if (error) throw error;
+
+      // Schedule notifications for the appointment
+      try {
+        await NotificationService.scheduleAppointmentNotification(data);
+        console.log('✅ Notifications scheduled for appointment:', data.id);
+      } catch (notificationError) {
+        console.error('⚠️ Error scheduling appointment notifications:', notificationError);
+        // Don't fail appointment creation because of notifications
+      }
 
       return {
         success: true,
@@ -273,6 +283,15 @@ export class AppointmentService {
 
       if (error) throw error;
 
+      // Cancel appointment notifications
+      try {
+        await NotificationService.cancelAppointmentNotification(appointmentId);
+        console.log('✅ Notifications cancelled for appointment:', appointmentId);
+      } catch (notificationError) {
+        console.error('⚠️ Error cancelling appointment notifications:', notificationError);
+        // Don't fail appointment cancellation because of notifications
+      }
+
       return { success: true, data };
     } catch (error) {
       console.error('Error cancelling appointment:', error);
@@ -433,6 +452,15 @@ export class AppointmentService {
         .single();
 
       if (error) throw error;
+
+      // Schedule notifications for the custom appointment
+      try {
+        await NotificationService.scheduleAppointmentNotification(data);
+        console.log('✅ Notifications scheduled for custom appointment:', data.id);
+      } catch (notificationError) {
+        console.error('⚠️ Error scheduling custom appointment notifications:', notificationError);
+        // Don't fail appointment creation because of notifications
+      }
 
       return {
         success: true,

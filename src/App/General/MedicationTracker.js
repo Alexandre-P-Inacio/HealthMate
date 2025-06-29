@@ -6,15 +6,7 @@ import * as Notifications from 'expo-notifications';
 import { useAuth } from '../../contexts/AuthContext';
 import LocalStorageService from '../../services/LocalStorageService';
 import DataUser from '../../../navigation/DataUser';
-
-// Configurar notificações para exibir quando o app estiver em primeiro plano
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+import NotificationService from '../../services/NotificationService';
 
 const MedicationTracker = ({ navigation }) => {
   const { isLoggedIn, user } = useAuth();
@@ -31,8 +23,7 @@ const MedicationTracker = ({ navigation }) => {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   useEffect(() => {
-    // Solicitar permissões de notificação
-    registerForPushNotificationsAsync();
+    initializeNotifications();
     
     // Carregar medicamentos pendentes
     fetchPendingMedications();
@@ -58,20 +49,23 @@ const MedicationTracker = ({ navigation }) => {
     };
   }, []);
 
-  // Obter permissões de notificação
-  const registerForPushNotificationsAsync = async () => {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    
-    if (finalStatus !== 'granted') {
-      Alert.alert('Permission required', 'Allow notifications to receive reminders.');
-      return;
-    }
+  // Inicializar sistema de notificações
+  const initializeNotifications = async () => {
+    try {
+      // Configurar categorias de notificação
+      await NotificationService.setupNotificationCategories();
+      
+      // Solicitar permissões
+      const hasPermission = await NotificationService.registerForPushNotifications();
+      
+      if (hasPermission && isLoggedIn) {
+        // Agendar todas as notificações de medicamentos
+        await NotificationService.scheduleAllMedicationNotifications();
+        console.log('🔔 Notification system initialized');
+      }
+          } catch (error) {
+        console.error('❌ Error initializing notifications:', error);
+      }
   };
 
   // Carregar medicamentos pendentes para hoje
@@ -92,7 +86,7 @@ const MedicationTracker = ({ navigation }) => {
           
           return {
             ...med,
-            title: med.title || 'Medicamento',
+            title: med.title || 'Medication',
             scheduledTime: scheduledTime,
             scheduled_date: scheduledDate,
             scheduled_time: scheduledTime,
@@ -106,7 +100,7 @@ const MedicationTracker = ({ navigation }) => {
           const testMeds = [
             {
               id: 'test_1',
-              title: 'Medicamento',
+              title: 'Medication',
               scheduledTime: '10:08',
               scheduled_date: todayStr,
               scheduled_time: '10:08:00',
@@ -116,7 +110,7 @@ const MedicationTracker = ({ navigation }) => {
             },
             {
               id: 'test_2', 
-              title: 'Medicamento',
+              title: 'Medication',
               scheduledTime: '10:26',
               scheduled_date: todayStr,
               scheduled_time: '10:26:00',
@@ -156,13 +150,13 @@ const MedicationTracker = ({ navigation }) => {
           `)
           .eq('user_id', userId)
           .eq('scheduled_date', todayStr)
-          .in('status', ['pending', 'scheduled']); // Inclui medicamentos programados e pendentes
+          .in('status', ['pending', 'scheduled']); // Include scheduled and pending medications
           
         if (error) throw error;
         
         const formattedMeds = (medications || []).map(med => ({
           ...med,
-          title: med.pills_warning?.titulo || 'Medicamento',
+          title: med.pills_warning?.titulo || 'Medication',
           scheduledTime: med.scheduled_time,
           isPast: new Date(`${med.scheduled_date}T${med.scheduled_time}`) < new Date()
         }));
@@ -170,31 +164,22 @@ const MedicationTracker = ({ navigation }) => {
         setPendingMedications(formattedMeds);
       }
     } catch (error) {
-      console.error('Erro ao buscar medicamentos:', error);
-      Alert.alert('Erro', 'Não foi possível carregar seus medicamentos.');
+      console.error('Error fetching medications:', error);
+      Alert.alert('Error', 'Unable to load your medications.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Programar notificações para medicamentos
-  const scheduleMedicationNotifications = async (medications) => {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    
-    for (const med of medications) {
-      const triggerTime = new Date(med.scheduledDateTime).getTime();
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Medication Reminder',
-          body: `It's time to take your medication: ${med.title}`,
-          data: { medicationId: med.medicationId },
-        },
-        trigger: {
-          type: 'date',
-          timestamp: triggerTime,
-        },
-      });
+  // Reagendar notificações após mudanças
+  const refreshNotifications = async () => {
+    if (isLoggedIn) {
+      try {
+        await NotificationService.scheduleAllMedicationNotifications();
+        console.log('🔄 Medication notifications updated');
+              } catch (error) {
+          console.error('❌ Error updating notifications:', error);
+        }
     }
   };
 
@@ -234,6 +219,11 @@ const MedicationTracker = ({ navigation }) => {
       // Remove o medicamento da lista imediatamente para feedback rápido
       setPendingMedications(prev => prev.filter(med => med.id !== medication.id));
       
+      // Cancelar notificações deste medicamento específico
+      if (isLoggedIn) {
+        await NotificationService.cancelMedicationNotification(medication.id);
+      }
+      
       if (!isLoggedIn) {
         // Atualizar dados locais
         await LocalStorageService.updateMedicationStatus(
@@ -243,7 +233,7 @@ const MedicationTracker = ({ navigation }) => {
         
         // Feedback imediato com toast
         showToast(
-          taken ? `✅ ${medication.title} marcado como tomado!` : `⚠️ ${medication.title} marcado como perdido`,
+          taken ? `✅ ${medication.title} marked as taken!` : `⚠️ ${medication.title} marked as missed`,
           taken ? 'success' : 'warning'
         );
       } else {
@@ -260,14 +250,14 @@ const MedicationTracker = ({ navigation }) => {
           
         if (error) {
           console.error('Error updating medication:', error);
-          // Readdiona o medicamento se houver erro
+          // Re-add medication if there's an error
           setPendingMedications(prev => [...prev, medication].sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
-          Alert.alert('❌ Erro', 'Não foi possível registrar sua confirmação.');
+          Alert.alert('❌ Error', 'Unable to record your confirmation.');
           return;
         }
         
         showToast(
-          taken ? `✅ ${medication.title} marcado como tomado!` : `⚠️ ${medication.title} marcado como perdido`,
+          taken ? `✅ ${medication.title} marked as taken!` : `⚠️ ${medication.title} marked as missed`,
           taken ? 'success' : 'warning'
         );
       }
@@ -286,12 +276,12 @@ const MedicationTracker = ({ navigation }) => {
   const addMedication = async () => {
     try {
       if (!newMedication.title.trim()) {
-        Alert.alert('⚠️ Atenção', 'Por favor, adicione um nome para o medicamento.');
+        Alert.alert('⚠️ Warning', 'Please add a name for the medication.');
         return;
       }
       
       if (!newMedication.time.trim()) {
-        Alert.alert('⚠️ Atenção', 'Por favor, adicione um horário para o medicamento.');
+        Alert.alert('⚠️ Warning', 'Please add a time for the medication.');
         return;
       }
 
@@ -310,12 +300,12 @@ const MedicationTracker = ({ navigation }) => {
         // Salvar localmente
         await LocalStorageService.saveMedication(medication, today);
         Alert.alert(
-          '✅ Medicamento Adicionado', 
-          `${newMedication.title} foi adicionado para ${newMedication.time}!\n\n💡 Dados salvos localmente. Faça login para sincronizar.`
+          '✅ Medication Added', 
+          `${newMedication.title} was added for ${newMedication.time}!\n\n💡 Data saved locally. Login to sync.`
         );
       } else {
-        // Salvar online (implementar conforme necessário)
-        Alert.alert('ℹ️ Info', 'Funcionalidade de adicionar medicamentos online será implementada em breve.');
+        // Save online (implement as needed)
+        Alert.alert('ℹ️ Info', 'Online medication adding functionality will be implemented soon.');
       }
       
       // Resetar formulário e fechar modal
@@ -324,9 +314,12 @@ const MedicationTracker = ({ navigation }) => {
       
       // Recarregar medicamentos
       fetchPendingMedications();
+      
+      // Reagendar notificações
+      await refreshNotifications();
     } catch (error) {
       console.error('Error adding medication:', error);
-      Alert.alert('❌ Erro', 'Não foi possível adicionar o medicamento.');
+      Alert.alert('❌ Error', 'Unable to add the medication.');
     }
   };
 
@@ -336,7 +329,7 @@ const MedicationTracker = ({ navigation }) => {
     setConfirmModal(true);
   };
 
-  // Calcular tempo de atraso
+  // Calculate delay time
   const calculateDelayTime = (scheduledTime, scheduledDate) => {
     const now = new Date();
     const scheduled = new Date(`${scheduledDate}T${scheduledTime}`);
@@ -346,7 +339,7 @@ const MedicationTracker = ({ navigation }) => {
     
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     if (diffMinutes < 60) {
-      return `${diffMinutes}min atrasado`;
+      return `${diffMinutes}min late`;
     }
     
     const diffHours = Math.floor(diffMinutes / 60);
@@ -354,15 +347,15 @@ const MedicationTracker = ({ navigation }) => {
     
     if (diffHours < 24) {
       return remainingMinutes > 0 
-        ? `${diffHours}h ${remainingMinutes}min atrasado`
-        : `${diffHours}h atrasado`;
+        ? `${diffHours}h ${remainingMinutes}min late`
+        : `${diffHours}h late`;
     }
     
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} dia(s) atrasado`;
+    return `${diffDays} day(s) late`;
   };
 
-  // Mostrar toast de feedback
+  // Show feedback toast
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
     setTimeout(() => {
@@ -374,7 +367,7 @@ const MedicationTracker = ({ navigation }) => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          {isLoggedIn ? 'Seus Medicamentos' : '💊 Medicamentos Locais'}
+          {isLoggedIn ? 'Your Medications' : '💊 Local Medications'}
         </Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity 
@@ -396,7 +389,7 @@ const MedicationTracker = ({ navigation }) => {
         <View style={styles.localBanner}>
           <Ionicons name="phone-portrait" size={16} color="#FF9800" />
           <Text style={styles.localBannerText}>
-            📱 Dados salvos localmente no dispositivo. Faça login para sincronizar.
+            📱 Data saved locally on device. Login to sync.
           </Text>
         </View>
       )}
@@ -404,16 +397,16 @@ const MedicationTracker = ({ navigation }) => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6A8DFD" />
-          <Text style={styles.loadingText}>Carregando medicamentos...</Text>
+          <Text style={styles.loadingText}>Loading medications...</Text>
         </View>
       ) : (
         <>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Medicamentos de Hoje</Text>
+            <Text style={styles.sectionTitle}>Today's Medications</Text>
             <Text style={styles.sectionSubtitle}>
               {pendingMedications.some(med => med.isPast) 
-                ? '⚠️ Medicamentos atrasados têm botões diretos para confirmar'
-                : 'Toque em um medicamento para confirmar quando chegar a hora'
+                ? '⚠️ Late medications have direct buttons to confirm'
+                : 'Tap a medication to confirm when it\'s time'
               }
             </Text>
           </View>
@@ -436,22 +429,22 @@ const MedicationTracker = ({ navigation }) => {
                     <View style={styles.medicationInfo}>
                       <Text style={styles.medicationTitle}>{item.title}</Text>
                       <Text style={styles.medicationTime}>
-                        {item.scheduledTime} - {item.dosage} comprimido(s)
+                        {item.scheduledTime} - {item.dosage} pill(s)
                       </Text>
                       {item.isPast && (
                         <Text style={styles.lateWarning}>
-                          ⏰ {calculateDelayTime(item.scheduled_time, item.scheduled_date) || 'Atrasado'} - Confirme se tomou
+                          ⏰ {calculateDelayTime(item.scheduled_time, item.scheduled_date) || 'Late'} - Confirm if taken
                         </Text>
                       )}
                     </View>
                     <View style={styles.medicationStatus}>
                       {item.isPast ? (
                         <View style={styles.statusBadge}>
-                          <Text style={styles.statusText}>Atrasado</Text>
+                          <Text style={styles.statusText}>Late</Text>
                         </View>
                       ) : (
                         <View style={[styles.statusBadge, styles.upcomingBadge]}>
-                          <Text style={[styles.statusText, styles.upcomingText]}>Programado</Text>
+                          <Text style={[styles.statusText, styles.upcomingText]}>Scheduled</Text>
                         </View>
                       )}
                       <Ionicons 
@@ -462,7 +455,7 @@ const MedicationTracker = ({ navigation }) => {
                     </View>
                   </TouchableOpacity>
                   
-                  {/* Botões diretos para medicamentos atrasados */}
+                  {/* Direct buttons for late medications */}
                   {item.isPast && (
                     <View style={styles.actionButtons}>
                       <TouchableOpacity 
@@ -470,7 +463,7 @@ const MedicationTracker = ({ navigation }) => {
                         onPress={() => confirmMedicationTaken(item, false)}
                       >
                         <Ionicons name="close" size={16} color="#fff" />
-                        <Text style={styles.actionButtonText}>Pulei</Text>
+                        <Text style={styles.actionButtonText}>Skipped</Text>
                       </TouchableOpacity>
                       
                       <TouchableOpacity 
@@ -478,7 +471,7 @@ const MedicationTracker = ({ navigation }) => {
                         onPress={() => confirmMedicationTaken(item, true)}
                       >
                         <Ionicons name="checkmark" size={16} color="#fff" />
-                        <Text style={styles.actionButtonText}>Tomei</Text>
+                        <Text style={styles.actionButtonText}>Taken</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -489,144 +482,158 @@ const MedicationTracker = ({ navigation }) => {
           ) : (
             <View style={styles.emptyContainer}>
               <Ionicons name="medical" size={64} color="#6A8DFD" />
-              <Text style={styles.emptyText}>Nenhum medicamento para hoje!</Text>
+              <Text style={styles.emptyText}>No medications for today!</Text>
               <Text style={styles.emptySubtext}>
                 {isLoggedIn ? 
-                  'Seus medicamentos programados para hoje aparecerão aqui.\nVocê pode adicionar novos medicamentos a qualquer momento.' :
-                  'Adicione seus medicamentos usando o botão + acima.\nDados ficam salvos localmente no dispositivo.'
+                  'Your scheduled medications for today will appear here.\nYou can add new medications anytime.' :
+                  'Add your medications using the + button above.\nData stays saved locally on device.'
                 }
               </Text>
               <TouchableOpacity 
                 style={styles.addMedicationButton}
                 onPress={() => setAddModal(true)}
               >
-                <Ionicons name="add-circle" size={20} color="#FFF" />
-                <Text style={styles.addMedicationButtonText}>Adicionar Medicamento</Text>
+                <Ionicons name="add-circle" size={20} color="#fff" />
+                <Text style={styles.addMedicationButtonText}>Add Medication</Text>
               </TouchableOpacity>
             </View>
           )}
         </>
       )}
       
-      {/* Modal de confirmação */}
+      {/* Confirmation Modal */}
+      {selectedMedication && (
+        <Modal
+          visible={confirmModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setConfirmModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Confirm Medication</Text>
+                <TouchableOpacity onPress={() => setConfirmModal(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.modalContent}>
+                <Text style={styles.medicationName}>{selectedMedication.title}</Text>
+                <Text style={styles.medicationDetails}>
+                  Scheduled for: {selectedMedication.scheduledTime}
+                </Text>
+                <Text style={styles.medicationDetails}>
+                  Dosage: {selectedMedication.dosage} pill(s)
+                </Text>
+                
+                {selectedMedication.isPast && (
+                  <Text style={styles.lateNotice}>
+                    ⏰ This medication is late. Please confirm if you took it.
+                  </Text>
+                )}
+                
+                <Text style={styles.confirmQuestion}>
+                  Did you take this medication?
+                </Text>
+              </View>
+              
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, styles.notTakenBtn]}
+                  onPress={() => confirmMedicationTaken(selectedMedication, false)}
+                >
+                  <Text style={styles.actionBtnText}>No, I skipped it</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.actionBtn, styles.takenBtn]}
+                  onPress={() => confirmMedicationTaken(selectedMedication, true)}
+                >
+                  <Text style={styles.actionBtnText}>Yes, I took it</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Add Medication Modal */}
       <Modal
-        animationType="slide"
+        visible={addModal}
         transparent={true}
-        visible={confirmModal}
-        onRequestClose={() => setConfirmModal(false)}
+        animationType="slide"
+        onRequestClose={() => setAddModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Confirmação de Medicamento</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Medication</Text>
+              <TouchableOpacity onPress={() => setAddModal(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
             
-            {selectedMedication && (
-              <>
-                <Text style={styles.medicationModalTitle}>{selectedMedication.title}</Text>
-                <Text style={styles.medicationModalTime}>
-                  Horário: {selectedMedication.scheduledTime}
-                </Text>
-                <Text style={styles.medicationModalDosage}>
-                  Dose: {selectedMedication.dosage} comprimido(s)
-                </Text>
-                
-                <Text style={styles.modalQuestion}>
-                  Você tomou este medicamento?
-                </Text>
-                
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.noButton]} 
-                    onPress={() => confirmMedicationTaken(selectedMedication, false)}
-                  >
-                    <Text style={styles.buttonText}>Não</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.yesButton]} 
-                    onPress={() => confirmMedicationTaken(selectedMedication, true)}
-                  >
-                    <Text style={styles.buttonText}>Sim</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
+            <View style={styles.modalContent}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Medication Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={newMedication.title}
+                  onChangeText={(text) => setNewMedication({...newMedication, title: text})}
+                  placeholder="Enter medication name"
+                  placeholderTextColor="#999"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Time (HH:MM)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={newMedication.time}
+                  onChangeText={(text) => setNewMedication({...newMedication, time: text})}
+                  placeholder="e.g., 08:00"
+                  placeholderTextColor="#999"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Dosage</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={newMedication.dosage}
+                  onChangeText={(text) => setNewMedication({...newMedication, dosage: text})}
+                  placeholder="e.g., 1 pill"
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.actionBtn, styles.cancelBtn]}
+                onPress={() => setAddModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionBtn, styles.addBtn]}
+                onPress={addMedication}
+              >
+                <Text style={styles.actionBtnText}>Add Medication</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
 
-      {/* Modal de adicionar medicamento */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={addModal}
-        onRequestClose={() => setAddModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>💊 Adicionar Medicamento</Text>
-            
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Nome do Medicamento</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Ex: Aspirina, Vitamina C..."
-                value={newMedication.title}
-                onChangeText={(text) => setNewMedication(prev => ({...prev, title: text}))}
-              />
-            </View>
-            
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Horário (HH:MM)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Ex: 08:00, 14:30..."
-                value={newMedication.time}
-                onChangeText={(text) => setNewMedication(prev => ({...prev, time: text}))}
-              />
-            </View>
-
-            {!isLoggedIn && (
-              <View style={styles.localInfo}>
-                <Ionicons name="information-circle" size={16} color="#2196F3" />
-                <Text style={styles.localInfoText}>
-                  Medicamento será salvo localmente no dispositivo
-                </Text>
-              </View>
-            )}
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
-                onPress={() => {
-                  setNewMedication({ title: '', time: '', dosage: '1' });
-                  setAddModal(false);
-                }}
-              >
-                <Text style={styles.buttonText}>Cancelar</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]} 
-                onPress={addMedication}
-              >
-                <Text style={styles.buttonText}>Adicionar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-                  </View>
-        </Modal>
-
-        {/* Toast de feedback */}
-        {toast.visible && (
-          <View style={[
-            styles.toast,
-            toast.type === 'success' && styles.toastSuccess,
-            toast.type === 'warning' && styles.toastWarning,
-            toast.type === 'error' && styles.toastError
-          ]}>
-            <Text style={styles.toastText}>{toast.message}</Text>
-          </View>
-        )}
+      {/* Toast Notification */}
+      {toast.visible && (
+        <View style={[styles.toast, toast.type === 'success' ? styles.toastSuccess : styles.toastWarning]}>
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -850,7 +857,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9BA3B7',
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',

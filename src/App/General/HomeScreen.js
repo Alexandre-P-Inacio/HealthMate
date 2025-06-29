@@ -14,11 +14,13 @@ import SamsungHealthService from '../../services/SamsungHealthService';
 import { useAuth } from '../../contexts/AuthContext';
 import LocalStorageService from '../../services/LocalStorageService';
 import { FontAwesome5 } from '@expo/vector-icons';
+import useNotifications from '../../hooks/useNotifications';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 const HomeScreen = () => {
   const { isLoggedIn, user, syncAuthState } = useAuth();
+  const { isInitialized: notificationsInitialized, notificationStats } = useNotifications();
   const [userData, setUserData] = useState({
     fullname: '',
     profilePicture: ''

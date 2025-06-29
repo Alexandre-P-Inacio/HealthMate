@@ -1,5 +1,6 @@
 import supabase from '../../supabase';
 import DataUser from '../../navigation/DataUser';
+import NotificationService from './NotificationService';
 
 class MedicationService {
   // Adicionar novo medicamento à agenda
@@ -44,7 +45,15 @@ class MedicationService {
       // Após criar o medicamento, calcular e registrar todos os horários
       if (pillsData && pillsData.id) {
         await this.calculateAndRegisterAllSchedules(pillsData, userData.id);
-        console.log('Todos os horários do medicamento foram registrados com sucesso');
+        console.log('All medication schedules have been successfully registered');
+        
+        // Reschedule all medication notifications
+        try {
+          await NotificationService.scheduleAllMedicationNotifications();
+          console.log('✅ Medication notifications rescheduled after adding new medication');
+        } catch (notificationError) {
+          console.error('⚠️ Error rescheduling notifications:', notificationError);
+        }
       }
       
       return data[0];
@@ -288,7 +297,15 @@ class MedicationService {
         
         // Depois, calcular e salvar os novos horários
         await this.calculateAndRegisterAllSchedules(pillsData, userData.id);
-        console.log('Horários do medicamento atualizados com sucesso');
+        console.log('Medication schedules successfully updated');
+        
+        // Reschedule all medication notifications
+        try {
+          await NotificationService.scheduleAllMedicationNotifications();
+          console.log('✅ Medication notifications rescheduled after updating medication');
+        } catch (notificationError) {
+          console.error('⚠️ Error rescheduling notifications:', notificationError);
+        }
       }
       
       return data[0];

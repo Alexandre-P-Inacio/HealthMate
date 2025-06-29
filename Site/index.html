@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HealthMate - Gestão Inteligente de Saúde</title>
-    <meta name="description" content="HealthMate - Aplicação móvel para gestão de saúde pessoal. Monitorize sinais vitais, gira medicação e conecte-se com profissionais de saúde.">
+    <title>HealthMate - Intelligent Health Management</title>
+    <meta name="description" content="HealthMate - Mobile application for personal health management. Monitor vital signs, manage medication and connect with healthcare professionals.">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -741,6 +741,24 @@
             border-radius: 16px;
             overflow: hidden;
             border: 2px solid var(--border-subtle);
+        }
+
+        .app-screenshot {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            border-radius: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .screenshot-wrapper:hover .app-screenshot {
+            transform: scale(1.02);
+        }
+
+        .screenshot-wrapper:hover {
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
         }
 
         .screenshot-placeholder {
@@ -1578,7 +1596,7 @@
     <!-- Loading Screen -->
     <div class="loading" id="loading">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Carregando HealthMate...</div>
+        <div class="loading-text">Loading HealthMate...</div>
     </div>
 
     <!-- Header -->
@@ -1591,11 +1609,11 @@
                 HealthMate
             </a>
             <ul class="nav-links">
-                <li><a href="#inicio" class="active">Início</a></li>
-                <li><a href="#funcionalidades">Funcionalidades</a></li>
-                <li><a href="#como-funciona">Como Funciona</a></li>
-                <li><a href="#capturas">Capturas</a></li>
-                <li><a href="sobre-nos.html">Sobre Nós</a></li>
+                <li><a href="#inicio" class="active">Home</a></li>
+                <li><a href="#funcionalidades">Features</a></li>
+                <li><a href="#como-funciona">How It Works</a></li>
+                <li><a href="#capturas">Screenshots</a></li>
+                <li><a href="sobre-nos.html">About Us</a></li>
                 <li><a href="#download">Download</a></li>
             </ul>
             <div class="mobile-menu" id="mobile-menu">
@@ -1609,11 +1627,11 @@
     <!-- Mobile Navigation Overlay -->
     <div class="mobile-nav-overlay" id="mobile-nav-overlay">
         <ul class="mobile-nav-links">
-            <li><a href="#inicio" onclick="closeMobileMenu()">Início</a></li>
-            <li><a href="#funcionalidades" onclick="closeMobileMenu()">Funcionalidades</a></li>
-            <li><a href="#como-funciona" onclick="closeMobileMenu()">Como Funciona</a></li>
-            <li><a href="#capturas" onclick="closeMobileMenu()">Capturas</a></li>
-            <li><a href="sobre-nos.html" onclick="closeMobileMenu()">Sobre Nós</a></li>
+            <li><a href="#inicio" onclick="closeMobileMenu()">Home</a></li>
+            <li><a href="#funcionalidades" onclick="closeMobileMenu()">Features</a></li>
+            <li><a href="#como-funciona" onclick="closeMobileMenu()">How It Works</a></li>
+            <li><a href="#capturas" onclick="closeMobileMenu()">Screenshots</a></li>
+            <li><a href="sobre-nos.html" onclick="closeMobileMenu()">About Us</a></li>
             <li><a href="#download" onclick="closeMobileMenu()">Download</a></li>
         </ul>
     </div>
@@ -1624,34 +1642,34 @@
             <div class="hero-content">
                 <div class="hero-badge">
                     <i class="fas fa-mobile-alt"></i>
-                    Aplicação Mobile para Android
+                    Mobile Application for Android
                 </div>
-                <h1>Gestão Inteligente da Sua Saúde</h1>
-                <p>Monitorize os seus sinais vitais, gira a sua medicação e mantenha registos de saúde organizados numa aplicação simples e intuitiva.</p>
+                <h1>Intelligent Management of Your Health</h1>
+                <p>Monitor your vital signs, manage your medication and keep health records organized in a simple and intuitive application.</p>
                 
                 <div class="hero-stats">
                     <div class="stat">
                         <span class="stat-number">Android 6.0+</span>
-                        <span class="stat-label">Compatibilidade</span>
+                        <span class="stat-label">Compatibility</span>
                     </div>
                     <div class="stat">
                         <span class="stat-number">96 MB</span>
-                        <span class="stat-label">Tamanho do APK</span>
+                        <span class="stat-label">APK Size</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-number">Grátis</span>
-                        <span class="stat-label">Preço</span>
+                        <span class="stat-number">Free</span>
+                        <span class="stat-label">Price</span>
                     </div>
                 </div>
                 
                 <div class="hero-buttons" style="justify-content: center;">
                     <a href="#" class="btn btn-primary" onclick="downloadApp()">
                         <i class="fab fa-android"></i>
-                        Baixar APK
+                        Download APK
                     </a>
                     <a href="install.html" class="btn btn-secondary">
                         <i class="fas fa-info-circle"></i>
-                        Como Instalar
+                        How to Install
                     </a>
                 </div>
             </div>
@@ -1675,7 +1693,7 @@
                                             <div class="phone-stat-icon">
                                                 <i class="fas fa-heartbeat"></i>
                                             </div>
-                                            <span class="phone-stat-label">Batimentos Cardíacos</span>
+                                            <span class="phone-stat-label">Heart Rate</span>
                                         </div>
                                         <div class="phone-stat-value">72 BPM</div>
                                     </div>
@@ -1684,18 +1702,18 @@
                                             <div class="phone-stat-icon">
                                                 <i class="fas fa-pills"></i>
                                             </div>
-                                            <span class="phone-stat-label">Medicação</span>
+                                            <span class="phone-stat-label">Medication</span>
                                         </div>
-                                        <div class="phone-stat-value">2 Pendentes</div>
+                                        <div class="phone-stat-value">2 Pending</div>
                                     </div>
                                     <div class="phone-stat">
                                         <div class="phone-stat-header">
                                             <div class="phone-stat-icon">
                                                 <i class="fas fa-calendar"></i>
                                             </div>
-                                            <span class="phone-stat-label">Próxima Consulta</span>
+                                            <span class="phone-stat-label">Next Appointment</span>
                                         </div>
-                                        <div class="phone-stat-value">2 Dias</div>
+                                        <div class="phone-stat-value">2 Days</div>
                                     </div>
                                 </div>
                             </div>
@@ -1712,10 +1730,10 @@
             <div class="section-header animate-on-scroll">
                 <div class="section-badge">
                     <i class="fas fa-star"></i>
-                    Funcionalidades
+                    Features
                 </div>
-                <h2 class="section-title">O que o HealthMate oferece</h2>
-                <p class="section-subtitle">Funcionalidades desenvolvidas para simplificar a gestão da sua saúde no dia a dia.</p>
+                <h2 class="section-title">What HealthMate offers</h2>
+                <p class="section-subtitle">Features developed to simplify your daily health management.</p>
             </div>
 
             <div class="features-grid">
@@ -1723,48 +1741,48 @@
                     <div class="feature-icon">
                         <i class="fas fa-heartbeat"></i>
                     </div>
-                    <h3 class="feature-title">Monitorização de Sinais Vitais</h3>
-                    <p class="feature-description">Registe e acompanhe os seus sinais vitais como pressão arterial, frequência cardíaca e peso corporal.</p>
+                    <h3 class="feature-title">Vital Signs Monitoring</h3>
+                    <p class="feature-description">Record and track your vital signs such as blood pressure, heart rate and body weight.</p>
                 </div>
 
                 <div class="feature-card animate-on-scroll">
                     <div class="feature-icon">
                         <i class="fas fa-pills"></i>
                     </div>
-                    <h3 class="feature-title">Gestão de Medicação</h3>
-                    <p class="feature-description">Organize a sua medicação com lembretes personalizados e controle de tomas diárias.</p>
+                    <h3 class="feature-title">Medication Management</h3>
+                    <p class="feature-description">Organize your medication with personalized reminders and daily intake control.</p>
                 </div>
 
                 <div class="feature-card animate-on-scroll">
                     <div class="feature-icon">
                         <i class="fas fa-calendar-check"></i>
                     </div>
-                    <h3 class="feature-title">Agendamento de Consultas</h3>
-                    <p class="feature-description">Gerencie as suas consultas médicas com lembretes e histórico de appointments.</p>
+                    <h3 class="feature-title">Appointment Scheduling</h3>
+                    <p class="feature-description">Manage your medical appointments with reminders and appointment history.</p>
                 </div>
 
                 <div class="feature-card animate-on-scroll">
                     <div class="feature-icon">
                         <i class="fas fa-chart-line"></i>
                     </div>
-                    <h3 class="feature-title">Relatórios de Saúde</h3>
-                    <p class="feature-description">Visualize gráficos e relatórios sobre a evolução dos seus dados de saúde ao longo do tempo.</p>
+                    <h3 class="feature-title">Health Reports</h3>
+                    <p class="feature-description">View charts and reports on the evolution of your health data over time.</p>
                 </div>
 
                 <div class="feature-card animate-on-scroll">
                     <div class="feature-icon">
                         <i class="fas fa-user-md"></i>
                     </div>
-                    <h3 class="feature-title">Perfis Médicos</h3>
-                    <p class="feature-description">Mantenha informações dos seus médicos e especialistas organizadas num só lugar.</p>
+                    <h3 class="feature-title">Medical Profiles</h3>
+                    <p class="feature-description">Keep information about your doctors and specialists organized in one place.</p>
                 </div>
 
                 <div class="feature-card animate-on-scroll">
                     <div class="feature-icon">
                         <i class="fas fa-shield-alt"></i>
                     </div>
-                    <h3 class="feature-title">Dados Seguros</h3>
-                    <p class="feature-description">Os seus dados de saúde são armazenados de forma segura com criptografia e backup automático.</p>
+                    <h3 class="feature-title">Secure Data</h3>
+                    <p class="feature-description">Your health data is stored securely with encryption and automatic backup.</p>
                 </div>
             </div>
         </div>
@@ -1776,29 +1794,29 @@
             <div class="section-header animate-on-scroll">
                 <div class="section-badge">
                     <i class="fas fa-cogs"></i>
-                    Processo
+                    Process
                 </div>
-                <h2 class="section-title">Como Começar</h2>
-                <p class="section-subtitle">Siga estes três passos simples para começar a usar o HealthMate.</p>
+                <h2 class="section-title">How to Get Started</h2>
+                <p class="section-subtitle">Follow these three simple steps to start using HealthMate.</p>
             </div>
 
             <div class="steps-container">
                 <div class="step-card animate-on-scroll">
                     <div class="step-number">1</div>
-                    <h3 class="step-title">Baixar e Instalar</h3>
-                    <p class="step-description">Faça o download do APK do HealthMate e instale no seu dispositivo Android.</p>
+                    <h3 class="step-title">Download and Install</h3>
+                    <p class="step-description">Download the HealthMate APK and install it on your Android device.</p>
                 </div>
 
                 <div class="step-card animate-on-scroll">
                     <div class="step-number">2</div>
-                    <h3 class="step-title">Configurar Perfil</h3>
-                    <p class="step-description">Crie a sua conta e configure o seu perfil com as informações básicas de saúde.</p>
+                    <h3 class="step-title">Set Up Profile</h3>
+                    <p class="step-description">Create your account and configure your profile with basic health information.</p>
                 </div>
 
                 <div class="step-card animate-on-scroll">
                     <div class="step-number">3</div>
-                    <h3 class="step-title">Começar a Usar</h3>
-                    <p class="step-description">Comece a registar os seus dados de saúde e utilize todas as funcionalidades disponíveis.</p>
+                    <h3 class="step-title">Start Using</h3>
+                    <p class="step-description">Start recording your health data and use all the available features.</p>
                 </div>
             </div>
         </div>
@@ -1812,53 +1830,37 @@
                     <i class="fas fa-images"></i>
                     Interface
                 </div>
-                <h2 class="section-title">Interface da Aplicação</h2>
-                <p class="section-subtitle">Veja como é a interface limpa e intuitiva do HealthMate.</p>
+                <h2 class="section-title">Application Interface</h2>
+                <p class="section-subtitle">See how clean and intuitive the HealthMate interface is.</p>
             </div>
 
             <div class="screenshots-grid">
                 <div class="screenshot-card animate-on-scroll">
                     <div class="screenshot-wrapper">
-                        <div class="screenshot-placeholder">
-                            <i class="fas fa-tachometer-alt"></i>
-                            <div class="placeholder-text">Dashboard Principal</div>
-                            <div class="placeholder-subtitle">[Inserir screenshot do dashboard]</div>
-                        </div>
+                        <img src="assets/Captura de ecrã 2025-06-28 001048.png" alt="HealthMate Main Dashboard" class="app-screenshot">
                     </div>
-                    <h4 class="screenshot-title">Visão Geral da Saúde</h4>
+                    <h4 class="screenshot-title">Health Overview</h4>
                 </div>
 
                 <div class="screenshot-card animate-on-scroll">
                     <div class="screenshot-wrapper">
-                        <div class="screenshot-placeholder">
-                            <i class="fas fa-pills"></i>
-                            <div class="placeholder-text">Gestão de Medicação</div>
-                            <div class="placeholder-subtitle">[Inserir screenshot da medicação]</div>
-                        </div>
+                        <img src="assets/Captura de ecrã 2025-06-28 001140.png" alt="HealthMate Medication Management" class="app-screenshot">
                     </div>
-                    <h4 class="screenshot-title">Controle de Medicamentos</h4>
+                    <h4 class="screenshot-title">Medication Control</h4>
                 </div>
 
                 <div class="screenshot-card animate-on-scroll">
                     <div class="screenshot-wrapper">
-                        <div class="screenshot-placeholder">
-                            <i class="fas fa-chart-area"></i>
-                            <div class="placeholder-text">Gráficos e Relatórios</div>
-                            <div class="placeholder-subtitle">[Inserir screenshot dos gráficos]</div>
-                        </div>
+                        <img src="assets/Captura de ecrã 2025-06-28 001221.png" alt="HealthMate Charts and Reports" class="app-screenshot">
                     </div>
-                    <h4 class="screenshot-title">Análise de Dados</h4>
+                    <h4 class="screenshot-title">Data Analysis</h4>
                 </div>
 
                 <div class="screenshot-card animate-on-scroll">
                     <div class="screenshot-wrapper">
-                        <div class="screenshot-placeholder">
-                            <i class="fas fa-calendar-alt"></i>
-                            <div class="placeholder-text">Agenda Médica</div>
-                            <div class="placeholder-subtitle">[Inserir screenshot da agenda]</div>
-                        </div>
+                        <img src="assets/Captura de ecrã 2025-06-28 001255.png" alt="HealthMate Medical Schedule" class="app-screenshot">
                     </div>
-                    <h4 class="screenshot-title">Consultas Agendadas</h4>
+                    <h4 class="screenshot-title">Scheduled Appointments</h4>
                 </div>
             </div>
         </div>
@@ -1870,28 +1872,28 @@
     <section id="download" class="section">
         <div class="container">
             <div class="cta-section animate-on-scroll">
-                <h2 class="cta-title">Baixe o HealthMate</h2>
-                <p class="cta-description">Comece a gerir a sua saúde de forma mais organizada e eficiente. O download é gratuito.</p>
+                <h2 class="cta-title">Download HealthMate</h2>
+                <p class="cta-description">Start managing your health in a more organized and efficient way. The download is free.</p>
                 
                 <div class="hero-buttons" style="justify-content: center;">
                     <a href="#" class="btn btn-primary" onclick="downloadApp()">
                         <i class="fab fa-android"></i>
-                        Baixar APK (96MB)
+                        Download APK (96MB)
                     </a>
                 </div>
 
                 <div class="download-info">
                     <span>
                         <i class="fas fa-mobile-alt"></i>
-                        Compatível com Android 6.0+
+                        Compatible with Android 6.0+
                     </span>
                     <span>
                         <i class="fas fa-download"></i>
-                        Download gratuito
+                        Free download
                     </span>
                     <span>
                         <i class="fas fa-shield-alt"></i>
-                        Aplicação segura
+                        Secure application
                     </span>
                 </div>
             </div>
@@ -2031,7 +2033,7 @@
             document.body.removeChild(a);
             
             setTimeout(() => {
-                alert('📱 Download do HealthMate iniciado!\n\n✅ Informações importantes:\n• Tamanho: 96MB\n• Compatível com Android 6.0+\n• Instale ativando "Origens Desconhecidas"\n• Download gratuito\n\n🔒 Aplicação desenvolvida para o projeto TGPSI');
+                alert('📱 HealthMate download started!\n\n✅ Important information:\n• Size: 96MB\n• Compatible with Android 6.0+\n• Install by enabling "Unknown Sources"\n• Free download\n\n🔒 Application developed for TGPSI project');
             }, 500);
         }
 
