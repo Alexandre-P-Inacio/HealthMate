@@ -16,12 +16,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DataUser from '../../navigation/DataUser';
 import { useAuth } from '../contexts/AuthContext';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const WelcomeScreen = ({ navigation }) => {
   const { login, syncAuthState } = useAuth();
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
+  const [showQuickLogin, setShowQuickLogin] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
+  const [lastClickTime, setLastClickTime] = useState(0);
 
   useEffect(() => {
     Animated.parallel([
@@ -37,6 +40,33 @@ const WelcomeScreen = ({ navigation }) => {
       }),
     ]).start();
   }, []);
+
+  const handleSecretAreaPress = () => {
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastClickTime;
+
+    // Reset count if more than 2 seconds between clicks
+    if (timeDiff > 2000) {
+      setClickCount(1);
+    } else {
+      setClickCount(prev => prev + 1);
+    }
+
+    setLastClickTime(currentTime);
+
+    // Show quick login buttons after 3 consecutive clicks
+    if (clickCount >= 2) { // 2 because we already incremented above
+      setShowQuickLogin(true);
+      console.log('🎉 Quick Login buttons activated!');
+      
+      // Optional: Hide them again after 30 seconds
+      setTimeout(() => {
+        setShowQuickLogin(false);
+        setClickCount(0);
+        console.log('⏰ Quick Login buttons hidden again');
+      }, 30000);
+    }
+  };
 
   const autoLogin = async () => {
     try {
@@ -202,23 +232,35 @@ const WelcomeScreen = ({ navigation }) => {
             <Text style={styles.secondaryButtonText}>Sign Up</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.tertiaryButton}
-            onPress={autoLogin}
-          >
-            <Ionicons name="flash-outline" size={24} color="#1a237e" style={styles.buttonIcon} />
-            <Text style={styles.tertiaryButtonText}>Quick Login 1</Text>
-          </TouchableOpacity>
+          {/* Quick Login buttons - only visible after secret activation */}
+          {showQuickLogin && (
+            <>
+              <TouchableOpacity 
+                style={[styles.tertiaryButton, styles.quickLoginButton]}
+                onPress={autoLogin}
+              >
+                <Ionicons name="flash-outline" size={24} color="#1a237e" style={styles.buttonIcon} />
+                <Text style={styles.tertiaryButtonText}>Quick Login 1</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.tertiaryButton}
-            onPress={autoLogin2}
-          >
-            <Ionicons name="flash-outline" size={24} color="#1a237e" style={styles.buttonIcon} />
-            <Text style={styles.tertiaryButtonText}>Quick Login 2</Text>
-          </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.tertiaryButton, styles.quickLoginButton]}
+                onPress={autoLogin2}
+              >
+                <Ionicons name="flash-outline" size={24} color="#1a237e" style={styles.buttonIcon} />
+                <Text style={styles.tertiaryButtonText}>Quick Login 2</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </Animated.View>
+
+      {/* Secret activation area - bottom right corner (invisible) */}
+      <TouchableOpacity
+        style={styles.secretArea}
+        onPress={handleSecretAreaPress}
+        activeOpacity={1}
+      />
     </View>
   );
 };
@@ -297,6 +339,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1a237e',
   },
+  quickLoginButton: {
+    marginBottom: 10,
+    backgroundColor: '#e8f5e8',
+    borderColor: '#4caf50',
+  },
   buttonIcon: {
     marginRight: 10,
   },
@@ -314,6 +361,14 @@ const styles = StyleSheet.create({
     color: '#1a237e',
     fontSize: 18,
     fontWeight: '600',
+  },
+  secretArea: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 60,
+    height: 60,
+    backgroundColor: 'transparent',
   },
 });
 
