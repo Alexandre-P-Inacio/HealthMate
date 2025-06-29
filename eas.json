@@ -20,14 +20,20 @@
         "buildType": "apk"
       }
     },
-    "production": {
+    "production-apk": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
       }
     },
-    "production-apk": {
+    "production": {
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
+      }
+    },
+    "production-playstore": {
+      "android": {
+        "buildType": "app-bundle"
       }
     },
     "development-simulator": {
@@ -40,6 +46,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./pc-api-8740145945070513703-995-0ad7dc2b1aef.json",
+        "track": "internal"
+      }
+    }
   }
 }
+

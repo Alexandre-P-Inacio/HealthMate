@@ -1,0 +1,112 @@
+====================================================================
+HEALTHMATE - GOOGLE PLAY STORE - COPY & PASTE VERSION
+====================================================================
+
+📱 APP TITLE (máximo 30 caracteres):
+HealthMate - Your Health Partner
+
+📝 SHORT DESCRIPTION (máximo 80 caracteres):
+Complete health management app with medication reminders & doctor appointments
+
+📖 FULL DESCRIPTION (máximo 4000 caracteres):
+HealthMate - Your Complete Digital Health Companion
+
+Take control of your health with HealthMate, the comprehensive health management app designed to keep you healthy and organized. Manage medications, track vital signs, and schedule appointments with ease.
+
+KEY FEATURES
+
+💊 Smart Medication Management
+• Intelligent medication reminders - never miss a dose
+• Track medication history and adherence
+• Custom dosage schedules and refill alerts
+
+🩺 Doctor Appointments & Telehealth  
+• Schedule appointments with healthcare providers
+• Video consultations and telemedicine support
+• Smart appointment reminders (1 day, 2 hours, 30 minutes before)
+
+📊 Health Monitoring & Tracking
+• Track vital signs: blood pressure, heart rate, weight
+• Monitor blood sugar levels and trends
+• Sleep and mood tracking
+
+🔗 Device Integration
+• Samsung Health integration
+• Health Connect compatibility
+• Bluetooth wearable device support
+
+📱 Smart Notifications
+• Customizable medication reminders
+• Appointment and health goal alerts
+• Emergency contact notifications
+
+📋 Digital Health Records
+• Secure health record storage
+• Lab results and medical document management
+• Family health profiles
+
+🔒 Privacy & Security
+• End-to-end encryption for all health data
+• Biometric authentication (fingerprint, face recognition)
+• HIPAA-compliant data storage
+
+WHY CHOOSE HEALTHMATE?
+
+✅ All-in-One Solution: Everything you need in one app
+✅ User-Friendly: Intuitive interface for all ages  
+✅ Reliable: Never miss important health tasks
+✅ Secure: Bank-level security protection
+✅ Connected: Seamless device integration
+
+PERFECT FOR:
+• Chronic condition management
+• Elderly care and medication adherence
+• Health-conscious individuals and families
+• Healthcare professionals and caregivers
+
+TELEHEALTH & REPORTS
+Connect with healthcare providers through secure video consultations. Generate comprehensive health reports for doctor visits with detailed analytics and trend tracking.
+
+Download HealthMate today and start your journey to better health management!
+
+Note: HealthMate supports your healthcare journey but does not replace professional medical advice. Always consult healthcare providers for medical decisions.
+
+====================================================================
+
+🏷️ CATEGORY:
+Primary: Medical
+Secondary: Health & Fitness
+
+🔑 KEYWORDS/TAGS (separados por vírgula):
+health, medication reminder, doctor appointment, telemedicine, health tracking, vital signs, blood pressure, heart rate, weight tracker, sleep monitor, health records, medical app, healthcare, prescription, pill reminder, fitness tracker, wellness, chronic care, elderly care, family health
+
+====================================================================
+
+📞 CONTACT INFO:
+Developer: A.P. Inacio
+Email: inacioprelhaz@gmail.com
+Website: (se tiver)
+Privacy Policy: (obrigatória para apps de saúde)
+Terms of Service: (obrigatória para apps de saúde)
+
+====================================================================
+
+📋 PERMISSIONS JUSTIFICATIONS (para review):
+
+Camera & Photos: For capturing medical documents and profile photos for health records
+Calendar: For scheduling and managing medical appointments and medication reminders
+Location: For finding nearby healthcare providers and pharmacies
+Bluetooth: For connecting to health monitoring devices like blood pressure monitors and fitness trackers
+Notifications: For medication reminders and appointment alerts to improve health outcomes
+Health Data: For comprehensive health tracking and monitoring vital signs
+Biometric: For secure app access and protecting sensitive health information
+
+====================================================================
+
+🎯 TARGET AUDIENCE:
+Adults 25-65 managing chronic conditions, elderly users needing medication management, health-conscious individuals and families
+
+💰 PRICING MODEL:
+Free to Download (with optional premium features)
+
+==================================================================== 
